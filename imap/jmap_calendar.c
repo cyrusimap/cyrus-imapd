@@ -1138,6 +1138,10 @@ static int getcalendarchanges_cb(const mbentry_t *mbentry, void *vrock)
     if (!mboxname_iscalendarmailbox(mbentry->name, mbentry->mbtype))
         return 0;
 
+    /* A tombstone from before jmapids has no JMAP id */
+    if (USER_COMPACT_EMAILIDS(req->cstate) && !mbentry->jmapid)
+        return 0;
+
     /* Ignore special-purpose calendar mailboxes. */
     mbname = mbname_from_intname(mbentry->name);
     if (jmap_calendar_isspecial(mbname)) {
