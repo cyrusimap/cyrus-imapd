@@ -50,8 +50,13 @@ sub test_calendarevent_query_shared
         my $state = $res->[0][1]{newState};
 
         if ($account eq 'manifold') {
-            $admintalk->setacl("user.manifold.#calendars.$calidA", cassandane => 'lrswipkxtecdn');
-            $admintalk->setacl("user.manifold.#calendars.$calidB", cassandane => 'lrswipkxtecdn');
+            for my $calid ($calidA, $calidB) {
+                my $mboxname = $self->collection_mboxname({
+                    parent => 'user.manifold.#calendars',
+                    id     => $calid,
+                });
+                $admintalk->setacl($mboxname, cassandane => 'lrswipkxtecdn') or die;
+            }
         }
 
         xlog $self, "create event #1 in calendar $calidA and event #2 in calendar $calidB";

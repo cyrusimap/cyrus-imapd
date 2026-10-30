@@ -31,6 +31,13 @@ sub test_addressbook_changes_unshare ($self)
                        cassandane => 'lr') or die;
     }
 
+    my @abook_ids = map {
+        $self->collection_jmap_id({
+            mboxname => "user.master.#addressbooks.$_",
+            kind     => 'addressbook',
+        })
+    } @abooks;
+
     my $res = $jmap->CallMethods([
         ['AddressBook/get', { accountId => 'master', ids => undef }, 'R1'],
     ]);
@@ -46,6 +53,6 @@ sub test_addressbook_changes_unshare ($self)
          'R1'],
     ]);
     $self->assert_cmp_deeply({
-        created => [], updated => [], destroyed => [ $abooks[0] ],
+        created => [], updated => [], destroyed => [ $abook_ids[0] ],
     }, { map { $_ => $res->[0][1]{$_} } qw(created updated destroyed) });
 }
