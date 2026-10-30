@@ -1,0 +1,30 @@
+Description:
+
+Without allowspecialusesubfolder, only a direct child of a user's INBOX
+can have special-use, however the attribute is set: SETMETADATA, a JMAP
+role, Sieve's :specialuse and autocreate now follow the rule CREATE
+already did.  Renaming now keeps every special-use mailbox there, not
+just those with an attribute in specialuse_protect.
+
+
+Documentation:
+
+The RFC 6154 note on the RFC support page;
+imapd.conf(5), allowspecialusesubfolder.
+
+
+Config changes:
+
+allowspecialusesubfolder now covers every way special-use is set.
+
+
+Upgrade instructions:
+
+Existing special-use mailboxes that aren't direct children of INBOX keep
+their attributes, but a non-admin can only rename them to a direct child
+of INBOX.  Move them up, or set allowspecialusesubfolder.
+
+
+GitHub issue:
+
+None
