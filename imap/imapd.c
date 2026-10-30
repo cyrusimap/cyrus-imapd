@@ -1522,6 +1522,63 @@ static bool proxy_selected(const char *tag, const char *cmd, bool rest_of_line,
     return true;
 }
 
+/* proxy_begin() and proxy_finish() flags */
+#define PROXY_RESULT        (1<<0)  /* hold the tagged response, see below */
+#define PROXY_REST_OF_LINE  (1<<1)  /* the client's line follows the command */
+#define PROXY_TELL_EXPUNGED (1<<2)  /* report the selected mailbox's expunges */
+
+/*
+ * Start proxying command 'cmd' on 'mailbox' to backend 's': write 'tag',
+ * 'cmd' and the mailbox name.  The caller may write more arguments, then
+ * calls proxy_finish() with the same flags.
+ *
+ * Changes to the selected mailbox are reported before the command's tagged
+ * response: here, unless PROXY_RESULT holds that response back until
+ * proxy_finish() can report them.
+ */
+static void proxy_begin(struct backend *s, const char *tag,
+                        const char *cmd, const char *mailbox, unsigned flags)
+{
+    if (!(flags & PROXY_RESULT))
+        imapd_check(s, (flags & PROXY_TELL_EXPUNGED) ? TELL_EXPUNGED : 0);
+
+    prot_printf(s->out, "%s %s ", tag, cmd);
+    prot_printliteral(s->out, mailbox, strlen(mailbox));
+}
+
+/*
+ * Finish a command started by proxy_begin(), with the rest of the client's
+ * line if PROXY_REST_OF_LINE, and relay the response.
+ *
+ * With PROXY_RESULT, for commands that change the mailbox list, the tagged
+ * response waits until the mupdate master has the change, and the selected
+ * mailbox has been checked.
+ */
+static void proxy_finish(struct backend *s, const char *tag, unsigned flags)
+{
+    if (flags & PROXY_REST_OF_LINE) {
+        prot_putc(' ', s->out);
+        if (pipe_command(s, 65536)) return;
+    }
+    else {
+        prot_puts(s->out, "\r\n");
+    }
+
+    if (!(flags & PROXY_RESULT)) {
+        pipe_including_tag(s, tag, 0);
+        return;
+    }
+
+    int res = pipe_until_tag(s, tag, 0);
+    if (ultraparanoid && res == PROXY_OK) kick_mupdate();
+
+    imapd_check(s, (flags & PROXY_TELL_EXPUNGED) ? TELL_EXPUNGED : 0);
+
+    /* any NOOP imapd_check() sent went to a different backend, so
+     * last_result is still this command's */
+    prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
+}
+
 #define IS_EOL(c, pin) ((c = (c == '\r') ? prot_getc(pin) : c) == '\n')
 
 /*
@@ -9413,11 +9470,8 @@ static void cmd_getquota(const char *tag, const char *name)
             goto done;
         }
 
-        imapd_check(s, 0);
-
-        prot_printf(s->out, "%s Getquota {%zu+}\r\n%s\r\n",
-                    tag, strlen(name), name);
-        pipe_including_tag(s, tag, 0);
+        proxy_begin(s, tag, "Getquota", name, 0);
+        proxy_finish(s, tag, 0);
 
         goto done;
     }
@@ -9469,16 +9523,13 @@ static void cmd_getquotaroot(const char *tag, const char *name)
         struct backend *s;
 
         s = proxy_findbackend(mbentry->server);
-        if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
-        imapd_check(s, 0);
-
-        if (!r) {
-            prot_printf(s->out, "%s Getquotaroot {%zu+}\r\n%s\r\n",
-                        tag, strlen(name), name);
-            pipe_including_tag(s, tag, 0);
+        if (s) {
+            proxy_begin(s, tag, "Getquotaroot", name, 0);
+            proxy_finish(s, tag, 0);
         } else {
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+            imapd_check(NULL, 0);
+            prot_printf(imapd_out, "%s NO %s\r\n", tag,
+                        error_message(IMAP_SERVER_UNAVAILABLE));
         }
 
         mboxlist_entry_free(&mbentry);
@@ -9635,28 +9686,23 @@ void cmd_setquota(const char *tag, const char *quotaroot)
         if (r)
             goto out;
 
-        imapd_check(NULL, 0);
-
         s = proxy_findbackend(mbentry->server);
         if (!s) {
             r = IMAP_SERVER_UNAVAILABLE;
             goto out;
         }
 
-        imapd_check(s, 0);
-
         qnames = CAPA(s, CAPA_QUOTASET) ? quota_names : legacy_quota_names;
 
-        prot_printf(s->out, "%s Setquota ", tag);
-        prot_printstring(s->out, quotaroot);
+        proxy_begin(s, tag, "Setquota", quotaroot, 0);
         prot_putc(' ', s->out);
         for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
             prot_printf(s->out, "%c%s " QUOTA_T_FMT,
                         sep, qnames[res], newquotas[res]);
             sep = ' ';
         }
-        prot_puts(s->out, ")\r\n");
-        pipe_including_tag(s, tag, 0);
+        prot_putc(')', s->out);
+        proxy_finish(s, tag, 0);
 
         mboxlist_entry_free(&mbentry);
         free(intname);
@@ -9985,19 +10031,16 @@ static void cmd_status(char *tag, char *name)
             struct backend *s;
 
             s = proxy_findbackend(mbentry->server);
-            if (!s) r = IMAP_SERVER_UNAVAILABLE;
+            if (s) {
+                unsigned flags = PROXY_REST_OF_LINE | PROXY_TELL_EXPUNGED;
 
-            imapd_check(s, TELL_EXPUNGED);
-
-            if (!r) {
-                prot_printf(s->out, "%s Status {%zu+}\r\n%s ", tag,
-                            strlen(name), name);
-                if (!pipe_command(s, 65536)) {
-                    pipe_including_tag(s, tag, 0);
-                }
+                proxy_begin(s, tag, "Status", name, flags);
+                proxy_finish(s, tag, flags);
             } else {
+                imapd_check(NULL, TELL_EXPUNGED);
                 eatline(imapd_in, prot_getc(imapd_in));
-                prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+                prot_printf(imapd_out, "%s NO %s\r\n", tag,
+                            error_message(IMAP_SERVER_UNAVAILABLE));
             }
         }
 
@@ -11514,10 +11557,8 @@ syntax_error:
             goto out;
         }
 
-        prot_printf(be->out, "%s %s %s ", tag, cmd, arg.s);
-        if (!pipe_command(be, 65536)) {
-            pipe_including_tag(be, tag, 0);
-        }
+        proxy_begin(be, tag, cmd, arg.s, PROXY_REST_OF_LINE);
+        proxy_finish(be, tag, PROXY_REST_OF_LINE);
         goto out_noprint;
     }
     /* local mailbox */
