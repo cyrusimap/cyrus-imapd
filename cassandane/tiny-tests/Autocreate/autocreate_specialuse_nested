@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+# An autocreated folder only gets the special-use its xlist- option gives
+# it if it's a top-level folder.
+sub test_autocreate_specialuse_nested
+    :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(
+        autocreate_inbox_folders => 'Drafts|Mail|Mail.Sent',
+        'xlist-drafts' => 'Drafts',
+        'xlist-sent' => 'Mail.Sent',
+    );
+    $self->_start_instances();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $talk = $svc->create_store(username => 'foo')->get_client();
+    my $list = $talk->list('', '*', 'return', ['special-use']);
+
+    # Mail::IMAPTalk lowercases flags
+    my %uses = map {;
+        $_->[2] => [ sort grep { m/^\\(?:drafts|sent)$/ } $_->[0]->@* ]
+    } $list->@*;
+    $self->assert_cmp_deeply(
+        superhashof({
+            'INBOX.Drafts'    => [ '\\drafts' ],
+            'INBOX.Mail.Sent' => [],
+        }),
+        \%uses);
+}

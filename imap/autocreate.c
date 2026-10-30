@@ -579,6 +579,13 @@ static void autocreate_specialuse_cb(const char *key, const char *val, void *roc
     buf_putc(&usebuf, '\\');
     buf_appendcstr(&usebuf, key + 6);
 
+    if (specialuse_check_location(ar->intname)) {
+        xsyslog_ev(LOG_WARNING, "autocreate.specialuse.location_refused",
+                   lf_intname("mbox.name", ar->intname),
+                   lf_buf("annot.value", &usebuf));
+        goto done;
+    }
+
     /* we've got an XLIST key that matches the autocreated name */
     char *existing = mboxlist_find_specialuse(buf_cstring(&usebuf), ar->userid);
     if (existing) {
