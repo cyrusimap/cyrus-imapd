@@ -4,7 +4,9 @@ use Cassandane::Tiny;
 #
 # Test the /private/specialuse annotation defined by RFC6154.
 #
-sub test_specialuse ($self)
+sub test_specialuse
+    :NoAltNameSpace
+    ($self)
 {
     xlog $self, "testing /private/specialuse";
 

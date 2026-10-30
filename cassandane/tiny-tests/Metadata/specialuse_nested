@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# Without allowspecialusesubfolder, only a user's top-level folders may have
+# special-use, whether it's set by CREATE or by SETMETADATA.
+sub test_specialuse_nested
+    :NoAltNameSpace
+    ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+    my $entry = '/private/specialuse';
+
+    $imaptalk->create("INBOX.Mail") or die "create: $@";
+
+    xlog $self, "CREATE can't make a nested special-use folder";
+    $imaptalk->create("INBOX.Mail.drafts", "(USE (\\Drafts))");
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    xlog $self, "SETMETADATA can't give a nested folder special-use";
+    $imaptalk->create("INBOX.Mail.sent") or die "create: $@";
+    $imaptalk->setmetadata("INBOX.Mail.sent", $entry, "\\Sent");
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+    my $res = $imaptalk->getmetadata("INBOX.Mail.sent", $entry);
+    $self->assert_null($res->{'INBOX.Mail.sent'}{$entry});
+}
