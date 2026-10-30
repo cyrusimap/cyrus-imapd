@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <sys/stat.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -1903,13 +1904,30 @@ static void sieve_log(void *sc __attribute__((unused)),
     json_array_append_new(m->actions, json_pack("[s {} [s]]", "log", text));
 }
 
-static int getinclude(void *sc __attribute__((unused)),
-                      const char *script,
-                      int isglobal __attribute__((unused)),
+static int getinclude(void *sc, const char *script, int isglobal,
                       char *fpath, size_t size)
 {
-    strlcpy(fpath, script, size);
-    strlcat(fpath, BYTECODE_SUFFIX, size);
+    script_data_t *sd = (script_data_t *) sc;
+    const char *domain = strchr(sd->userid, '@');
+    struct stat sbuf;
+
+    if (strchr(script, '/')) return SIEVE_FAIL;
+
+    if (!isglobal) {
+        snprintf(fpath, size, "%s/%s%s",
+                 user_sieve_path(sd->userid), script, BYTECODE_SUFFIX);
+        return SIEVE_OK;
+    }
+
+    if (domain) {
+        snprintf(fpath, size, "%s/%s%s",
+                 user_sieve_path(domain), script, BYTECODE_SUFFIX);
+        if (!stat(fpath, &sbuf)) return SIEVE_OK;
+    }
+
+    /* server-wide global script */
+    snprintf(fpath, size, "%s/%s%s",
+             user_sieve_path(""), script, BYTECODE_SUFFIX);
 
     return SIEVE_OK;
 }
@@ -2172,6 +2190,7 @@ static int jmap_sieve_test(struct jmap_req *req)
                 err = jmap_server_error(r);
 
             json_object_set_new(not_completed, emailid, err);
+            err = NULL;
         }
         else {
             if (!envelope) {
@@ -2194,6 +2213,7 @@ static int jmap_sieve_test(struct jmap_req *req)
 
             if (err) {
                 json_object_set_new(not_completed, emailid, err);
+                err = NULL;
                 json_decref(m.actions);
             }
             else {

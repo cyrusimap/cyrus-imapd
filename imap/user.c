@@ -151,7 +151,7 @@ static const char *user_sieve_path_byname(const mbname_t *mbname)
                         FNAME_DOMAINDIR, d, domain);
     }
 
-    if (localpart) {
+    if (localpart && *localpart) {
         const char *userid = config_virtdomains ? localpart : mbname_userid(mbname);
         char c = (char) dir_hash_c(userid, config_fulldirhash);
         snprintf(sieve_path + len, size - len, "/%c/%s", c, userid);
@@ -193,7 +193,8 @@ EXPORTED const char *user_sieve_path(const char *inuser)
     const char *localpart = mbname_localpart(mbname);
     int legacy = 0;
 
-    if (localpart) {
+    /* "@domain" has an empty localpart and names the domain's global scripts */
+    if (localpart && *localpart) {
         /* user script */
         char *inboxname = mboxname_user_mbox(user, NULL);
         mbentry_t *mbentry = NULL;
