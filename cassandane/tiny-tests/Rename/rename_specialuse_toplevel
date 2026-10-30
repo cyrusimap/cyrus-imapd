@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+# A special-use mailbox, protected or not, can only be renamed to another
+# top-level mailbox.
+sub test_rename_specialuse_toplevel
+    :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(specialuse_extra => '\\XSpecialUse');
+    $self->_start_instances();
+
+    my $imaptalk = $self->{store}->get_client();
+    my $entry = '/private/specialuse';
+
+    $imaptalk->create("INBOX.Mail") or die "create: $@";
+
+    for my $use ("\\Sent", "\\XSpecialUse") {
+        my $old = "INBOX.old" . lc substr($use, 1);
+        my $new = "INBOX.new" . lc substr($use, 1);
+        $imaptalk->create($old, "(USE ($use))") or die "create: $@";
+
+        xlog $self, "can't rename $use into a subfolder";
+        $imaptalk->rename($old, "INBOX.Mail.x");
+        $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+
+        xlog $self, "can rename $use to another top-level name";
+        $imaptalk->rename($old, $new);
+        $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+        my $res = $imaptalk->getmetadata($new, $entry);
+        $self->assert_str_equals($use, $res->{$new}{$entry});
+    }
+}

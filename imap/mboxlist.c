@@ -2908,39 +2908,37 @@ EXPORTED int mboxlist_deletemailboxlock(const char *name, int isadmin,
     return r;
 }
 
+/* A special-use mailbox must land where it could have been given its
+ * special-use, and a protected one mustn't be deleted by a rename.
+ * Mailboxes without special-use always pass. */
 static int _rename_check_specialuse(const char *oldname, const char *newname)
 {
-    const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
-    if (!protect) return 0;
-
     mbname_t *old = mbname_from_intname(oldname);
-    mbname_t *new = mbname_from_intname(newname);
     struct buf attrib = BUF_INITIALIZER;
     int r = 0;
+
     if (mbname_userid(old))
         annotatemore_lookup(oldname, "/specialuse", mbname_userid(old), &attrib);
+    mbname_free(&old);
+    if (!attrib.len) goto done;
 
-    /* we have specialuse? */
-    if (attrib.len) {
+    r = specialuse_check_location(newname);
+    if (r) goto done;
+
+    /* a protected special-use mailbox mustn't be deleted by renaming it */
+    const char *protect = config_getstring(IMAPOPT_SPECIALUSE_PROTECT);
+    mbname_t *new = mbname_from_intname(newname);
+    if (protect && mbname_isdeleted(new)) {
         strarray_t *check = strarray_split(protect, NULL, STRARRAY_TRIM);
         strarray_t *uses = strarray_split(buf_cstring(&attrib), NULL, 0);
-        if (strarray_intersect_case(uses, check)) {
-            /* then if allowspecialusesubfolders is not enabled the target must be a single-depth mailbox too */
-            if (!config_getswitch(IMAPOPT_ALLOWSPECIALUSESUBFOLDER) && strarray_size(mbname_boxes(new)) != 1)
-                r = IMAP_MAILBOX_SPECIALUSE;
-            /* and have a userid as well */
-            if (!mbname_userid(new))
-                r = IMAP_MAILBOX_SPECIALUSE;
-            /* and not be deleted */
-            if (mbname_isdeleted(new))
-                r = IMAP_MAILBOX_SPECIALUSE;
-        }
+        if (strarray_intersect_case(uses, check))
+            r = IMAP_MAILBOX_SPECIALUSE;
         strarray_free(uses);
         strarray_free(check);
     }
-
     mbname_free(&new);
-    mbname_free(&old);
+
+done:
     buf_free(&attrib);
     return r;
 }
