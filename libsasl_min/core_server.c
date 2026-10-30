@@ -1342,66 +1342,10 @@ EXPORTED int sasl_server_start(sasl_conn_t *conn,
     }
 
     if (m->m.condition == SASL_CONTINUE) {
-        sasl_server_plug_init_t *entry_point = NULL;
-        void *library = NULL;
-        sasl_server_plug_t *pluglist = NULL;
-        int version, plugcount;
-        int l = 0;
-
-        /* need to load this plugin */
-        result = _sasl_get_plugin(
-            m->m.f,
-            _sasl_find_verifyfile_callback(global_callbacks.callbacks),
-            &library);
-
-        if (result == SASL_OK) {
-            result = _sasl_locate_entry(library,
-                                        "sasl_server_plug_init",
-                                        (void **) &entry_point);
-        }
-
-        if (result == SASL_OK) {
-            result = entry_point(mechlist->utils,
-                                 SASL_SERVER_PLUG_VERSION,
-                                 &version,
-                                 &pluglist,
-                                 &plugcount);
-        }
-
-        if (result == SASL_OK) {
-            /* find the correct mechanism in this plugin */
-            for (l = 0; l < plugcount; l++) {
-                if (!strcasecmp(pluglist[l].mech_name, m->m.plug->mech_name)) {
-                    break;
-                }
-            }
-            if (l == plugcount) {
-                result = SASL_NOMECH;
-            }
-        }
-        if (result == SASL_OK) {
-            /* check that the parameters are the same */
-            if ((pluglist[l].max_ssf != m->m.plug->max_ssf)
-                || (pluglist[l].security_flags != m->m.plug->security_flags))
-            {
-                _sasl_log(conn,
-                          SASL_LOG_ERR,
-                          "%s: security parameters don't match mechlist file",
-                          pluglist[l].mech_name);
-                result = SASL_NOMECH;
-            }
-        }
-        if (result == SASL_OK) {
-            /* copy mechlist over */
-            sasl_FREE((sasl_server_plug_t *) m->m.plug);
-            m->m.plug = &pluglist[l];
-            m->m.condition = SASL_OK;
-        }
-
-        if (result != SASL_OK) {
-            /* The library will eventually be freed, don't sweat it */
-            RETURN(conn, result);
-        }
+        /* We don't support dynamic plugins */
+        sasl_seterror(conn, 0, "Incomplete mech %s", mech);
+        result = SASL_NOMECH;
+        goto done;
     }
 
     if (conn->context) {
