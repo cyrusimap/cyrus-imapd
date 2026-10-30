@@ -918,7 +918,7 @@ static int mboxlist_read_uniqueid(const char *uniqueid,
 
 EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
                                       const char *userid __attribute__((unused)),
-                                      const struct auth_state *auth_state __attribute__((unused)))
+                                      const struct auth_state *auth_state)
 {
     int r;
     const char *data;
@@ -934,8 +934,10 @@ EXPORTED char *mboxlist_find_uniqueid(const char *uniqueid,
     r = mboxlist_parse_entry(&mbentry, NULL, 0, data, datalen);
     if (r) return NULL;
 
-    // only note the name down if it's not deleted
-    if (!(mbentry->mbtype & MBTYPE_DELETED)) {
+    // only note the name down if it's not deleted, and can be seen
+    if (!(mbentry->mbtype & MBTYPE_DELETED) &&
+        (!auth_state ||
+         (cyrus_acl_myrights(auth_state, mbentry->acl) & ACL_LOOKUP))) {
         mbname = mbentry->name;
         mbentry->name = NULL;
     }

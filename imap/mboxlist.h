@@ -173,6 +173,14 @@ int mboxlist_lookup_by_uniqueid(const char *uniqueid,
                                 mbentry_t **entryptr, struct txn **tid);
 
 char *mboxlist_find_specialuse(const char *use, const char *userid);
+/**
+ * Find the name of the live mailbox with a given uniqueid, in any account.
+ *
+ * @param uniqueid    the mailbox uniqueid
+ * @param userid      unused
+ * @param auth_state  if non-NULL, the mailbox must grant it ACL_LOOKUP
+ * @return the internal mailbox name, which the caller must free, or NULL
+ */
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
 

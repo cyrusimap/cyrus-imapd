@@ -1169,10 +1169,17 @@ static int sieve_fileinto(void *ac,
         else md = mdata->m;
     }
 
+    /* "p" on somebody else's mailbox only lets mail be sent to it, where their
+       own script sees it first.  Filing straight in is an APPEND, so needs "i" */
+    char *owner = mboxname_to_userid(intname);
+    long aclcheck = strcmpsafe(owner, userid) ? ACL_INSERT : ACL_POST;
+    free(owner);
+
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, NULL, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader, mode,
-                          intname, md->date, 0 /*savedate*/, quotaoverride, 0);
+                          intname, md->date, 0 /*savedate*/, quotaoverride,
+                          aclcheck);
 
     if (ret == IMAP_MAILBOX_NONEXISTENT) {
         /* if "plus" folder under INBOX, then try to create it */
@@ -1196,7 +1203,8 @@ static int sieve_fileinto(void *ac,
             ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                                   &imap4flags, NULL, userid, sd->authstate, md->id,
                                   userid, mdata->notifyheader, mode,
-                                  intname, md->date, 0 /*savedate*/, quotaoverride, 0);
+                                  intname, md->date, 0 /*savedate*/, quotaoverride,
+                                  aclcheck);
         }
     }
 
@@ -1422,7 +1430,7 @@ static int sieve_snooze(void *ac,
     ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
                           &imap4flags, annots, userid, sd->authstate, md->id,
                           userid, mdata->notifyheader, ACTION_SNOOZE,
-                          intname, md->date, until, quotaoverride, 0);
+                          intname, md->date, until, quotaoverride, ACL_POST);
     if (ret) {
         xsyslog(LOG_NOTICE,
                 "Sieve: delivery to \\Snoozed mailbox failed",
@@ -1838,7 +1846,7 @@ static int sieve_keep(void *ac,
     const char *authuser = mydata->authuser;
     const struct auth_state *authstate = mydata->authstate;
     struct auth_state *freeme = NULL;
-    int acloverride = 0;
+    long aclcheck = ACL_POST;
 
     if (kc->headers) {
         mydata = setup_special_delivery(mydata, kc->headers);
@@ -1852,13 +1860,13 @@ static int sieve_keep(void *ac,
     if (mboxname_isusermailbox(intname, 1)) {
         authstate = freeme = auth_newstate(userid);
         authuser = userid;
-        acloverride = 1;
+        aclcheck = 0;
     }
 
     ret = deliver_mailbox(md->f, mydata->content, mydata->stage, md->size,
                           &imap4flags, NULL, authuser, authstate, md->id,
                           userid, mydata->notifyheader, mode, intname, md->date,
-                          0 /*savedate*/, quotaoverride, acloverride);
+                          0 /*savedate*/, quotaoverride, aclcheck);
 
     if (freeme) auth_freestate(freeme);
 
