@@ -377,7 +377,8 @@ extern int _sasl_getcallback(sasl_conn_t *conn,
                              sasl_callback_ft *pproc,
                              void **pcontext);
 
-extern void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...);
+extern void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...)
+            __attribute__((format(printf, 3, 4)));
 
 void _sasl_get_errorbuf(sasl_conn_t *conn, char ***bufhdl, size_t **lenhdl);
 int _sasl_add_string(char **out,

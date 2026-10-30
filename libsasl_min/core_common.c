@@ -11,8 +11,10 @@
 #include "libsasl_min/saslplug.h"
 
 #include "lib/assert.h"
+#include "lib/buf.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1727,207 +1729,34 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
  * This function is typically called from a plugin.
  * It creates a string from the formatting and varargs given
  * and calls the logging callback (syslog by default)
- *
- * %m will parse the value in the next argument as an errno string
- * %z will parse the next argument as a SASL error code.
  */
 
 EXPORTED void _sasl_log(sasl_conn_t *conn, int level, const char *fmt, ...)
 {
-    char *out = NULL;
-    size_t alloclen = 100; /* current allocated length */
-    size_t outlen = 0;     /* current length of output buffer */
-    size_t formatlen;
-    size_t pos = 0; /* current position in format string */
-    int result;
-    sasl_log_t *log_cb;
-    void *log_ctx;
+    struct buf out = BUF_INITIALIZER;
+    const int saved_errno = errno;
+    sasl_log_t *log_cb = NULL;
+    void *log_ctx = NULL;
+    va_list args;
+    int r;
 
-    int ival;
-    unsigned int uval;
-    char *cval;
-    va_list ap; /* varargs thing */
+    if (!fmt) return;
 
-    if (!fmt) {
-        return;
-    }
+    r = _sasl_getcallback(conn,
+                          SASL_CB_LOG,
+                          (sasl_callback_ft *) &log_cb,
+                          &log_ctx);
 
-    out = (char *) sasl_ALLOC(250);
-    if (!out) {
-        return;
-    }
+    if (r || !log_cb) return;
 
-    formatlen = strlen(fmt);
+    va_start(args, fmt);
+    errno = saved_errno; /* make sure %m is caller's errno, not one of ours! */
+    buf_vprintf(&out, fmt, args);
+    va_end(args);
 
-    /* See if we have a logging callback... */
-    result = _sasl_getcallback(conn,
-                               SASL_CB_LOG,
-                               (sasl_callback_ft *) &log_cb,
-                               &log_ctx);
-    if (result == SASL_OK && !log_cb) {
-        result = SASL_FAIL;
-    }
-    if (result != SASL_OK) {
-        goto done;
-    }
+    log_cb(log_ctx, level, buf_cstring(&out));
 
-    va_start(ap, fmt); /* start varargs */
-
-    while (pos < formatlen) {
-        if (fmt[pos] != '%') /* regular character */ {
-            result = _buf_alloc(&out, &alloclen, outlen + 1);
-            if (result != SASL_OK) {
-                goto done;
-            }
-            out[outlen] = fmt[pos];
-            outlen++;
-            pos++;
-        }
-        else { /* formating thing */
-            int done = 0;
-            char frmt[10];
-            int frmtpos = 1;
-            char tempbuf[21];
-            frmt[0] = '%';
-            pos++;
-
-            while (done == 0) {
-                switch (fmt[pos]) {
-                case 's':                      /* need to handle this */
-                    cval = va_arg(ap, char *); /* get the next arg */
-                    result = _sasl_add_string(&out, &alloclen, &outlen, cval);
-
-                    if (result != SASL_OK) /* add the string */ {
-                        goto done;
-                    }
-
-                    done = 1;
-                    break;
-
-                case '%': /* double % output the '%' character */
-                    result = _buf_alloc(&out, &alloclen, outlen + 1);
-                    if (result != SASL_OK) {
-                        goto done;
-                    }
-
-                    out[outlen] = '%';
-                    outlen++;
-                    done = 1;
-                    break;
-
-                case 'm': /* insert the errno string */
-                    result = _sasl_add_string(&out,
-                                              &alloclen,
-                                              &outlen,
-                                              strerror(va_arg(ap, int)));
-                    if (result != SASL_OK) {
-                        goto done;
-                    }
-
-                    done = 1;
-                    break;
-
-                case 'z': /* insert the sasl error string */
-                    result = _sasl_add_string(
-                        &out,
-                        &alloclen,
-                        &outlen,
-                        (char *) sasl_errstring(va_arg(ap, int), NULL, NULL));
-                    if (result != SASL_OK) {
-                        goto done;
-                    }
-
-                    done = 1;
-                    break;
-
-                case 'c':
-                    frmt[frmtpos++] = fmt[pos];
-                    frmt[frmtpos] = 0;
-                    tempbuf[0] = (char) va_arg(ap, int); /* get the next arg */
-                    tempbuf[1] = '\0';
-
-                    /* now add the character */
-                    result =
-                        _sasl_add_string(&out, &alloclen, &outlen, tempbuf);
-                    if (result != SASL_OK) {
-                        goto done;
-                    }
-
-                    done = 1;
-                    break;
-
-                case 'd':
-                case 'i':
-                    frmt[frmtpos++] = fmt[pos];
-                    frmt[frmtpos] = 0;
-                    ival = va_arg(ap, int); /* get the next arg */
-
-                    snprintf(tempbuf,
-                             20,
-                             frmt,
-                             ival); /* have snprintf do the work */
-                    /* now add the string */
-                    result =
-                        _sasl_add_string(&out, &alloclen, &outlen, tempbuf);
-                    if (result != SASL_OK) {
-                        goto done;
-                    }
-
-                    done = 1;
-                    break;
-
-                case 'o':
-                case 'u':
-                case 'x':
-                case 'X':
-                    frmt[frmtpos++] = fmt[pos];
-                    frmt[frmtpos] = 0;
-                    uval = va_arg(ap, unsigned int); /* get the next arg */
-
-                    snprintf(tempbuf,
-                             20,
-                             frmt,
-                             uval); /* have snprintf do the work */
-                    /* now add the string */
-                    result =
-                        _sasl_add_string(&out, &alloclen, &outlen, tempbuf);
-                    if (result != SASL_OK) {
-                        goto done;
-                    }
-
-                    done = 1;
-                    break;
-
-                default:
-                    frmt[frmtpos++] = fmt[pos]; /* add to the formating */
-                    frmt[frmtpos] = 0;
-                    if (frmtpos > 9) {
-                        done = 1;
-                    }
-                }
-                pos++;
-                if (pos > formatlen) {
-                    done = 1;
-                }
-            }
-        }
-    }
-
-    /* put 0 at end */
-    result = _buf_alloc(&out, &alloclen, outlen + 1);
-    if (result != SASL_OK) {
-        goto done;
-    }
-    out[outlen] = 0;
-
-    /* send log message */
-    result = log_cb(log_ctx, level, out);
-
-done:
-    va_end(ap);
-    if (out) {
-        sasl_FREE(out);
-    }
+    buf_free(&out);
 }
 
 /* Allocate and Init a sasl_utils_t structure */

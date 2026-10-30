@@ -211,9 +211,9 @@ EXPORTED int sasl_client_add_plugin(const char *plugname,
         _sasl_log(NULL,
                   SASL_LOG_WARN,
                   "sasl_client_add_plugin(): entry_point(): failed for "
-                  "plugname %s: %z",
+                  "plugname %s: %s",
                   plugname,
-                  result);
+                  sasl_errstring(result, NULL, NULL));
         return result;
     }
 
