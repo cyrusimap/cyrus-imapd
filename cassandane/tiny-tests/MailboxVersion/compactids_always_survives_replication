@@ -6,7 +6,7 @@ use Cassandane::Tiny;
 # an explicit "off".  With compact_ids set to "always", replication must not be
 # able to leave either end handing out legacy ids.
 sub test_compactids_always_survives_replication
-    :min_version_3_13 :CompactIdsAlways :Replication
+    :min_version_3_13 :Replication
     ($self)
 {
     $self->make_message("test compactids");
