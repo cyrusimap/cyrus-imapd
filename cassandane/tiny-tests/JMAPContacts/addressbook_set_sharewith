@@ -32,6 +32,10 @@ sub test_addressbook_set_sharewith
 
     xlog $self, "share to user with permission to share";
     $admintalk->setacl("user.master.#addressbooks.$AddressBookId", "cassandane" => 'lrswipkxtecdan') or die;
+    my $AddressBookJmapId = $self->collection_jmap_id({
+        mboxname => "user.master.#addressbooks.$AddressBookId",
+        kind     => 'addressbook',
+    });
 
     xlog $self, "create third account";
     $admintalk->create("user.manifold");
@@ -71,7 +75,7 @@ sub test_addressbook_set_sharewith
     my $res = $jmap->CallMethods([
             ['AddressBook/set', {
                     accountId => 'master',
-                    update => { "$AddressBookId" => {
+                    update => { $AddressBookJmapId => {
                             "shareWith/manifold" => {
                                 mayRead => JSON::true
                             },
@@ -98,7 +102,7 @@ sub test_addressbook_set_sharewith
     $jmap->CallMethods([
             ['AddressBook/set', {
                     accountId => 'master',
-                    update => { "$AddressBookId" => {
+                    update => { $AddressBookJmapId => {
                             "shareWith/manifold/mayWrite" => JSON::true,
              }}}, "R1"]
     ]);
@@ -114,7 +118,7 @@ sub test_addressbook_set_sharewith
     $res = $jmap->CallMethods([
             ['AddressBook/set', {
                     accountId => 'master',
-                    update => { "$AddressBookId" => {
+                    update => { $AddressBookJmapId => {
                             "shareWith/paraphrase" => undef,
              }}}, "R1"]
     ]);

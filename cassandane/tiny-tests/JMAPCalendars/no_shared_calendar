@@ -30,6 +30,7 @@ sub test_no_shared_calendar
     ]);
     my $otherCalendarId = $res->[0][1]{list}[0]{id};
     $self->assert_not_null($otherCalendarId);
+    my $otherState = $res->[0][1]{state};
     $admintalk->setacl('user.other.#calendars', cassandane => 'lr') or die;
 
     my $session = $jmap->get_client_session->client_session;
@@ -43,7 +44,7 @@ sub test_no_shared_calendar
         }, 'R1'],
         ['Calendar/changes', {
             accountId => 'other',
-            sinceState => '0',
+            sinceState => $otherState,
         }, 'R2'],
         ['Calendar/set', {
             accountId => 'other',
