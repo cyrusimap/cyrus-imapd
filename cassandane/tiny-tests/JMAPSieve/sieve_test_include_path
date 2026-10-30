@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ();
+
+sub test_sieve_test_include_path
+    :JMAPExtensions
+{
+    my ($self) = @_;
+
+    my $cmp_deeply = sub {
+        my ($want, $got) = @_;
+        my ($ok, $stack) = Test::Deep::cmp_details($got, $want);
+        $self->assert($ok, $ok ? '' : Test::Deep::deep_diag($stack));
+    };
+
+    my $jmap = $self->{jmap};
+
+    xlog "create a script to be included";
+    my $res = $jmap->CallMethods([
+        ['Blob/upload', {
+            create => {
+               "A" => { data => [{
+                   'data:asText' => "require \"fileinto\";\r\nfileinto \"INCLUDED\";\r\n"
+               }] }
+            }
+         }, "R0"],
+        ['SieveScript/set', {
+            create => {
+                "1" => { name => "target", blobId => "#A" }
+            }
+         }, "R1"]
+    ]);
+    $self->assert_not_null($res->[1][1]{created}{1});
+
+    my $email = (<<'EOF' =~ s/\r?\n/\r\n/gr);
+From: "Some Example Sender" <example@example.com>
+To: cassandane@example.com
+Subject: test email
+Date: Wed, 7 Dec 2016 22:11:11 +1100
+MIME-Version: 1.0
+Content-Type: text/plain; charset="UTF-8"
+
+This is a test email.
+EOF
+    my $emailid = $jmap->Upload($email, "message/rfc822")->{blobId};
+
+    my sub test_include {
+        my ($name) = @_;
+        my $script = (<<EOF =~ s/\r?\n/\r\n/gr);
+require ["include", "variables"];
+set "s" "/";
+include "$name";
+EOF
+        my $scriptid = $jmap->Upload($script, "application/sieve")->{blobId};
+
+        my $res = $jmap->CallMethods([
+            ['SieveScript/test', {
+                scriptBlobId => $scriptid,
+                emailBlobIds => [ $emailid ],
+            }, "R1"]
+        ]);
+        return $res->[0][1];
+    }
+
+    xlog "include by script name resolves in the user's sieve directory";
+    $cmp_deeply->({
+        accountId => 'cassandane',
+        completed => {
+            $emailid => [
+                [ 'fileinto', { }, [ 'INCLUDED' ] ],
+            ],
+        },
+        notCompleted => undef,
+    }, test_include('target'));
+
+    xlog "include by path built from variables is rejected";
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    my $path = "$sievedir/target";
+    $path =~ s{/}{\${s}}g;
+
+    $cmp_deeply->({
+        accountId => 'cassandane',
+        completed => undef,
+        notCompleted => {
+            $emailid => {
+                type => 'serverFail',
+                description => 'Invalid script name',
+            },
+        },
+    }, test_include($path));
+}
