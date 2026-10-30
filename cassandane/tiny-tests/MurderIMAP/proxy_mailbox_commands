@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+# Commands naming a mailbox that's on a backend go through to it.
+sub test_proxy_mailbox_commands
+    :NoAltNamespace
+    ($self)
+{
+    my $frontend = $self->{frontend_store}->get_client();
+    my $admin = $self->{frontend_adminstore}->get_client();
+    my $backend = $self->{store}->get_client();
+
+    $frontend->create('INBOX.a') or die "create: $@";
+
+    $frontend->append('INBOX.a',
+                      $self->{gen}->generate(subject => 'appended')->as_string);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    my $res = $frontend->status('INBOX.a', '(messages)');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_num_equals(1, $res->{messages});
+
+    $admin->setquota('user.cassandane', '(STORAGE 100000)');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    $admin->getquota('user.cassandane');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    $frontend->getquotaroot('INBOX.a');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $frontend->setacl('INBOX.a', 'anyone', 'lr');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $res = $backend->getacl('INBOX.a');
+    $self->assert_cmp_deeply(supersetof('anyone', 'lr'), $res);
+
+    $frontend->deleteacl('INBOX.a', 'anyone');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $res = $backend->getacl('INBOX.a');
+    $self->assert_cmp_deeply(noneof('anyone'), $res);
+
+    $frontend->subscribe('INBOX.a');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $res = $frontend->lsub('', 'INBOX.a');
+    $self->assert_num_equals(1, scalar @$res);
+
+    $frontend->unsubscribe('INBOX.a');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $frontend->rename('INBOX.a', 'INBOX.b');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $res = $frontend->status('INBOX.b', '(messages)');
+    $self->assert_num_equals(1, $res->{messages});
+
+    $frontend->delete('INBOX.b');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $frontend->status('INBOX.b', '(messages)');
+    $self->assert_str_equals('no', $frontend->get_last_completion_response());
+}
