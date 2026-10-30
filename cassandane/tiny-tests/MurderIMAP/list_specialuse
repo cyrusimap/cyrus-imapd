@@ -1,7 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_list_specialuse ($self)
+sub test_list_specialuse
+    :NoAltNameSpace
+    ($self)
 {
     my $frontend = $self->{frontend_store}->get_client();
     my $backend = $self->{backend1_store}->get_client();

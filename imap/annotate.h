@@ -275,6 +275,18 @@ int annotate_anydb_islocked();
 int specialuse_validate(const char *mboxname, const char *userid,
                         const char *src, struct buf *dest, int allow_dups);
 
+/**
+ * Check that a mailbox may have special-use attributes: it must belong to a
+ * user and, unless allowspecialusesubfolder is set, be one of that user's
+ * top-level mailboxes.
+ *
+ * specialuse_validate() makes this check whenever it's given a mailbox name.
+ *
+ * @param mboxname  the mailbox's internal name
+ * @return 0 if it may, IMAP_MAILBOX_SPECIALUSE if not
+ */
+int specialuse_check_location(const char *mboxname);
+
 int annotatemore_upgrade(void);
 
 #endif /* ANNOTATE_H */

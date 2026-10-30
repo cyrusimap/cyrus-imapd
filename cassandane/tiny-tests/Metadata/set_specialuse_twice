@@ -1,7 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_set_specialuse_twice ($self)
+sub test_set_specialuse_twice
+    :NoAltNameSpace
+    ($self)
 {
     xlog $self, "testing if we could /private/specialuse twice on a folder";
 
