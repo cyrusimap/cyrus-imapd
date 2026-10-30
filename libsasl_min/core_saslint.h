@@ -350,9 +350,6 @@ extern int _sasl_done_with_plugins(void);
 /*
  * common.c
  */
-extern const sasl_callback_t *_sasl_find_verifyfile_callback(
-    const sasl_callback_t *callbacks);
-
 extern int _sasl_common_init(sasl_global_callbacks_t *global_callbacks);
 
 extern int _sasl_conn_init(sasl_conn_t *conn,

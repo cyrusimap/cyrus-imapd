@@ -1592,14 +1592,6 @@ static int _sasl_getsimple(void *context,
     }
 }
 
-static int _sasl_verifyfile(void *context __attribute__((unused)),
-                            char *file __attribute__((unused)),
-                            int type __attribute__((unused)))
-{
-    /* always say ok */
-    return SASL_OK;
-}
-
 static int _sasl_proxy_policy(sasl_conn_t *conn,
                               void *context __attribute__((unused)),
                               const char *requested_user,
@@ -1704,10 +1696,6 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
     case SASL_CB_AUTHNAME:
         *pproc = SASL_CB_PROC_PTR &_sasl_getsimple;
         *pcontext = conn;
-        return SASL_OK;
-    case SASL_CB_VERIFYFILE:
-        *pproc = SASL_CB_PROC_PTR &_sasl_verifyfile;
-        *pcontext = NULL;
         return SASL_OK;
     case SASL_CB_PROXY_POLICY:
         *pproc = SASL_CB_PROC_PTR &_sasl_proxy_policy;
@@ -1871,41 +1859,6 @@ EXPORTED int sasl_idle(sasl_conn_t *conn)
     }
 
     return 0;
-}
-
-static const sasl_callback_t *_sasl_find_callback_by_type(
-    const sasl_callback_t *callbacks,
-    unsigned long id)
-{
-    if (callbacks) {
-        while (callbacks->id != SASL_CB_LIST_END) {
-            if (callbacks->id == id) {
-                return callbacks;
-            }
-            else {
-                ++callbacks;
-            }
-        }
-    }
-    return NULL;
-}
-
-EXPORTED const sasl_callback_t *_sasl_find_verifyfile_callback(
-    const sasl_callback_t *callbacks)
-{
-    static const sasl_callback_t default_verifyfile_cb = {
-        SASL_CB_VERIFYFILE,
-        SASL_CB_PROC_PTR &_sasl_verifyfile,
-        NULL
-    };
-
-    callbacks = _sasl_find_callback_by_type(callbacks, SASL_CB_VERIFYFILE);
-    if (callbacks != NULL) {
-        return callbacks;
-    }
-    else {
-        return &default_verifyfile_cb;
-    }
 }
 
 /* Basically a conditional call to realloc(), if we need more */
