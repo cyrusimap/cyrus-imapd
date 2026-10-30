@@ -56,7 +56,6 @@ sub new
     $config->set(icalendar_max_size => 100000);
     $config->set(virtdomains => 'no');
     $config->set(jmap_nonstandard_extensions => 'yes');
-    $config->set(conversations => 'yes');
     $config->set(sieve_maxscripts => 10);
 
     my $self = $class->SUPER::new({

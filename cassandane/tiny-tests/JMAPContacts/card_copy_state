@@ -25,6 +25,10 @@ sub test_card_copy_state
     xlog $self, "share addressbook";
     $admintalk->setacl("user.other.#addressbooks.Default",
                        "cassandane" => 'lrswipkxtecdn') or die;
+    my $otherDefault = $self->collection_jmap_id({
+        mboxname => 'user.other.#addressbooks.Default',
+        kind     => 'addressbook',
+    });
 
     my $card =  {
         '@type' => 'Card',
@@ -59,7 +63,7 @@ sub test_card_copy_state
             create => {
                 1 => {
                     id => $cardId,
-                    addressBookIds => { Default => JSON::true },
+                    addressBookIds => { $otherDefault => JSON::true },
                 },
             },
             onSuccessDestroyOriginal => JSON::true,

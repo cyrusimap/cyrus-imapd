@@ -88,7 +88,6 @@ sub new
     $config->set(virtdomains => 'userid');
     $config->set(caldav_realm => 'Cassandane');
     $config->set(httpallowcompress => 'no');
-    $config->set(conversations => 'yes');
 
     $config->set(search_engine => 'xapian');
     $config->set(search_index_headers => 'no');

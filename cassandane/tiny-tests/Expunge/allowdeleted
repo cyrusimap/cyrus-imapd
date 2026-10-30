@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_allowdeleted
-    :AllowDeleted :DelayedExpunge :Conversations
+    :AllowDeleted :DelayedExpunge
     ($self)
 {
     my $store = $self->{store};

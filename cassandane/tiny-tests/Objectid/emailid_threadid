@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test uniqueid and rename
 #
 sub test_emailid_threadid
-    :AltNamespace :Conversations :min_version_3_1
+    :AltNamespace :min_version_3_1
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

@@ -36,6 +36,10 @@ sub test_calendar_set_sharewith
 
     xlog $self, "share to user with permission to share";
     $admintalk->setacl("user.master.#calendars.$CalendarId", "cassandane" => 'lrswipkxtecdan9') or die;
+    my $CalendarJmapId = $self->collection_jmap_id({
+        mboxname => "user.master.#calendars.$CalendarId",
+        kind     => 'calendar',
+    });
 
     xlog $self, "create third account";
     $admintalk->create("user.manifold");
@@ -75,7 +79,7 @@ sub test_calendar_set_sharewith
     my $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
-                    update => { "$CalendarId" => {
+                    update => { $CalendarJmapId => {
                             "shareWith/manifold" => {
                                 mayReadFreeBusy => JSON::true,
                                 mayReadItems => JSON::true,
@@ -141,7 +145,7 @@ sub test_calendar_set_sharewith
     $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
-                    update => { "$CalendarId" => {
+                    update => { $CalendarJmapId => {
                             "shareWith/manifold/mayWriteAll" => JSON::true,
              }}}, "R1"]
     ]);
@@ -165,7 +169,7 @@ sub test_calendar_set_sharewith
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
-                    update => { "$CalendarId" => {
+                    update => { $CalendarJmapId => {
                             "shareWith/paraphrase" => undef,
              }}}, "R1"]
     ]);

@@ -6,7 +6,7 @@ use Cassandane::Util::Slurp;
 # so the id lookup key is scoped the same way: shared mailboxes in
 # different domains, or in a domain and in none, may carry the same id.
 sub test_reconstruct_mailboxid_shared_domains
-    :NoAltNameSpace :Conversations :VirtDomains
+    :NoAltNameSpace :VirtDomains
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

@@ -29,7 +29,6 @@ sub new
     # if we're gonna try and run jmap tests, set up config for it
     if ($buildinfo->get('component', 'jmap')) {
         $config->set(caldav_realm => 'Cassandane',
-                     conversations => 'yes',
                      conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                      jmapsubmission_deleteonsend => 'no',
                      ctl_conversationsdb_conversations_max_thread => 5,
@@ -44,8 +43,7 @@ sub new
         }, @args);
     }
     else {
-        $config->set(conversations => 'yes',
-                     conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+        $config->set(conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                      ctl_conversationsdb_conversations_max_thread => 5);
 
         return $class->SUPER::new({
@@ -115,7 +113,7 @@ sub _munge_annot_crc
 # Test APPEND of messages to IMAP which results in a CID clash.
 #
 sub bogus_test_append_clash
-    :min_version_3_0 :Conversations
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -158,7 +156,7 @@ sub bogus_test_append_clash
 # Test APPEND of messages to IMAP which results in multiple CID clashes.
 #
 sub bogus_test_double_clash
-    :min_version_3_0 :Conversations
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -207,7 +205,7 @@ sub bogus_test_double_clash
 # Test that a CID clash resolved on the master is replicated
 #
 sub bogus_test_replication_clash
-    :min_version_3_0 :needs_component_replication :Conversations
+    :min_version_3_0 :needs_component_replication
 {
     my ($self) = @_;
     my %exp;
@@ -284,7 +282,7 @@ sub bogus_test_replication_clash
 # conversations but not any of Message-ID, References, or In-Reply-To.
 #
 sub bogus_test_fm_webui_draft
-    :min_version_3_0 :Conversations
+    :min_version_3_0
 {
     my ($self) = @_;
     my %exp;
@@ -316,7 +314,7 @@ sub bogus_test_fm_webui_draft
 # Test a COPY between folders owned by different users
 #
 sub bogus_test_cross_user_copy
-    :min_version_3_0 :Conversations
+    :min_version_3_0
 {
     my ($self) = @_;
     my $bobuser = "bob";

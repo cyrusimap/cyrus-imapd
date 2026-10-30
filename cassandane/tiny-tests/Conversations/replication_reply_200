@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_replication_reply_200
-    :min_version_3_1 :needs_component_replication :Conversations :NoReplicaOnly
+    :min_version_3_1 :needs_component_replication :NoReplicaOnly
     ($self)
 {
     my %exp;

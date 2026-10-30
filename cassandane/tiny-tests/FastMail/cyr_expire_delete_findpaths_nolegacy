@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_cyr_expire_delete_findpaths_nolegacy
-    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
+    :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs :CompactIdsPerUser
     ($self)
 {
     my $adminstore = $self->{adminstore};

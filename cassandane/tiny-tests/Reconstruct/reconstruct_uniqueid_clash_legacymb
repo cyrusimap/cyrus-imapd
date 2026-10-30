@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 # A legacy-dir mailbox keeps its files under its name, so a uniqueid clash
 # only needs the header and mailboxes.db records changed.
 sub test_reconstruct_uniqueid_clash_legacymb
-    :MailboxLegacyDirs :NoAltNameSpace :Conversations
+    :MailboxLegacyDirs :NoAltNameSpace
     ($self)
 {
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';

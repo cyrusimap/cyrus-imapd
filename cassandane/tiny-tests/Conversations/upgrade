@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # test upgrade tooling
 #
 sub test_upgrade
-    :min_version_3_12 :Conversations
+    :min_version_3_12
     ($self)
 {
     my %exp;

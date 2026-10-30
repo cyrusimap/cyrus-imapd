@@ -31,7 +31,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(carddav_realm => 'Cassandane',
-                 conversations => 'yes',
                  httpmodules => 'carddav jmap',
                  httpallowcompress => 'no',
                  vcard_max_size => 100000,

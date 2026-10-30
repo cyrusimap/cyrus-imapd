@@ -295,11 +295,8 @@ magic(MailboxLegacyDirs => sub {
 magic(CrossDomains => sub {
     shift->config_set(crossdomains => 'yes');
 });
-magic(CompactIdsAlways => sub {
-    shift->config_set(compact_ids => 'always');
-});
-magic(Conversations => sub {
-    shift->config_set(conversations => 'yes');
+magic(NoConversations => sub {
+    shift->config_set(conversations => 'no');
 });
 magic(ConversationsQuota => sub {
     # this setting is new in 3.3.0 -- any test using this magic
@@ -538,11 +535,16 @@ magic(MailboxVersion => sub {
     }
 
     $self->{mailbox_version} = $version;
+    $self->config_set(compact_ids => 'per-user') if $version < 20;
 });
 magic(OldJMAPIds => sub {
     my ($self) = @_;
 
     $self->{old_jmap_ids} = 1;
+    $self->config_set(compact_ids => 'per-user');
+});
+magic(CompactIdsPerUser => sub {
+    shift->config_set(compact_ids => 'per-user');
 });
 
 
@@ -1560,6 +1562,54 @@ sub check_conversations
     xlog $self, "RESULT: $str";
     $self->assert_matches(qr/is OK/, $str);
     $self->assert_does_not_match(qr/is BROKEN/, $str);
+}
+
+# Find the IMAP name of a DAV collection from its JMAP id.
+#
+# With compact ids, a calendar or addressbook's JMAP id (C7F, R7F) is not
+# its mailbox name, so a test that wants to SETACL the mailbox behind a
+# collection it created over JMAP has to look the mailbox up.  The compact
+# collection id and the mailbox's own JMAP id share everything but the prefix
+# letter, and the mailboxes database records the mailbox JMAP id, so we read
+# the database rather than asking over IMAP: the admin user often has no rights
+# on another user's DAV collections, and STATUS would refuse.
+#
+#   my $mboxname = $self->collection_mboxname({
+#       parent => 'user.manifold.#calendars',
+#       id     => $CalendarId,
+#   });
+sub collection_mboxname ($self, $arg) {
+    my $parent = $arg->{parent};
+    my $want   = 'P' . substr($arg->{id}, 1);
+
+    my $mailboxes = $self->{instance}->read_mailboxes_db;
+
+    for my $name (sort keys %$mailboxes) {
+        next unless $name =~ /\A\Q$parent\E\.[^.]+\z/;
+        return $name if ($mailboxes->{$name}{jmapId} // '') eq $want;
+    }
+
+    die "no collection with id $arg->{id} under $parent";
+}
+
+# The other direction: the JMAP id of a DAV collection whose mailbox name
+# you already know, as when CalDAV or CardDAV created it and handed back
+# the name's last component.
+#
+#   my $id = $self->collection_jmap_id({
+#       mboxname => "user.other.#calendars.$dav_id",
+#       kind     => 'calendar', # or 'addressbook'
+#   });
+sub collection_jmap_id ($self, $arg) {
+    my %prefix = (calendar => 'C', addressbook => 'R');
+    my $prefix = $prefix{ $arg->{kind} }
+        // die "unknown collection kind $arg->{kind}";
+
+    my $mailboxes = $self->{instance}->read_mailboxes_db;
+    my $entry = $mailboxes->{ $arg->{mboxname} }
+        // die "no mailbox $arg->{mboxname}";
+
+    return $prefix . substr($entry->{jmapId}, 1);
 }
 
 # Set up a mailbox structure from data

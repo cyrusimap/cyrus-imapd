@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_preview_args
-    :min_version_3_5 :Conversations
+    :min_version_3_5
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();

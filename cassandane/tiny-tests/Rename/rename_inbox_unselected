@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_rename_inbox_unselected
-    :Conversations :min_version_3_7
+    :min_version_3_7
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();

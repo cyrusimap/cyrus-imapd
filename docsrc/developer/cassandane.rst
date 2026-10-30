@@ -394,7 +394,7 @@ Cassandane::Config
     .. code:: perl
 
         my $config = Cassandane::Config->default()->clone();
-        $config->set(conversations => 'on');
+        $config->set(unixhierarchysep => 'yes');
         my $instance = Cassandane::Instance->new(config => $config);
 
     Cloning is copy-on-write and ``get`` walks back up the ancestry, so a clone

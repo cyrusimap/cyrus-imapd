@@ -28,6 +28,10 @@ sub test_card_copy_preserve_xprops
         "user.other.#addressbooks.Default",
         "cassandane" => 'lrswipkxtecdn'
     ) or die;
+    my $otherDefault = $self->collection_jmap_id({
+        mboxname => 'user.other.#addressbooks.Default',
+        kind     => 'addressbook',
+    });
 
     my $card = decode(
         'utf-8', <<EOF
@@ -62,7 +66,7 @@ EOF
                 accountId     => 'other',
                 create        => {
                     contact1 => {
-                        addressBookIds => { 'Default' => JSON::true },
+                        addressBookIds => { $otherDefault => JSON::true },
                         id             => $contactId
                     }
                 },

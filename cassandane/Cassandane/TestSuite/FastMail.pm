@@ -28,7 +28,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
                  allowusermoves => 'yes',
@@ -45,7 +44,6 @@ sub new
                  crossdomains => 'yes',
                  crossdomains_onlyother => 'yes',
                  annotation_allow_undefined => 'yes',
-                 conversations => 'yes',
                  conversations_counted_flags => '\\Draft \\Flagged \\Answered $followed $muted',
                  conversations_max_thread => '100',
                  mailbox_initial_flags => '$X-ME-Annot-2 $IsMailingList $IsNotification $HasAttachment $IsTrusted $MaskedEmail $MDNSent $Forwarded $Junk $NotJunk $Phishing $Important $SieveFailed $new $CanUnsubscribe $followed $muted $hasmemo',

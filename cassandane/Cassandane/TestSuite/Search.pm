@@ -15,7 +15,6 @@ sub new
 {
     my $class = shift;
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'on');
     return $class->SUPER::new({adminstore => 1, config => $config}, @_);
 }
 

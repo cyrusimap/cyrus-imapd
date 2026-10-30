@@ -18,7 +18,6 @@ sub new
 
     $config->set(
         annotation_callout => '@basedir@/conf/socket/annotator.sock',
-        conversations => 'yes',
         httpmodules => 'jmap',
         jmap_nonstandard_extensions => 'yes',
     );

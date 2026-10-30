@@ -43,16 +43,21 @@ sub test_calendar_set_shared_sort_order
     my $session = $jmap->get_client_session->client_session;
     $self->assert_equals(JSON::false, $session->{accounts}{manifold}{isReadOnly});
 
+    my $CalendarJmapId1 = $self->collection_jmap_id({
+        mboxname => "user.manifold.#calendars.$CalendarId1",
+        kind     => 'calendar',
+    });
+
     xlog $self, "Set sortOrder on a calendar";
     my $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'manifold',
                     update => {
-                        $CalendarId1 => {
+                        $CalendarJmapId1 => {
                             sortOrder => 2
                         }
                     }
              }, "R1"]
     ]);
-    $self->assert(exists $res->[0][1]{updated}{$CalendarId1});
+    $self->assert(exists $res->[0][1]{updated}{$CalendarJmapId1});
 }

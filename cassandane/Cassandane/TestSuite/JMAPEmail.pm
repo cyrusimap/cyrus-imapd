@@ -29,7 +29,6 @@ sub new
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_historical_age => -1,
                  caldav_realm => 'Cassandane',
-                 conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment \$muted",
                  defaultdomain => 'example.com',
                  httpallowcompress => 'no',

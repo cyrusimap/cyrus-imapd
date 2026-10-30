@@ -17,8 +17,7 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'yes',
-                 httpmodules => 'jmap',
+    $config->set(httpmodules => 'jmap',
                  httpallowcompress => 'no');
 
     my $self = $class->SUPER::new({

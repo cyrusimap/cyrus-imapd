@@ -18,8 +18,7 @@ sub new
     if ($buildinfo->get('component', 'httpd')) {
         my $config = Cassandane::Config->default()->clone();
 
-        $config->set(conversations => 'yes',
-                     httpmodules => 'carddav caldav');
+        $config->set(httpmodules => 'carddav caldav');
 
         return $class->SUPER::new({
             config => $config,

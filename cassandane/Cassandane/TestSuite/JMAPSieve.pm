@@ -44,7 +44,6 @@ sub new
 
     $config->set(caldav_realm => 'Cassandane',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment \$muted",
-                 conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
                  jmap_max_objects_in_get => '3',

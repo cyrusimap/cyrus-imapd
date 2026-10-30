@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_query_snippets
-    :min_version_3_1 :needs_component_sieve :Conversations
+    :min_version_3_1 :needs_component_sieve
     ($self)
 {
     my %exp;

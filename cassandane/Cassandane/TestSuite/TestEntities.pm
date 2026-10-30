@@ -13,8 +13,7 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'yes',
-                 httpmodules => 'carddav caldav jmap',
+    $config->set(httpmodules => 'carddav caldav jmap',
                  jmap_nonstandard_extensions => 'yes');
 
     my $self = $class->SUPER::new({
