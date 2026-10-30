@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_invite_shared_with_attachment
-    :Conversations :MailboxLegacyDirs
+    :MailboxLegacyDirs
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

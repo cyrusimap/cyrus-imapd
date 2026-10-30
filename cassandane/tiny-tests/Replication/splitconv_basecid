@@ -14,7 +14,7 @@ sub basecids
 }
 
 sub test_splitconv_basecid
-    :Conversations :NoStartInstances
+    :NoStartInstances
     ($self)
 {
     $_->{config}->set(conversations_max_thread => 5)

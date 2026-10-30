@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # test reconstruct of larger conversation
 #
 sub test_reconstruct_splitconv
-    :min_version_3_1 :Conversations
+    :min_version_3_1
     ($self)
 {
     my %exp;

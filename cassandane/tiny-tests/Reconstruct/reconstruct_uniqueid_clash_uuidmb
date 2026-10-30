@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # one uniqueid share one directory.  reconstruct -I must give the name the
 # I key doesn't point at its own uniqueid and its own copy of the files.
 sub test_reconstruct_uniqueid_clash_uuidmb
-    :NoAltNameSpace :Conversations
+    :NoAltNameSpace
     ($self)
 {
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';

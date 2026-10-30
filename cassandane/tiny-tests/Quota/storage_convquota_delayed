@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_storage_convquota_delayed
-    :min_version_3_3 :Conversations :ConversationsQuota :DelayedDelete
+    :min_version_3_3 :ConversationsQuota :DelayedDelete
     ($self)
 {
     xlog $self, "test increasing usage of the STORAGE quota resource as messages are added";

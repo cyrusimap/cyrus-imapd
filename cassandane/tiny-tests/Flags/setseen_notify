@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_setseen_notify
-    :Conversations :FastMailEvent :min_version_3_0
+    :FastMailEvent :min_version_3_0
     ($self)
 {
     my $talk = $self->{store}->get_client();

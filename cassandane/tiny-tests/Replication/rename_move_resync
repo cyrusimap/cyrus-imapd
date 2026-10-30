@@ -8,7 +8,7 @@ use Cassandane::Tiny;
 # (no_copyback).
 #
 sub test_rename_move_resync
-    :NoAltNameSpace :AllowMoves :Replication :DelayedDelete :Conversations
+    :NoAltNameSpace :AllowMoves :Replication :DelayedDelete
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

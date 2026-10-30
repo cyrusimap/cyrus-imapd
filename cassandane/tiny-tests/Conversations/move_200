@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test MOVE of messages after conversation split
 #
 sub test_move_200
-    :min_version_3_1 :Conversations
+    :min_version_3_1
     ($self)
 {
     my %exp;

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_list_groupaccess_racl
-    :ReverseACLs :min_version_3_7 :NoAltNamespace :Conversations
+    :ReverseACLs :min_version_3_7 :NoAltNamespace
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

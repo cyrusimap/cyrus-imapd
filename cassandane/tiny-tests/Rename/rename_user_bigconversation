@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test big conversation rename
 #
 sub test_rename_user_bigconversation
-    :AllowMoves :Conversations :min_version_3_0
+    :AllowMoves :min_version_3_0
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();
