@@ -21,7 +21,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane');
-    $config->set(conversations => 'yes');
     $config->set(httpmodules => 'caldav jmap');
     $config->set(httpallowcompress => 'no');
     $config->set(caldav_historical_age => -1);

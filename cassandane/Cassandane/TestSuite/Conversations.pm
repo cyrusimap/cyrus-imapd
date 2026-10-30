@@ -29,7 +29,6 @@ sub new
     # if we're gonna try and run jmap tests, set up config for it
     if ($buildinfo->get('component', 'jmap')) {
         $config->set(caldav_realm => 'Cassandane',
-                     conversations => 'yes',
                      conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                      jmapsubmission_deleteonsend => 'no',
                      ctl_conversationsdb_conversations_max_thread => 5,
@@ -44,8 +43,7 @@ sub new
         }, @args);
     }
     else {
-        $config->set(conversations => 'yes',
-                     conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
+        $config->set(conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                      ctl_conversationsdb_conversations_max_thread => 5);
 
         return $class->SUPER::new({

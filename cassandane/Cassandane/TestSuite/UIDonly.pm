@@ -23,8 +23,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
 
-    $config->set(conversations => 'yes');
-
     my $self = $class->SUPER::new({
         config => $config,
         deliver => 1,

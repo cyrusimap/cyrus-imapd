@@ -19,8 +19,7 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'yes',
-                 httpmodules => 'jmap',
+    $config->set(httpmodules => 'jmap',
                  http_allowplaintext => 'off',
                  httpallowcompress => 'no');
 

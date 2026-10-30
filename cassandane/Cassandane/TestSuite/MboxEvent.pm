@@ -39,10 +39,6 @@ sub new
         'timestamp vnd.fastmail.traceId vnd.fastmail.jmapStates'
         . ' vnd.fastmail.specialUse');
 
-    # vnd.fastmail.jmapStates reports the per-type JMAP modseqs, which are only
-    # tracked when conversations are enabled.
-    $config->set(conversations => 'yes');
-
     # Enable enough HTTP to drive CalDAV requests from tests that want to
     # exercise the http engine's contribution to events (e.g. X-Trace-Id).
     $config->set(httpmodules => 'caldav carddav jmap');
