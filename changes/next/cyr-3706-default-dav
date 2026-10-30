@@ -1,0 +1,28 @@
+Description:
+
+A DAV login as "user+default" (in any case) now shows only the user's
+default calendar or addressbook, whatever that collection is called.
+Previously it showed whichever collection was named "Default".  Any other
+"user+foo" login still shows the collection named "foo".
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients that log in as "user+default" to reach a collection literally
+named "Default" will now see the user's default collection instead, if
+those differ.
+
+
+GitHub issue:
+
+None.

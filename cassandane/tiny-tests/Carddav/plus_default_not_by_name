@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+# "+Default" means the user's actual default addressbook, not whichever
+# addressbook happens to be called Default.
+sub test_plus_default_not_by_name
+    ($self)
+{
+    my $service = $self->{instance}->get_service("http");
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{carddav}->NewAddressBook('Other');
+
+    xlog $self, "make Other the default addressbook";
+    $admintalk->setmetadata('user.cassandane.#addressbooks',
+        '/shared/vendor/cmu/cyrus-httpd/' .
+        '<http://cyrusimap.org/ns/>jmap-default-addressbook',
+        'user.cassandane.#addressbooks.Other',
+    );
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $talk = Net::CardDAVTalk->new(
+        user => 'cassandane+Default',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my @paths = map { $_->{path} } @{ $talk->GetAddressBooks };
+    $self->assert_cmp_deeply([ 'Other' ], \@paths);
+}
