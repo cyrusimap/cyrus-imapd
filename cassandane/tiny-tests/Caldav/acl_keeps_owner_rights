@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_acl_keeps_owner_rights
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Owner sets a DAV ACL that omits the owner";
+    my $xml = <<'EOF';
+<?xml version="1.0" encoding="utf-8"?>
+<D:acl xmlns:D="DAV:">
+  <D:ace>
+    <D:principal><D:all/></D:principal>
+    <D:grant><D:privilege><D:read/></D:privilege></D:grant>
+  </D:ace>
+</D:acl>
+EOF
+
+    $caldav->Request('ACL', "/dav/calendars/user/cassandane/Default", $xml,
+                     'Content-Type' => 'application/xml');
+
+    my %acl = $admintalk->getacl("user.cassandane.#calendars.Default")->@*;
+    $self->assert_not_null($acl{cassandane});
+    $self->assert_matches(qr/\Q$_\E/, $acl{cassandane}) for split //, "lkxan";
+    $self->assert_not_null($acl{anyone});
+}
