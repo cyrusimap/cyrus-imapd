@@ -49,6 +49,9 @@ sub default
             debug_command => '@prefix@/utils/gdbtramp %s %d',
             # default changed, we want to be explicit about it
             unixhierarchysep => 'no',
+            # most tests need this; the few that test life without it
+            # use the :NoConversations magic
+            conversations => 'yes',
             # let's hear all about it
             chatty => 'yes',
             debug => 'yes',

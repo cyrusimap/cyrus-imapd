@@ -301,6 +301,9 @@ magic(CompactIdsAlways => sub {
 magic(Conversations => sub {
     shift->config_set(conversations => 'yes');
 });
+magic(NoConversations => sub {
+    shift->config_set(conversations => 'no');
+});
 magic(ConversationsQuota => sub {
     # this setting is new in 3.3.0 -- any test using this magic
     # also needs :min_version_3_3
