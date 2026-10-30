@@ -4438,6 +4438,10 @@ static int _mbox_changes_cb(const mbentry_t *mbentry, void *rock)
         return 0;
     }
 
+    /* A tombstone or intermediate from before jmapids has no JMAP id */
+    if (USER_COMPACT_EMAILIDS(req->cstate) && !mbentry->jmapid)
+        return 0;
+
     /* Lookup status. */
     if (!(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE))) {
         struct statusdata sdata = STATUSDATA_INIT;

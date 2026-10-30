@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+# A tombstone left over from before jmapids has no J field.  It has no JMAP
+# id, so Mailbox/changes must skip it rather than try to report it.
+sub test_mailbox_changes_tombstone_no_jmapid
+    :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $imap = $self->{store}->get_client();
+    my $instance = $self->{instance};
+    my $db = $instance->get_basedir() . '/conf/mailboxes.db';
+    my $format = $instance->{config}->get('mboxlist_db');
+    my $key = "Nuser\x1fcassandane\x1ffoo";
+
+    $imap->create('INBOX.foo') or die;
+    $imap->delete('INBOX.foo') or die;
+
+    my $res = $jmap->CallMethods([['Mailbox/get', { ids => [] }, 'R1']]);
+    my $state = $res->[0][1]{state};
+    $self->assert_not_null($state);
+
+    xlog $self, "remove the jmapid from the tombstone of INBOX.foo";
+    $self->{store}->disconnect();
+    $instance->stop();
+    $instance->{re_use_dir} = 1;
+    my (undef, $value) = $instance->run_dbcommand($db, $format, ['SHOW', $key]);
+    my $record = Cyrus::DList->parse_string($value)->as_perl();
+    $self->assert_str_equals('ed', $record->{T});
+    $self->assert_not_null(delete $record->{J});
+    $instance->run_dbcommand($db, $format,
+        ['SET', $key, Cyrus::DList->new_perl('', $record)->as_string()]);
+    $instance->start();
+    $self->{store}->connect();
+
+    $imap = $self->{store}->get_client();
+    $imap->create('INBOX.bar') or die;
+    my $barId = $imap->status('INBOX.bar', ['mailboxid'])->{mailboxid}[0];
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/changes', { sinceState => $state }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(superhashof({
+        created => [$barId],
+        updated => [],
+        destroyed => [],
+    }), $res->[0][1]);
+}
