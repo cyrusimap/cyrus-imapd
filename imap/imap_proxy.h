@@ -37,7 +37,23 @@ extern struct protocol_t imap_protocol;
 
 void proxy_gentag(char *tag, size_t len);
 
+/**
+ * Find or open a connection to a backend, as the proxied user, caching it
+ * with imapd's other backend connections.
+ *
+ * @param server  the backend's name, as in an mbentry's server field
+ * @return the backend, or NULL if it can't be reached
+ */
+struct backend *proxy_findbackend(const char *server);
 struct backend *proxy_findinboxserver(const char *userid);
+
+/**
+ * The backend holding the logged-in user's INBOX, connecting to it and
+ * remembering it in backend_inbox the first time.
+ *
+ * @return the backend, or NULL if the INBOX is local or can't be reached
+ */
+struct backend *proxy_inbox_backend(void);
 
 int discard_until_tag(struct backend *s, const char *tag, int force_notfatal);
 int pipe_until_tag(struct backend *s, const char *tag, int force_notfatal);

@@ -95,6 +95,13 @@ void proxy_gentag(char *tag, size_t len)
     snprintf(tag, len, "PROXY%d", proxy_cmdcnt++);
 }
 
+struct backend *proxy_findbackend(const char *server)
+{
+    return proxy_findserver(server, &imap_protocol, proxy_userid,
+                            &backend_cached, &backend_current, &backend_inbox,
+                            imapd_in);
+}
+
 struct backend *proxy_findinboxserver(const char *userid)
 {
     mbentry_t *mbentry = NULL;
@@ -107,14 +114,18 @@ struct backend *proxy_findinboxserver(const char *userid)
     if (r) return NULL;
 
     if (mbentry->mbtype & MBTYPE_REMOTE) {
-        s = proxy_findserver(mbentry->server, &imap_protocol,
-                             proxy_userid, &backend_cached,
-                             &backend_current, &backend_inbox, imapd_in);
+        s = proxy_findbackend(mbentry->server);
     }
 
     mboxlist_entry_free(&mbentry);
 
     return s;
+}
+
+struct backend *proxy_inbox_backend(void)
+{
+    if (!backend_inbox) backend_inbox = proxy_findinboxserver(imapd_userid);
+    return backend_inbox;
 }
 
 #define PIPE_FLAG_FORCE_NOTFATAL (1<<0)
@@ -1491,9 +1502,7 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 
     assert(server && mbox_pat && entry_pat && attribute_pat);
 
-    be = proxy_findserver(server, &imap_protocol,
-                          proxy_userid, &backend_cached,
-                          &backend_current, &backend_inbox, imapd_in);
+    be = proxy_findbackend(server);
     if (!be) return IMAP_SERVER_UNAVAILABLE;
 
     /* Send command to remote */
@@ -1541,9 +1550,7 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
 
     assert(server && mbox_pat && entryatts);
 
-    be = proxy_findserver(server, &imap_protocol,
-                          proxy_userid, &backend_cached,
-                          &backend_current, &backend_inbox, imapd_in);
+    be = proxy_findbackend(server);
     if (!be) return IMAP_SERVER_UNAVAILABLE;
 
     /* Send command to remote */
@@ -1633,9 +1640,7 @@ static void proxy_part_filldata(partlist_t *part_list, int idx)
                lf_s("proxy.server", item->value));
 
     /* connect to server */
-    be = proxy_findserver(item->value, &imap_protocol,
-            proxy_userid, &backend_cached,
-            &backend_current, &backend_inbox, imapd_in);
+    be = proxy_findbackend(item->value);
 
     if (be) {
         uint64_t server_available = 0;
