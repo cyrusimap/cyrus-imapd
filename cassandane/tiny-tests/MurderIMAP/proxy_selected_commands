@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+# Commands on a selected mailbox that's on a backend go through to it.
+sub test_proxy_selected_commands
+    :NoAltNamespace
+    ($self)
+{
+    $self->make_message("Message $_") for 1..4;
+
+    my $frontend = $self->{frontend_store}->get_client();
+    $frontend->select('INBOX') or die "select: $@";
+
+    $frontend->noop();
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    my $res = $frontend->fetch('1:*', '(uid)');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_num_equals(4, scalar keys %$res);
+
+    $frontend->store('2', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $res = $frontend->search('deleted');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_cmp_deeply([2], $res);
+
+    $res = $frontend->sort('(subject)', 'utf-8', 'all');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_cmp_deeply([1, 2, 3, 4], $res);
+
+    $res = $frontend->thread('references', 'utf-8', 'all');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+    $self->assert_num_equals(4, scalar @$res);
+
+    $frontend->expunge();
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $frontend->store('3', '+flags', '(\\Deleted)');
+    $frontend->_imap_cmd('UID EXPUNGE', 0, '', '3');
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $res = $frontend->search('all');
+    $self->assert_cmp_deeply([1, 4], $res);
+
+    $frontend->unselect();
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    $frontend->select('INBOX') or die "select: $@";
+    $frontend->close();
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+}
