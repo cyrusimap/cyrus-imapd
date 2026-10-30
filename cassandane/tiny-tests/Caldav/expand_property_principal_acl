@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+use Test::Deep ();
+
+sub test_expand_property_principal_acl
+    :NoAltNameSpace
+{
+    my ($self) = @_;
+
+    my $cmp_deeply = sub {
+        my ($want, $got) = @_;
+        my ($ok, $stack) = Test::Deep::cmp_details($got, $want);
+        $self->assert($ok, $ok ? '' : Test::Deep::deep_diag($stack));
+    };
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $caldav = $self->{caldav};
+
+    xlog $self, "Create a second user with a calendar home";
+    $admintalk->create("user.other");
+    my $service = $self->{instance}->get_service("http");
+    my $othertalk = Net::CalDAVTalk->new(
+        user      => "other",
+        password  => 'pass',
+        host      => $service->host(),
+        port      => $service->port(),
+        scheme    => 'http',
+        url       => '/',
+        expandurl => 1,
+    );
+
+    my $xml = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:expand-property xmlns:D="DAV:">
+  <D:property name="displayname"/>
+  <D:property name="principal-URL">
+    <D:property name="displayname"/>
+  </D:property>
+</D:expand-property>
+EOF
+
+    xlog $self, "Expand properties of own principal";
+    my $res = $caldav->SafeRequest('REPORT',
+        '/dav/principals/user/cassandane/', $xml,
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(207, $res->{http_response}{status});
+    my $prop = $res->{payload}{'{DAV:}response'}[0]
+                   {'{DAV:}propstat'}[0]{'{DAV:}prop'};
+    my $name = $prop->{'{DAV:}displayname'}{content};
+    $self->assert_not_null($name);
+    $cmp_deeply->({
+        '{DAV:}href' => { content => '/dav/principals/user/cassandane/' },
+        '{DAV:}propstat' => {
+            '{DAV:}prop' => {
+                '{DAV:}displayname' => { content => $name },
+            },
+            '{DAV:}status' => { content => 'HTTP/1.1 200 OK' },
+        },
+    }, $prop->{'{DAV:}principal-URL'}{'{DAV:}response'});
+
+    xlog $self, "Expanding properties of another principal is forbidden";
+    $res = $caldav->SafeRequest('REPORT',
+        '/dav/principals/user/other/', $xml,
+        'Content-Type' => 'application/xml', Depth => 0);
+    $self->assert_num_equals(403, $res->{http_response}{status});
+    $self->assert_matches(qr/need-privileges/,
+        $res->{http_response}{content});
+    $self->assert_does_not_match(qr/displayname/,
+        $res->{http_response}{content});
+}
