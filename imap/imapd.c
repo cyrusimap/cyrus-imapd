@@ -7283,8 +7283,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                     }
 
                     // why not send a LOCALCREATE to the backend?
-                    prot_printf(s_conn->out, "%s CREATE ", tag);
-                    prot_printastring(s_conn->out, origname);
+                    proxy_begin(s_conn, tag, "CREATE", origname, PROXY_RESULT);
 
                     // special use needs extended support, so pass through extargs
                     if (specialuse.len || uniqueid) {
@@ -7317,10 +7316,6 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                         prot_printastring(s_conn->out, partition);
                     }
 
-                    prot_printf(s_conn->out, "\r\n");
-
-                    int res = pipe_until_tag(s_conn, tag, 0);
-
                     if (!CAPA(s_conn, CAPA_MUPDATE)) {
                         // Huh?
                         // "do MUPDATE create operations"
@@ -7329,12 +7324,7 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
                                    lf_s("proxy.server", server));
                     }
 
-                    /* make sure we've seen the update */
-                    if (ultraparanoid && res == PROXY_OK) kick_mupdate();
-
-                    imapd_check(s_conn, 0);
-
-                    prot_printf(imapd_out, "%s %s", tag, s_conn->last_result.s);
+                    proxy_finish(s_conn, tag, PROXY_RESULT);
 
                     goto done;
 
@@ -7614,7 +7604,6 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
         struct backend *s = NULL;
-        int res;
 
         // don't hold the lock locally, we're proxying
         user_nslock_release(&user_nslock);
@@ -7626,29 +7615,13 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
         }
 
         s = proxy_findbackend(mbentry->server);
-        if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
-        if (!r) {
-            prot_printf(s->out, "%s DELETE {%zu+}\r\n%s\r\n",
-                        tag, strlen(origname), origname);
-            res = pipe_until_tag(s, tag, 0);
-
-            if (!CAPA(s, CAPA_MUPDATE) && res == PROXY_OK) {
-                /* do MUPDATE delete operations */
-            }
-
-            /* make sure we've seen the update */
-            if (ultraparanoid && res == PROXY_OK) kick_mupdate();
-        }
-
-        imapd_check(s, 0);
-
-        if (r) {
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+        if (s) {
+            proxy_begin(s, tag, "DELETE", origname, PROXY_RESULT);
+            proxy_finish(s, tag, PROXY_RESULT);
         } else {
-            /* we're allowed to reference last_result since the noop, if
-               sent, went to a different server */
-            prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
+            imapd_check(NULL, 0);
+            prot_printf(imapd_out, "%s NO %s\r\n", tag,
+                        error_message(IMAP_SERVER_UNAVAILABLE));
         }
 
         goto done;
@@ -8064,7 +8037,6 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
     if (!r && mbentry->mbtype & MBTYPE_REMOTE) {
         /* remote mailbox */
         struct backend *s = NULL;
-        int res;
 
         // don't hold the locks locally, we're proxying
         user_nslock_release(&user_nslock);
@@ -8096,30 +8068,21 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
 
             if (!destserver || !strcmp(destserver, mbentry->server)) {
                 /* same server: proxy a rename */
-                prot_printf(s->out,
-                        "%s RENAME \"%s\" \"%s\" %s\r\n",
-                        tag,
-                        orig_oldname,
-                        orig_newname,
-                        location);
+                proxy_begin(s, tag, "RENAME", orig_oldname, PROXY_RESULT);
+                prot_putc(' ', s->out);
+                prot_printliteral(s->out, orig_newname, strlen(orig_newname));
+                prot_printf(s->out, " %s", location);
             } else {
                 /* different server: proxy an xfer */
-                prot_printf(s->out,
-                        "%s XFER \"%s\" %s%s%s\r\n",
-                        tag,
-                        oldname,
-                        destserver,
-                        destpart ? " " : "",
-                        destpart ? destpart : "");
+                proxy_begin(s, tag, "XFER", oldname, PROXY_RESULT);
+                prot_printf(s->out, " %s%s%s",
+                            destserver,
+                            destpart ? " " : "",
+                            destpart ? destpart : "");
             }
 
             if (destserver) free(destserver);
             if (destpart) free(destpart);
-
-            res = pipe_until_tag(s, tag, 0);
-
-            /* make sure we've seen the update */
-            if (ultraparanoid && res == PROXY_OK) kick_mupdate();
 
         } else { // (location)
             // a simple rename, old name and new name must not be the same
@@ -8128,28 +8091,12 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
                 goto done;
             }
 
-            prot_printf(s->out,
-                    "%s RENAME \"%s\" \"%s\"\r\n",
-                    tag,
-                    orig_oldname,
-                    orig_newname
-                );
-
-            res = pipe_until_tag(s, tag, 0);
-
-            /* make sure we've seen the update */
-            if (ultraparanoid && res == PROXY_OK) kick_mupdate();
+            proxy_begin(s, tag, "RENAME", orig_oldname, PROXY_RESULT);
+            prot_putc(' ', s->out);
+            prot_printliteral(s->out, orig_newname, strlen(orig_newname));
         }
 
-        imapd_check(s, 0);
-
-        if (r) {
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-        } else {
-            /* we're allowed to reference last_result since the noop, if
-               sent, went to a different server */
-            prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
-        }
+        proxy_finish(s, tag, PROXY_RESULT);
 
         goto done;
     }
@@ -9282,54 +9229,34 @@ static void cmd_setacl(char *tag, const char *name,
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         /* remote mailbox */
         struct backend *s = NULL;
-        int res;
 
         // don't hold the lock locally, we're calling remote
         user_nslock_release(&user_nslock);
 
         s = proxy_findbackend(mbentry->server);
-        if (!s) r = IMAP_SERVER_UNAVAILABLE;
+        if (!s) {
+            imapd_check(NULL, 0);
+            prot_printf(imapd_out, "%s NO %s\r\n", tag,
+                        error_message(IMAP_SERVER_UNAVAILABLE));
+            goto done;
+        }
 
-        if (!r && imapd_userisadmin && supports_referrals) {
+        if (imapd_userisadmin && supports_referrals) {
             /* They aren't an admin remotely, so let's refer them */
             imapd_refer(tag, mbentry->server, name);
             referral_kick = 1;
             goto done;
         }
 
-        if (!r) {
-            if (rights) {
-                prot_printf(s->out,
-                            "%s Setacl {%zu+}\r\n%s"
-                            " {%zu+}\r\n%s {%zu+}\r\n%s\r\n",
-                            tag, strlen(name), name,
-                            strlen(identifier), identifier,
-                            strlen(rights), rights);
-            } else {
-                prot_printf(s->out,
-                            "%s Deleteacl {%zu+}\r\n%s"
-                            " {%zu+}\r\n%s\r\n",
-                            tag, strlen(name), name,
-                            strlen(identifier), identifier);
-            }
-            res = pipe_until_tag(s, tag, 0);
-
-            if (!CAPA(s, CAPA_MUPDATE) && res == PROXY_OK) {
-                /* setup new ACL in MUPDATE */
-            }
-            /* make sure we've seen the update */
-            if (ultraparanoid && res == PROXY_OK) kick_mupdate();
+        proxy_begin(s, tag, rights ? "Setacl" : "Deleteacl",
+                    name, PROXY_RESULT);
+        prot_putc(' ', s->out);
+        prot_printliteral(s->out, identifier, strlen(identifier));
+        if (rights) {
+            prot_putc(' ', s->out);
+            prot_printliteral(s->out, rights, strlen(rights));
         }
-
-        imapd_check(s, 0);
-
-        if (r) {
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-        } else {
-            /* we're allowed to reference last_result since the noop, if
-               sent, went to a different server */
-            prot_printf(imapd_out, "%s %s", tag, s->last_result.s);
-        }
+        proxy_finish(s, tag, PROXY_RESULT);
 
         goto done;
     }
