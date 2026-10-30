@@ -1562,6 +1562,54 @@ sub check_conversations
     $self->assert_does_not_match(qr/is BROKEN/, $str);
 }
 
+# Find the IMAP name of a DAV collection from its JMAP id.
+#
+# With compact ids, a calendar or addressbook's JMAP id (C7F, R7F) is not
+# its mailbox name, so a test that wants to SETACL the mailbox behind a
+# collection it created over JMAP has to look the mailbox up.  The compact
+# collection id and the mailbox's own JMAP id share everything but the prefix
+# letter, and the mailboxes database records the mailbox JMAP id, so we read
+# the database rather than asking over IMAP: the admin user often has no rights
+# on another user's DAV collections, and STATUS would refuse.
+#
+#   my $mboxname = $self->collection_mboxname({
+#       parent => 'user.manifold.#calendars',
+#       id     => $CalendarId,
+#   });
+sub collection_mboxname ($self, $arg) {
+    my $parent = $arg->{parent};
+    my $want   = 'P' . substr($arg->{id}, 1);
+
+    my $mailboxes = $self->{instance}->read_mailboxes_db;
+
+    for my $name (sort keys %$mailboxes) {
+        next unless $name =~ /\A\Q$parent\E\.[^.]+\z/;
+        return $name if ($mailboxes->{$name}{jmapId} // '') eq $want;
+    }
+
+    die "no collection with id $arg->{id} under $parent";
+}
+
+# The other direction: the JMAP id of a DAV collection whose mailbox name
+# you already know, as when CalDAV or CardDAV created it and handed back
+# the name's last component.
+#
+#   my $id = $self->collection_jmap_id({
+#       mboxname => "user.other.#calendars.$dav_id",
+#       kind     => 'calendar', # or 'addressbook'
+#   });
+sub collection_jmap_id ($self, $arg) {
+    my %prefix = (calendar => 'C', addressbook => 'R');
+    my $prefix = $prefix{ $arg->{kind} }
+        // die "unknown collection kind $arg->{kind}";
+
+    my $mailboxes = $self->{instance}->read_mailboxes_db;
+    my $entry = $mailboxes->{ $arg->{mboxname} }
+        // die "no mailbox $arg->{mboxname}";
+
+    return $prefix . substr($entry->{jmapId}, 1);
+}
+
 # Set up a mailbox structure from data
 # See List.pm tests for examples of how to drive this
 sub setup_mailbox_structure
