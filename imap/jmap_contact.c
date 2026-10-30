@@ -2144,6 +2144,10 @@ static int getaddressbookchanges_cb(const mbentry_t *mbentry, void *vrock)
     if (!mboxname_isaddressbookmailbox(mbentry->name, mbentry->mbtype))
         return 0;
 
+    /* A tombstone from before jmapids has no JMAP id */
+    if (USER_COMPACT_EMAILIDS(req->cstate) && !mbentry->jmapid)
+        return 0;
+
     char id[JMAP_MAX_ADDRBOOKID_SIZE];
     jmap_set_addrbookid(req->cstate, mbentry, id);
 
