@@ -1486,6 +1486,42 @@ static void imapd_check(struct backend *be, unsigned tell_flags)
     }
 }
 
+/*
+ * If the selected mailbox is remote, send its backend 'tag' and 'cmd', then
+ * the arguments that 'fmt' formats unless it's NULL, then the rest of the
+ * client's command line if 'rest_of_line', and relay the response.
+ *
+ * Returns true if it did, false if the selected mailbox, if any, is local.
+ */
+static bool proxy_selected(const char *tag, const char *cmd, bool rest_of_line,
+                           const char *fmt, ...)
+    __attribute__((format(printf, 4, 5)));
+static bool proxy_selected(const char *tag, const char *cmd, bool rest_of_line,
+                           const char *fmt, ...)
+{
+    if (!backend_current) return false;
+
+    prot_printf(backend_current->out, "%s %s", tag, cmd);
+    if (fmt) {
+        va_list args;
+
+        prot_putc(' ', backend_current->out);
+        va_start(args, fmt);
+        prot_vprintf(backend_current->out, fmt, args);
+        va_end(args);
+    }
+
+    if (rest_of_line) {
+        prot_putc(' ', backend_current->out);
+        if (pipe_command(backend_current, 65536)) return true;
+    }
+    else {
+        prot_puts(backend_current->out, "\r\n");
+    }
+    pipe_including_tag(backend_current, tag, 0);
+    return true;
+}
+
 #define IS_EOL(c, pin) ((c = (c == '\r') ? prot_getc(pin) : c) == '\n')
 
 /*
@@ -3443,13 +3479,7 @@ static void cmd_unauthenticate(char *tag)
  */
 static void cmd_noop(char *tag, char *cmd)
 {
-    if (backend_current) {
-        /* remote mailbox */
-        prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
-        pipe_including_tag(backend_current, tag, 0);
-
-        return;
-    }
+    if (proxy_selected(tag, cmd, false, NULL)) return;
 
     imapd_check(NULL, TELL_EXPUNGED);
 
@@ -5118,13 +5148,9 @@ static void cmd_close(char *tag, char *cmd)
 {
     if (cmd[0] == 'U') client_behavior_mask |= CB_UNSELECT;
 
-    if (backend_current) {
-        /* remote mailbox */
-        prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
-        /* XXX do we want this to say OK if the connection is gone?
-         * saying NO is clearly wrong, hense the fatal request. */
-        pipe_including_tag(backend_current, tag, 0);
-
+    /* XXX do we want this to say OK if the connection is gone?
+     * saying NO is clearly wrong, hense the fatal request. */
+    if (proxy_selected(tag, cmd, false, NULL)) {
         /* remove backend_current from the protgroup */
         protgroup_delete(protin, backend_current->in);
 
@@ -5850,14 +5876,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     unsigned flags = FETCH_ALLOW_MODIFIERS;
     struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
 
-    if (backend_current) {
-        /* remote mailbox */
-        prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
-        return;
-    }
+    if (proxy_selected(tag, cmd, true, "%s", sequence)) return;
 
     /* local mailbox */
     memset(&fetchargs, 0, sizeof(struct fetchargs));
@@ -5948,15 +5967,7 @@ static void cmd_store(char *tag, char *sequence, int usinguid)
     char *modified = NULL;
     int r;
 
-    if (backend_current) {
-        /* remote mailbox */
-        prot_printf(backend_current->out, "%s %s %s ",
-                    tag, cmd, sequence);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
-        return;
-    }
+    if (proxy_selected(tag, cmd, true, "%s", sequence)) return;
 
     /* local mailbox */
     memset(&storeargs, 0, sizeof storeargs);
@@ -6306,14 +6317,7 @@ static void cmd_search(const char *tag, const char *cmd)
     int usinguid = 0, n = 0;
     int state = GETSEARCH_RETURN;
 
-    if (backend_current) {
-        /* remote mailbox */
-        if (cmd[0] == 'U') cmd = "UID Search";
-
-        prot_printf(backend_current->out, "%s %s ", tag, cmd);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
+    if (proxy_selected(tag, cmd[0] == 'U' ? "UID Search" : cmd, true, NULL)) {
         return;
     }
 
@@ -6564,14 +6568,7 @@ static void cmd_sort(char *tag, int usinguid)
     clock_t start = clock();
     int n;
 
-    if (backend_current) {
-        /* remote mailbox */
-        const char *cmd = usinguid ? "UID Sort" : "Sort";
-
-        prot_printf(backend_current->out, "%s %s ", tag, cmd);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
+    if (proxy_selected(tag, usinguid ? "UID Sort" : "Sort", true, NULL)) {
         return;
     }
 
@@ -6658,14 +6655,7 @@ static void cmd_thread(char *tag, int usinguid)
     clock_t start = clock();
     int n;
 
-    if (backend_current) {
-        /* remote mailbox */
-        const char *cmd = usinguid ? "UID Thread" : "Thread";
-
-        prot_printf(backend_current->out, "%s %s ", tag, cmd);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
+    if (proxy_selected(tag, usinguid ? "UID Thread" : "Thread", true, NULL)) {
         return;
     }
 
@@ -6990,15 +6980,8 @@ static void cmd_expunge(char *tag, char *sequence)
     modseq_t new;
     int r = 0;
 
-    if (backend_current) {
-        /* remote mailbox */
-        if (sequence) {
-            prot_printf(backend_current->out, "%s UID Expunge %s\r\n", tag,
-                        sequence);
-        } else {
-            prot_printf(backend_current->out, "%s Expunge\r\n", tag);
-        }
-        pipe_including_tag(backend_current, tag, 0);
+    if (sequence ? proxy_selected(tag, "UID Expunge", false, "%s", sequence)
+                 : proxy_selected(tag, "Expunge", false, NULL)) {
         return;
     }
 
@@ -11446,14 +11429,7 @@ static void cmd_xrunannotator(const char *tag, const char *sequence,
     char mytime[100];
     int r = 0;
 
-    if (backend_current) {
-        /* remote mailbox */
-        prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
-        }
-        return;
-    }
+    if (proxy_selected(tag, cmd, true, "%s", sequence)) return;
 
     /* local mailbox */
 
@@ -15903,14 +15879,9 @@ static void cmd_uidbatches(char *tag, uint32_t size, uint32_t low, uint32_t high
         return;
     }
 
-    if (backend_current) {
-        /* remote mailbox */
-        prot_printf(backend_current->out, "%s UIDBATCHES %u", tag, size);
-        if (low > 1 || high < UINT32_MAX) {
-            prot_printf(backend_current->out, " %u:%u", low, high);
-        }
-        prot_puts(backend_current->out, "\r\n");
-        pipe_including_tag(backend_current, tag, 0);
+    if ((low > 1 || high < UINT32_MAX) ?
+        proxy_selected(tag, "UIDBATCHES", false, "%u %u:%u", size, low, high) :
+        proxy_selected(tag, "UIDBATCHES", false, "%u", size)) {
         return;
     }
 
