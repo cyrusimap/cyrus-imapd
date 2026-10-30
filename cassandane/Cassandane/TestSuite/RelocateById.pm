@@ -15,7 +15,6 @@ sub new
     my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
     $config->set(
-        conversations => 'yes',
         mailbox_legacy_dirs => 'yes',
         delete_mode => 'delayed',
         unixhierarchysep => 'no', # XXX need a :NoUnixHierarchySep

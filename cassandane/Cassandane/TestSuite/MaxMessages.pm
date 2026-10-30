@@ -25,7 +25,6 @@ sub new
         caldav_realm => 'Cassandane',
         calendar_user_address_set => 'example.com',
         caldav_historical_age => -1,
-        conversations => 1,
         httpmodules => 'caldav carddav jmap',
         httpallowcompress => 'no',
         icalendar_max_size => 100000,

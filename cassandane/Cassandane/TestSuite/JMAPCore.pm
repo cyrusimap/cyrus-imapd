@@ -26,7 +26,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  jmap_max_size_upload => '1k',
                  jmap_max_size_request => '4k',

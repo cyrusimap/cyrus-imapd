@@ -20,8 +20,7 @@ sub new
     my ($class, @args) = @_;
 
     my $config = Cassandane::Config->default()->clone();
-    $config->set(conversations => 'yes',
-                 httpmodules => 'jmap',
+    $config->set(httpmodules => 'jmap',
                  jmap_max_size_upload => '1k',
                  httpallowcompress => 'no');
 

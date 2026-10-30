@@ -27,7 +27,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  httpmodules => 'carddav caldav jmap',
                  specialuse_extra => '\\XSpecialUse \\XChats \\XTemplates \\XNotes',

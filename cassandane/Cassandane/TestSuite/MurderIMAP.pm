@@ -20,8 +20,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
 
-    $config->set(conversations => 'yes');
-
     my $self = $class->SUPER::new({
         imapmurder => 1, adminstore => 1, deliver => 1,
     }, @_);
