@@ -295,9 +295,6 @@ magic(MailboxLegacyDirs => sub {
 magic(CrossDomains => sub {
     shift->config_set(crossdomains => 'yes');
 });
-magic(CompactIdsAlways => sub {
-    shift->config_set(compact_ids => 'always');
-});
 magic(NoConversations => sub {
     shift->config_set(conversations => 'no');
 });
@@ -538,11 +535,16 @@ magic(MailboxVersion => sub {
     }
 
     $self->{mailbox_version} = $version;
+    $self->config_set(compact_ids => 'per-user') if $version < 20;
 });
 magic(OldJMAPIds => sub {
     my ($self) = @_;
 
     $self->{old_jmap_ids} = 1;
+    $self->config_set(compact_ids => 'per-user');
+});
+magic(CompactIdsPerUser => sub {
+    shift->config_set(compact_ids => 'per-user');
 });
 
 

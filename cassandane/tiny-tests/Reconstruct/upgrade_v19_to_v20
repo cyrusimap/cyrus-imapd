@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 sub test_upgrade_v19_to_v20
     :MailboxLegacyDirs :NoAltNameSpace :Replication
     :NoStartInstances
-    :min_version_3_13 :min_other_version_3_13
+    :min_version_3_13 :min_other_version_3_13 :CompactIdsPerUser
     ($self)
 {
     # Every database the fixture tarball carries is a plain file, so each must

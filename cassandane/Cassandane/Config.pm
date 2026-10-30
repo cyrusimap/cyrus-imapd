@@ -52,6 +52,9 @@ sub default
             # most tests need this; the few that test life without it
             # use the :NoConversations magic
             conversations => 'yes',
+            # the same goes for this; the tests that want per-user compact ids
+            # use the :CompactIdsPerUser magic
+            compact_ids => 'always',
             # let's hear all about it
             chatty => 'yes',
             debug => 'yes',

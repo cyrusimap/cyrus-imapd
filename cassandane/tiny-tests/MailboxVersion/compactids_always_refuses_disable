@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_compactids_always_refuses_disable
-    :min_version_3_13 :CompactIdsAlways
+    :min_version_3_13
     ($self)
 {
     $self->make_message("test compactids");
