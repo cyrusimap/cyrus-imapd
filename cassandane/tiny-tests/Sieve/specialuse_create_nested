@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+# fileinto :specialuse :create still files into a nested mailbox it creates,
+# but doesn't give it special-use.
+sub test_specialuse_create_nested
+    :NoAltNameSpace
+    ($self)
+{
+    my $folder = "INBOX.Mail.junk";
+
+    $self->{instance}->install_sieve_script(<<EOF
+require ["fileinto", "special-use", "mailbox"];
+fileinto :specialuse "\\\\Junk" :create "$folder";
+EOF
+    );
+
+    my $msg = $self->{gen}->generate(subject => "msg1");
+    $self->{instance}->deliver($msg);
+
+    my $talk = $self->{store}->get_client();
+    $talk->select($folder);
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+
+    my $res = $talk->getmetadata($folder, '/private/specialuse');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_null($res->{$folder}{'/private/specialuse'});
+}

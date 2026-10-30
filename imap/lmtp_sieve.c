@@ -1201,7 +1201,7 @@ static int do_fileinto(deliver_data_t *mdata, const char *userid,
             if (specialuse) {
                 /* Attempt to add special-use flag to newly created mailbox */
                 struct buf buf = BUF_INITIALIZER;
-                int r = specialuse_validate(NULL, userid, specialuse, &buf, 0);
+                int r = specialuse_validate(intname, userid, specialuse, &buf, 0);
 
                 if (!r) {
                     annotatemore_write(intname, "/specialuse", userid, &buf);
@@ -1702,7 +1702,7 @@ static int sieve_snooze(void *ac,
                 if (!ret && sn->awaken_spluse) {
                     /* Attempt to add special-use flag to newly created mailbox */
                     struct buf specialuse = BUF_INITIALIZER;
-                    int r2 = specialuse_validate(NULL, userid,
+                    int r2 = specialuse_validate(awaken, userid,
                                                  sn->awaken_spluse, &specialuse, 0);
 
                     if (!r2) {
@@ -2337,7 +2337,7 @@ static void do_fcc(script_data_t *sdata, sieve_fileinto_context_t *fcc,
             if (!r && fcc->specialuse) {
                 /* Attempt to add special-use flag to newly created mailbox */
                 struct buf specialuse = BUF_INITIALIZER;
-                int r2 = specialuse_validate(NULL, userid,
+                int r2 = specialuse_validate(intname, userid,
                                              fcc->specialuse, &specialuse, 0);
 
                 if (!r2) {
