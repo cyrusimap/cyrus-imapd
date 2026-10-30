@@ -1522,6 +1522,21 @@ static bool proxy_selected(const char *tag, const char *cmd, bool rest_of_line,
     return true;
 }
 
+/*
+ * Close the selected mailbox on backend_current, before selecting another
+ * mailbox or none.  The caller updates backend_current.
+ */
+static void proxy_unselect(void)
+{
+    char mytag[128];
+
+    proxy_gentag(mytag, sizeof(mytag));
+    prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
+    /* do not fatal() here, because we don't really care about this
+     * server anymore anyway */
+    pipe_until_tag(backend_current, mytag, 1);
+}
+
 /* proxy_begin() and proxy_finish() flags */
 #define PROXY_RESULT        (1<<0)  /* hold the tagged response, see below */
 #define PROXY_REST_OF_LINE  (1<<1)  /* the client's line follows the command */
@@ -3459,13 +3474,7 @@ static void cmd_unauthenticate(char *tag)
     /* Unselect any open mailbox */
     if (backend_current) {
         /* remote mailbox */
-        char mytag[128];
-
-        proxy_gentag(mytag, sizeof(mytag));
-        prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
-        /* do not fatal() here, because we don't really care about this
-         * server anymore anyway */
-        pipe_until_tag(backend_current, mytag, 1);
+        proxy_unselect();
 
         /* remove backend_current from the protgroup */
         protgroup_delete(protin, backend_current->in);
@@ -5044,8 +5053,6 @@ static void cmd_select(char *tag, char *cmd, char *name)
     }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
-        char mytag[128];
-
         if (supports_referrals) {
             imapd_refer(tag, mbentry->server, name);
             goto done;
@@ -5056,11 +5063,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
         if (backend_current && backend_current != backend_next) {
             /* switching servers; flush old server output */
-            proxy_gentag(mytag, sizeof(mytag));
-            prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
-            /* do not fatal() here, because we don't really care about this
-             * server anymore anyway */
-            pipe_until_tag(backend_current, mytag, 1);
+            proxy_unselect();
             mboxlist_entry_free((mbentry_t **) &backend_current->context);
         }
         backend_current = backend_next;
@@ -5114,15 +5117,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     /* local mailbox */
     if (backend_current) {
-      char mytag[128];
-
-      /* switching servers; flush old server output */
-      proxy_gentag(mytag, sizeof(mytag));
-      prot_printf(backend_current->out, "%s Unselect\r\n", mytag);
-      /* do not fatal() here, because we don't really care about this
-       * server anymore anyway */
-      pipe_until_tag(backend_current, mytag, 1);
-      mboxlist_entry_free((mbentry_t **) &backend_current->context);
+        /* switching servers; flush old server output */
+        proxy_unselect();
+        mboxlist_entry_free((mbentry_t **) &backend_current->context);
     }
     backend_current = NULL;
 
