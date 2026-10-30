@@ -1,11 +1,11 @@
 Name: allowspecialusesubfolder
 Type: SWITCH
 Default-Value: 0
-Last-Modified: 3.12.0
+Last-Modified: UNRELEASED
 
-If enabled, allows special-use folders to be moved into subfolders
+If enabled, allows special-use folders anywhere in a user's namespace.
 
-By default, cyrus does not allow a special-use folder to be moved or
-renamed if the new folder is not a direct folder of the users INBOX.  This
-was implemented to prevent clients renaming Sent to Trash/Sent, which would
-confused other clients.
+By default, only a direct child of a user's INBOX can have special-use,
+however the attribute is set, and a special-use folder can't be moved
+anywhere else.  This prevents clients renaming Sent to Trash/Sent, which
+would confuse other clients.
