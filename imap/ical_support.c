@@ -1783,6 +1783,11 @@ static int parse_target_path(char *path, struct path_segment_t **path_seg,
         return -1;
     }
 
+    if (!tail) {
+        *errstr = "Missing initial segment";
+        return -1;
+    }
+
     tail->action = action;
     if (!tail->data) tail->data = data;
 
@@ -2358,7 +2363,8 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
         }
 
         /* Parse PATCH-TARGET */
-        char *path = xstrdup(icalproperty_get_patchtarget(prop));
+        /* A property without a value gives an empty path */
+        char *path = xstrdupsafe(icalproperty_get_patchtarget(prop));
 
         icalcomponent_remove_property(patch, prop);
         icalproperty_free(prop);
@@ -2386,7 +2392,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
             nextprop = icalcomponent_get_next_property(patch, ICAL_ANY_PROPERTY);
 
             if (kind == ICAL_PATCHDELETE_PROPERTY) {
-                path = xstrdup(icalproperty_get_patchdelete(prop));
+                path = xstrdupsafe(icalproperty_get_patchdelete(prop));
 
                 icalcomponent_remove_property(patch, prop);
                 icalproperty_free(prop);
@@ -2394,7 +2400,11 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
                 r = parse_target_path(path, &ppath, ACTION_DELETE, NULL, errstr);
                 free(path);
 
-                if (r) goto done;
+                if (r) {
+                    /* A failed parse leaves a partial path, with no data */
+                    path_segment_free(ppath);
+                    goto done;
+                }
                 else if (!ppath ||
                          (ppath->type == SEGMENT_COMP &&
                           ppath->kind == ICAL_VCALENDAR_COMPONENT)) {
@@ -2410,7 +2420,7 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
                 }
             }
             else if (kind == ICAL_PATCHPARAMETER_PROPERTY) {
-                path = xstrdup(icalproperty_get_patchparameter(prop));
+                path = xstrdupsafe(icalproperty_get_patchparameter(prop));
 
                 icalcomponent_remove_property(patch, prop);
 
@@ -2418,7 +2428,12 @@ EXPORTED int icalcomponent_apply_vpatch(icalcomponent *ical,
                                       ACTION_SETPARAM, prop, errstr);
                 free(path);
 
-                if (r) goto done;
+                if (r) {
+                    /* prop is attached to ppath only on success */
+                    path_segment_free(ppath);
+                    icalproperty_free(prop);
+                    goto done;
+                }
                 else if (!ppath || ppath->type != SEGMENT_PROP) {
                     *errstr = "Initial segment of PATCH-PARAMETER"
                         " MUST be a property";
