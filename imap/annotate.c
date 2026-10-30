@@ -3766,6 +3766,17 @@ static int annotation_set_fuzzyalways(annotate_state_t *state,
     return annotation_set_todb(state, entry, maywrite);
 }
 
+EXPORTED int specialuse_check_location(const char *mboxname)
+{
+    mbname_t *mbname = mbname_from_intname(mboxname);
+    bool ok = mbname_userid(mbname)
+              && (config_getswitch(IMAPOPT_ALLOWSPECIALUSESUBFOLDER)
+                  || strarray_size(mbname_boxes(mbname)) == 1);
+
+    mbname_free(&mbname);
+    return ok ? 0 : IMAP_MAILBOX_SPECIALUSE;
+}
+
 EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
                                  const char *src, struct buf *dest, int allow_dups)
 {
@@ -3810,6 +3821,11 @@ EXPORTED int specialuse_validate(const char *mboxname, const char *userid,
     strarray_add(valid, "\\Scheduled"); // JMAP
 
     new_attribs = strarray_split(src, NULL, 0);
+
+    if (mboxname && new_attribs->count) {
+        r = specialuse_check_location(mboxname);
+        if (r) goto done;
+    }
 
     for (i = 0; i < new_attribs->count; i++) {
         int skip_mbcheck = allow_dups;

@@ -2368,6 +2368,12 @@ static void _mbox_create(jmap_req_t *req, struct mboxset_args *args,
         goto done;
     }
 
+    if (args->specialuse && *args->specialuse &&
+            specialuse_check_location(mboxname)) {
+        jmap_parser_invalid(&parser, "role");
+        goto done;
+    }
+
     /* Skip role updates in first iteration */
     if (args->specialuse && *args->specialuse) {
         if (mode == _MBOXSET_SKIP) {
@@ -2812,6 +2818,12 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
                 goto done;
             }
 
+            if (args->specialuse && *args->specialuse &&
+                    specialuse_check_location(newmboxname)) {
+                jmap_parser_invalid(&parser, "role");
+                goto done;
+            }
+
             r = jmap_mboxlist_lookup(newmboxname, NULL, NULL);
             if (r == 0) {
                 if (mode == _MBOXSET_SKIP) {
@@ -2874,6 +2886,13 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             jmap_myrights_delete(req, newmboxname);
             jmap_mbentry_cache_free(req);
 
+            if (r == IMAP_MAILBOX_SPECIALUSE) {
+                /* nothing moved: the mailbox has a role that can't go
+                 * where it would land */
+                jmap_parser_invalid(&parser, "parentId");
+                r = 0;
+                goto done;
+            }
             if (r) {
                 xsyslog_ev(LOG_ERR, "jmap.mailbox.rename.failed",
                            lf_jmapreq(req),
@@ -2885,6 +2904,12 @@ static void _mbox_update(jmap_req_t *req, struct mboxset_args *args,
             mboxname = newmboxname;  // cheap and nasty change!
             renamed = true;
         }
+    }
+
+    if (!renamed && args->specialuse && *args->specialuse &&
+            specialuse_check_location(mboxname)) {
+        jmap_parser_invalid(&parser, "role");
+        goto done;
     }
 
     /* Write annotations and isSubscribed */

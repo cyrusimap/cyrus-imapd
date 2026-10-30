@@ -1,7 +1,9 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_annot ($self)
+sub test_annot
+    :NoAltNameSpace
+    ($self)
 {
     my $imaptalk = $self->{store}->get_client();
 

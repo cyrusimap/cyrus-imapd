@@ -7110,11 +7110,8 @@ static void cmd_create(char *tag, char *name, struct dlist *extargs, int localon
 
     use = dlist_getchild(extargs, "USE");
     if (use) {
-        /* only user mailboxes can have specialuse, and if allowspecialusesubfolders is not enabled they must be user toplevel folders */
-        if (!mbname_userid(mbname) || (!config_getswitch(IMAPOPT_ALLOWSPECIALUSESUBFOLDER ) && strarray_size(mbname_boxes(mbname)) != 1)) {
-            r = IMAP_MAILBOX_SPECIALUSE;
-            goto err;
-        }
+        r = specialuse_check_location(mbname_intname(mbname));
+        if (r) goto err;
         /* I would much prefer to create the specialuse annotation FIRST
          * and do the sanity check on the values, so we can return the
          * correct error.  Sadly, that's a pain - so we compromise by
