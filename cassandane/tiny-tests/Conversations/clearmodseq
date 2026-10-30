@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # test clearing the modseq
 #
 sub test_clearmodseq
-    :min_version_3_1 :Conversations
+    :min_version_3_1
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

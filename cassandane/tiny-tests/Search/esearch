@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_esearch
-    :NoAltNameSpace :needs_search_xapian :Conversations :min_version_3_7
+    :NoAltNameSpace :needs_search_xapian :min_version_3_7
     ($self)
 {
     xlog $self, "Create shared folder, writeable by cassandane user";

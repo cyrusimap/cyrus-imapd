@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test evil INBOX rename possibilities
 #
 sub test_rename_inbox_intermediate
-    :Conversations :min_version_3_1
+    :min_version_3_1
     ($self)
 {
     my $imaptalk = $self->{store}->get_client();

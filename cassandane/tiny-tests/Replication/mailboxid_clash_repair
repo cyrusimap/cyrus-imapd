@@ -6,7 +6,7 @@ use Cassandane::Tiny;
 # repairs it, the replica takes the new id and createdmodseq, and gives the
 # old id back to the mailbox that was left carrying it without the key.
 sub test_mailboxid_clash_repair
-    :NoAltNameSpace :Conversations
+    :NoAltNameSpace
     ($self)
 {
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';

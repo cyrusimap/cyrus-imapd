@@ -2,7 +2,6 @@
 use Cassandane::Tiny;
 
 sub test_userflags_crash
-    :Conversations
     :LowEmailLimits
     :min_version_3_6
     ($self)

@@ -298,9 +298,6 @@ magic(CrossDomains => sub {
 magic(CompactIdsAlways => sub {
     shift->config_set(compact_ids => 'always');
 });
-magic(Conversations => sub {
-    shift->config_set(conversations => 'yes');
-});
 magic(NoConversations => sub {
     shift->config_set(conversations => 'no');
 });

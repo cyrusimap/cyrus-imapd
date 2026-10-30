@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_rename_jmapid
-    :AllowMoves :Conversations :min_version_3_12
+    :AllowMoves :min_version_3_12
     ($self)
 {
     my $synclogfname = "$self->{instance}->{basedir}/conf/sync/log";

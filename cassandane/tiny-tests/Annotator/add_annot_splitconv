@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_add_annot_splitconv
-    :min_version_3_1 :Conversations
+    :min_version_3_1
     ($self)
 {
     my %exp;

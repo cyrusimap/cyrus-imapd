@@ -12,7 +12,7 @@ use Cassandane::Tiny;
 # decoded from the real world!
 #
 sub test_normalise_nonascii_whitespace
-    :min_version_3_0 :Conversations
+    :min_version_3_0
     ($self)
 {
     my %exp;
