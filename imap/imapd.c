@@ -11574,10 +11574,10 @@ syntax_error:
         }
 
         prot_printf(be->out, "%s %s %s ", tag, cmd, arg.s);
-        if (!pipe_command(backend_current, 65536)) {
-            pipe_including_tag(backend_current, tag, 0);
+        if (!pipe_command(be, 65536)) {
+            pipe_including_tag(be, tag, 0);
         }
-        goto out;
+        goto out_noprint;
     }
     /* local mailbox */
 
