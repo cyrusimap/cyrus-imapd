@@ -1892,6 +1892,52 @@ EXPORTED int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen)
     return SASL_OK;
 }
 
+/* Like vsprintf, but malloc an appropriately sized buffer.
+ * Caller must free it.
+ *
+ * XXX this is bogus, need to take a va_list like buf_vprintf does
+ */
+EXPORTED int _mvsprintf(char **pbuf, const char *fmt, ...)
+{
+    char *buf;
+    va_list ap;
+    size_t size;
+    int n;
+
+    if (!pbuf)
+        return 0;
+
+    va_start(ap, fmt);
+    n = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+
+    if (n < 0) {
+        *pbuf = NULL;
+        return -1;
+    }
+
+    size = n + 1;
+    buf = malloc(size);
+    if (!buf) {
+        *pbuf = NULL;
+        return -1;
+    }
+
+    va_start(ap, fmt);
+    n = vsnprintf(buf, size, fmt, ap);
+    va_end(ap);
+
+    if (n < 0 || (unsigned) n >= size) {
+        /* should never get here, buf is big enough */
+        free(buf);
+        *pbuf = NULL;
+        return -1;
+    }
+
+    *pbuf = buf;
+    return n;
+}
+
 /* convert an iovec to a single buffer */
 EXPORTED int _iovec_to_buf(const struct iovec *vec,
                            unsigned numiov,

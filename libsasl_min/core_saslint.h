@@ -389,6 +389,9 @@ extern int _sasl_strdup(const char *in, char **out, size_t *outlen);
 /* Basically a conditional call to realloc(), if we need more */
 int _buf_alloc(char **rwbuf, size_t *curlen, size_t newlen);
 
+/* Like vsprintf, but malloc an appropriately sized buffer. */
+extern int _mvsprintf(char **pbuf, const char *fmt, ...);
+
 /* convert an iovec to a single buffer */
 int _iovec_to_buf(const struct iovec *vec,
                   unsigned numiov,
