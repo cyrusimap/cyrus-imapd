@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+# Without allowspecialusesubfolder, only a top-level mailbox may have a role.
+sub test_mailbox_set_role_nested
+    :NoAltNameSpace
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            create => {
+                parent => { name => 'Mail' },
+                child => { name => 'child', parentId => '#parent' },
+                drafts => { name => 'drafts', role => 'drafts' },
+                sent => {
+                    name => 'sent',
+                    parentId => '#parent',
+                    role => 'sent',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $parent = $res->[0][1]{created}{parent}{id};
+    my $child = $res->[0][1]{created}{child}{id};
+    my $drafts = $res->[0][1]{created}{drafts}{id};
+    $self->assert_not_null($parent);
+    $self->assert_not_null($child);
+    $self->assert_not_null($drafts);
+
+    xlog $self, "can't create a nested mailbox with a role";
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => [ 'role' ] },
+        $res->[0][1]{notCreated}{sent});
+
+    xlog $self, "can't give a nested mailbox a role";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => { $child => { role => 'trash' } },
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => [ 'role' ] },
+        $res->[0][1]{notUpdated}{$child});
+
+    xlog $self, "can't move a mailbox with a role under another";
+    $res = $jmap->CallMethods([
+        ['Mailbox/set', {
+            update => { $drafts => { parentId => $parent } },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{notUpdated}{$drafts});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', {
+            ids => [ $drafts ], properties => [ 'parentId', 'role' ],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $drafts, parentId => undef, role => 'drafts' } ],
+        $res->[0][1]{list});
+}
