@@ -13696,12 +13696,11 @@ static void _email_update_parse(jmap_req_t *req,
                     invalid = 1;
                 }
                 else {
-                    /* Same destination ACL check the create path
-                     * performs in _email_snoozed_parse: the deferred
-                     * move runs as the *owner* of the source
-                     * mailbox, so without this check a sharee can
-                     * land messages in mailboxes they cannot write.
-                     * -- claude, 2026-05-07 */
+                    /* Same destination ACL check the create path performs in
+                     * _email_snoozed_parse: the deferred move runs as the
+                     * *owner* of the source mailbox, so without this check a
+                     * sharee can land messages in mailboxes they cannot write.
+                     */
                     int need_rights = JACL_LOOKUP|JACL_ADDITEMS;
                     const mbentry_t *mbentry =
                         jmap_mbentry_by_mboxid(req, json_string_value(jval));
@@ -14811,8 +14810,9 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
                 json_object_set(update->mailboxids, mbentry->uniqueid, jval);
                 mbox_id = mbentry->uniqueid;
 
-                is_valid = is_appendmailbox(req, mbentry,
-                                            JACL_LOOKUP | JACL_ADDITEMS);
+                is_valid = jval == json_true()
+                    ? is_appendmailbox(req, mbentry, JACL_LOOKUP)
+                    : jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP);
             }
 
             /* If trying to move a message in/out of $scheduled
