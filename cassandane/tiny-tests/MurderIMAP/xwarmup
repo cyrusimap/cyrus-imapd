@@ -1,0 +1,17 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_xwarmup ($self)
+{
+    my $frontend = $self->{frontend_store}->get_client();
+
+    xlog $self, "XWARMUP with no mailbox selected";
+    $frontend->_imap_cmd('XWARMUP', 0, '', 'INBOX', ['index']);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+
+    xlog $self, "XWARMUP with a mailbox selected";
+    $frontend->create('INBOX.other') or die "create: $@";
+    $frontend->select('INBOX.other') or die "select: $@";
+    $frontend->_imap_cmd('XWARMUP', 0, '', 'INBOX', ['index']);
+    $self->assert_str_equals('ok', $frontend->get_last_completion_response());
+}
