@@ -1,0 +1,27 @@
+Description:
+
+A sharee moving an email between someone else's mailboxes over JMAP no
+longer needs the right to add items to the mailbox the email is leaving;
+removing from it is enough.  When a sharee does lack a needed right, Email/set
+now reports forbidden for a compact mailbox id, as it already did for a
+legacy one, instead of invalidProperties.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

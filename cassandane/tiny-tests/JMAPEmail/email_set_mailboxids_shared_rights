@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee moving an email between a sharer's mailboxes needs the right to
+# remove from the source and to add to the destination, and when one is missing
+# the setError should be "forbidden".
+sub test_email_set_mailboxids_shared_rights ($self)
+{
+    my $jmap  = $self->{jmap};
+    my $other = $self->{instance}->create_user('other');
+
+    my sub check_move ($desc, $arg) {
+        my $src = $other->mailboxes->create({ name => "$desc src" });
+        my $dst = $other->mailboxes->create({ name => "$desc dst" });
+        $src->share_with(cassandane => $arg->{source_rights});
+        $dst->share_with(cassandane => [ qw(mayReadItems mayAddItems) ]);
+
+        my $email = $src->new_email;
+
+        my $res = $jmap->request([
+            ['Email/set', {
+                accountId => 'other',
+                update => {
+                    $email->id => {
+                        'mailboxIds/' . $src->id => undef,
+                        'mailboxIds/' . $dst->id => JSON::true,
+                    },
+                },
+            }],
+        ]);
+        my $set = $res->single_sentence('Email/set')->arguments;
+
+        my $got = exists $set->{updated}{ $email->id }
+                ? 'updated'
+                : $set->{notUpdated}{ $email->id }{type} // 'nothing';
+
+        $self->assert_str_equals($arg->{expect}, $got,
+            "$desc: expected $arg->{expect}, got $got");
+    }
+
+    check_move("read-only source", {
+        source_rights => [ qw(mayReadItems) ],
+        expect        => 'forbidden',
+    });
+
+    check_move("remove-only source", {
+        source_rights => [ qw(mayReadItems mayRemoveItems) ],
+        expect        => 'updated',
+    });
+
+    check_move("writable source", {
+        source_rights => [ qw(mayReadItems mayAddItems mayRemoveItems) ],
+        expect        => 'updated',
+    });
+}
