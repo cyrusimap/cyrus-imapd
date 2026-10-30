@@ -1572,8 +1572,19 @@ static void proxy_begin(struct backend *s, const char *tag,
 static void proxy_finish(struct backend *s, const char *tag, unsigned flags)
 {
     if (flags & PROXY_REST_OF_LINE) {
+        /* The line may hold a large literal, such as an APPEND's message.
+         * Mark the backend active, so that it isn't dropped as idle while
+         * the literal arrives, and leave the backend a chance to refuse
+         * one bigger than 16k before the client sends it. */
+        int is_active = 1;
+        void *save_context = s->context;
+        int r;
+
         prot_putc(' ', s->out);
-        if (pipe_command(s, 65536)) return;
+        s->context = &is_active;
+        r = pipe_command(s, 16384);
+        s->context = save_context;
+        if (r) return;
     }
     else {
         prot_puts(s->out, "\r\n");
@@ -4412,31 +4423,21 @@ static int cmd_append(char *tag, char *name, const char *cur_name,
         }
 
         s = proxy_findbackend(mbentry->server);
-        if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
         mboxlist_entry_free(&mbentry);
 
-        imapd_check(s, 0);
-
-        if (!r) {
-            int is_active = 1;
-            void *save_context = s->context;
-            s->context = (void*) &is_active;
+        if (s) {
+            proxy_begin(s, tag, "Localappend", origname, PROXY_REST_OF_LINE);
+            prot_putc(' ', s->out);
             if (imapd_index) {
                 const char *mboxname = index_mboxname(imapd_index);
-                prot_printf(s->out, "%s Localappend {%zu+}\r\n%s"
-                            " {%zu+}\r\n%s ",
-                            tag, strlen(origname), origname,
-                            strlen(mboxname), mboxname);
-            } else {
-                prot_printf(s->out, "%s Localappend {%zu+}\r\n%s"
-                            " \"\" ", tag, strlen(origname), origname);
+                prot_printliteral(s->out, mboxname, strlen(mboxname));
             }
-            if (!(r = pipe_command(s, 16384))) {
-                pipe_including_tag(s, tag, 0);
-            }
-            s->context = save_context;
+            else
+                prot_puts(s->out, "\"\"");
+            proxy_finish(s, tag, PROXY_REST_OF_LINE);
         } else {
+            imapd_check(NULL, 0);
+            r = IMAP_SERVER_UNAVAILABLE;
             eatline(imapd_in, prot_getc(imapd_in));
         }
 
@@ -6848,17 +6849,10 @@ static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int is
         /* XXX  end of separate proxy-only code */
 
         /* simply send the COPY to the backend */
-        prot_printf(
-                backend_current->out,
-                "%s %s %s {%zu+}\r\n%s\r\n",
-                tag,
-                usinguid ? (ismove ? "UID Move" : "UID Copy") : (ismove ? "Move" : "Copy"),
-                sequence,
-                strlen(name),
-                name
-            );
-
-        pipe_including_tag(backend_current, tag, 0);
+        proxy_selected(tag,
+                       usinguid ? (ismove ? "UID Move" : "UID Copy")
+                                : (ismove ? "Move" : "Copy"),
+                       false, "%s {%zu+}\r\n%s", sequence, strlen(name), name);
 
         goto cleanup;
     }
@@ -8811,21 +8805,10 @@ static void cmd_changeusergroup(char *tag, char *userid, char *group, int add)
     int r = 0;
 
     if (proxy_inbox_backend()) {
-        imapd_check(backend_inbox, 0);
-
-        if (!r) {
-            prot_printf(backend_inbox->out,
-                        "%s %s {%zu+}\r\n%s"
-                        " {%zu+}\r\n%s\r\n",
-                        tag, cmd,
-                        strlen(userid), userid,
-                        strlen(group), group);
-            pipe_including_tag(backend_inbox, tag, 0);
-        }
-        else {
-            prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-        }
-
+        proxy_begin(backend_inbox, tag, cmd, userid, 0);
+        prot_putc(' ', backend_inbox->out);
+        prot_printliteral(backend_inbox->out, group, strlen(group));
+        proxy_finish(backend_inbox, tag, 0);
         return;
     }
 
@@ -8868,24 +8851,17 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
             /* Doesn't exist on murder */
         }
 
-        imapd_check(backend_inbox, 0);
-
         if (!r) {
+            proxy_begin(backend_inbox, tag, cmd,
+                        namespace ? namespace : name, 0);
             if (namespace) {
-                prot_printf(backend_inbox->out,
-                            "%s %s {%zu+}\r\n%s"
-                            " {%zu+}\r\n%s\r\n",
-                            tag, cmd,
-                            strlen(namespace), namespace,
-                            strlen(name), name);
-            } else {
-                prot_printf(backend_inbox->out, "%s %s {%zu+}\r\n%s\r\n",
-                            tag, cmd,
-                            strlen(name), name);
+                prot_putc(' ', backend_inbox->out);
+                prot_printliteral(backend_inbox->out, name, strlen(name));
             }
-            pipe_including_tag(backend_inbox, tag, 0);
+            proxy_finish(backend_inbox, tag, 0);
         }
         else {
+            imapd_check(backend_inbox, 0);
             prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
         }
 
