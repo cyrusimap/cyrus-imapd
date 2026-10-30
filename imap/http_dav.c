@@ -32,10 +32,12 @@
 #include "assert.h"
 #include "dlist.h"
 #include "global.h"
+#include "http_carddav.h"
 #include "http_dav.h"
 #include "http_dav_sharing.h"
 #include "http_proxy.h"
 #include "index.h"
+#include "itip_support.h"
 #include "proxy.h"
 #include "times.h"
 #include "syslog.h"
@@ -6196,6 +6198,36 @@ HIDDEN size_t make_collection_url(struct buf *buf, const char *urlprefix, int ha
 }
 
 
+/* Does the collection pass the filter of a "user+foo" login?  "+default",
+ * in any case, picks the authenticated user's default collection whatever
+ * its name; any other value picks collections by name. */
+static int extrafolder_matches(unsigned nsid, const mbentry_t *mbentry,
+                               const char *collname)
+{
+    char *defaultname = NULL;
+    int match;
+
+    if (strcasecmp(httpd_extrafolder, "default"))
+        return !strcasecmp(collname, httpd_extrafolder);
+
+    switch (nsid) {
+    case URL_NS_CALENDAR: {
+        char *defaultcoll = caldav_scheddefault(httpd_userid, 1);
+        if (defaultcoll) defaultname = caldav_mboxname(httpd_userid, defaultcoll);
+        free(defaultcoll);
+        break;
+    }
+
+    case URL_NS_ADDRESSBOOK:
+        defaultname = carddav_defaultaddressbook_mboxname(httpd_userid);
+        break;
+    }
+
+    match = !strcmpsafe(mbentry->name, defaultname);
+    free(defaultname);
+    return match;
+}
+
 /* mboxlist_findall() callback to find props on a collection */
 int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 {
@@ -6239,7 +6271,10 @@ int propfind_by_collection(const mbentry_t *mbentry, void *rock)
 
     default:
         /* Magic folder filter */
-        if (httpd_extrafolder && strcasecmp(p, httpd_extrafolder)) goto done;
+        if (httpd_extrafolder &&
+            !extrafolder_matches(fctx->req_tgt->namespace->id, mbentry, p)) {
+            goto done;
+        }
         break;
     }
 
