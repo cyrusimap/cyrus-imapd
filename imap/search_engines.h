@@ -168,6 +168,7 @@ struct mboxlist_entry;
 
 #define SEARCH_FLAG_CAN_BATCH      (1<<0)
 #define SEARCH_FLAG_CAN_GUIDSEARCH (1<<1)
+#define SEARCH_FLAG_CAN_FUZZY      (1<<2)  /* FUZZY (RFC 6203) is supported */
 struct search_engine {
     const char *name;
     unsigned int flags;

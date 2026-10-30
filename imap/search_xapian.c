@@ -4649,7 +4649,7 @@ static int can_match(enum search_op matchop, enum search_part partnum)
 
 const struct search_engine xapian_search_engine = {
     "Xapian",
-    SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH,
+    SEARCH_FLAG_CAN_BATCH | SEARCH_FLAG_CAN_GUIDSEARCH | SEARCH_FLAG_CAN_FUZZY,
     begin_session,
     end_session,
     begin_search,

@@ -399,6 +399,9 @@ magic(SearchFuzzyAlways => sub {
 magic(SearchEngineSquat => sub {
     shift->config_set(search_engine => 'squat');
 });
+magic(SearchEngineNone => sub {
+    shift->config_set(search_engine => 'none');
+});
 magic(SearchNormalizationMax20000 => sub {
     shift->config_set(search_normalisation_max => 20000);
 });

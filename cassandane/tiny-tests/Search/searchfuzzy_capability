@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_searchfuzzy_capability
+    :needs_search_xapian
+    ($self)
+{
+    my $imap = $self->{store}->get_client();
+    $self->assert_not_null($imap->capability()->{'search=fuzzy'});
+
+    $self->make_message("I run") || die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    my $uids = $imap->search('fuzzy', 'subject', 'running');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $self->assert_cmp_deeply([1], $uids);
+
+    $uids = $imap->sort('(subject)', 'utf-8', 'fuzzy', 'subject', 'running');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $self->assert_cmp_deeply([1], $uids);
+
+    $uids = $imap->thread('references', 'utf-8', 'fuzzy', 'subject', 'running');
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+    $self->assert_cmp_deeply([[1]], $uids);
+}

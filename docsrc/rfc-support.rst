@@ -604,6 +604,12 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     IMAP4 Extension for Fuzzy Search
 
+    .. NOTE::
+
+        ``SEARCH=FUZZY`` is advertised only when :imapdconf:`search_engine`
+        is ``xapian``.  With other engines, the ``FUZZY`` search key is
+        accepted and ignored.
+
 :rfc:`6350`
 
     vCard Format Specification

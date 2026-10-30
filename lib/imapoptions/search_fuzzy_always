@@ -1,9 +1,12 @@
 Name: search_fuzzy_always
 Type: SWITCH
 Default-Value: 0
-Last-Modified: 3.1.5
+Last-Modified: UNRELEASED
 
 Whether to enable :rfc:`6203` FUZZY search for all IMAP SEARCH. If turned
 on, search attributes will be searched using FUZZY search by default.  If
 turned off, clients have to explicitly use the FUZZY search key to enable
 fuzzy search for regular SEARCH commands.
+
+This option, and the per-user ``search-fuzzy-always`` annotation that
+overrides it, have no effect unless :imapdconf:`search_engine` is ``xapian``.

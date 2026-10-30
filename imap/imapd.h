@@ -167,10 +167,11 @@ struct searchannot {
 /* Flags for searchargs.state */
 enum {
     GETSEARCH_CHARSET_KEYWORD = 0x01,
-    GETSEARCH_RETURN = 0x02,
-    GETSEARCH_CHARSET_FIRST = 0x04,
-    GETSEARCH_SOURCE = 0x08,
-    GETSEARCH_MODSEQ = 0x10,
+    GETSEARCH_RETURN          = 0x02,
+    GETSEARCH_CHARSET_FIRST   = 0x04,
+    GETSEARCH_SOURCE          = 0x08,
+    GETSEARCH_MODSEQ          = 0x10,
+    GETSEARCH_FUZZY           = 0x20, /**< honor FUZZY search key (RFC 6203) */
 };
 
 /* Bitmasks for search source options (RFC 7377) */
