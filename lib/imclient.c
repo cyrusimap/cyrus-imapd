@@ -21,7 +21,7 @@
 #include <sys/select.h>
 #endif
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 #include <openssl/lhash.h>
 #include <openssl/bn.h>

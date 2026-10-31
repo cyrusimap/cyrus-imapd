@@ -11,13 +11,14 @@
 #include <netinet/in.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
-#include <sasl/saslutil.h>
 #include <stdbool.h>
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <string.h>
 #include <unistd.h>
+
+#include "libsasl_min/saslutil.h"
 
 #include "iptostring.h"
 #include "util.h"
@@ -681,7 +682,7 @@ static int do_referral(isieve_t *obj, char *refer_to)
 
             switch (callbacks[n].id) {
             case SASL_CB_USER:
-                callbacks[n].proc = (int (*)(void)) (void (*)(void)) &refer_simple_cb;
+                callbacks[n].proc = SASL_CB_PROC_PTR &refer_simple_cb;
                 callbacks[n].context = userid ? userid : authid;
                 break;
             case SASL_CB_AUTHNAME:
