@@ -167,7 +167,10 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
         if (mbentry->mbtype & MBTYPE_MOVING) {
             struct mb_node *next;
 
-            syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
+            xsyslog_ev(LOG_WARNING, "ctl_mboxlist.fix",
+                       lf_s("ctl_mboxlist.action", "unset_moving"),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_b("ctl_mboxlist.dryrun", warn_only));
 
             if (warn_only) {
                 printf("Remove remote flag on: %s\n", mbentry->name);
@@ -241,7 +244,10 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
                 IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
                 /* But not for a unified configuration */
 
-                syslog(LOG_WARNING, "Remove Local Mailbox: %s", mbentry->name);
+                xsyslog_ev(LOG_WARNING, "ctl_mboxlist.fix",
+                           lf_s("ctl_mboxlist.action", "remove_local"),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_b("ctl_mboxlist.dryrun", warn_only));
 
                 if (warn_only) {
                     printf("Remove Local Mailbox: %s\n", mbentry->name);
@@ -261,7 +267,10 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
                  * push it then too) */
                 struct mb_node *next;
 
-                syslog(LOG_WARNING, "Remove remote flag on: %s", mbentry->name);
+                xsyslog_ev(LOG_WARNING, "ctl_mboxlist.fix",
+                           lf_s("ctl_mboxlist.action", "unset_moving"),
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_b("ctl_mboxlist.dryrun", warn_only));
 
                 if (warn_only) {
                     printf("Remove remote flag on: %s\n", mbentry->name);
@@ -284,7 +293,10 @@ static int pop_mupdate_cb(const mbentry_t *mbentry, void *rockp)
         return 0;
     }
 
-    syslog(LOG_WARNING, "Force Activate: %s", mbentry->name);
+    xsyslog_ev(LOG_WARNING, "ctl_mboxlist.fix",
+               lf_s("ctl_mboxlist.action", "activate"),
+               lf_intname("mbox.name", mbentry->name),
+               lf_b("ctl_mboxlist.dryrun", warn_only));
 
     if (warn_only) {
         printf("Force Activate: %s\n", mbentry->name);
@@ -376,7 +388,10 @@ static void do_pop_mupdate(void)
         struct mb_node *me = del_head;
         del_head = del_head->next;
 
-        syslog(LOG_WARNING, "Remove from MUPDATE: %s", me->mailbox);
+        xsyslog_ev(LOG_WARNING, "ctl_mboxlist.fix",
+                   lf_s("ctl_mboxlist.action", "remove_mupdate"),
+                   lf_intname("mbox.name", me->mailbox),
+                   lf_b("ctl_mboxlist.dryrun", warn_only));
 
         if (warn_only) {
             printf("Remove from MUPDATE: %s\n", me->mailbox);
@@ -620,8 +635,8 @@ static int dump_cb(const mbentry_t *mbentry, void *rockp)
 
     output = json_dumps(jparent, JSON_EMBED);
     if (!output) {
-        xsyslog(LOG_ERR, "unable to stringify json object",
-                         "mboxname=<%s>", mbentry->name);
+        xsyslog_ev(LOG_ERR, "ctl_mboxlist.dump.failed",
+                   lf_intname("mbox.name", mbentry->name));
         return IMAP_INTERNAL;
     }
 
@@ -1226,9 +1241,9 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
 
     int r = mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &byunqid, NULL);
     if (r) {
-        xsyslog(LOG_NOTICE, "missing uniqueid record, skipping",
-               "mboxname=<%s> uniqueid=<%s>",
-               mbentry->name, mbentry->uniqueid);
+        xsyslog_ev(LOG_NOTICE, "ctl_mboxlist.uniqueid.missing",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("mbox.uniqueid", mbentry->uniqueid));
         return 0;
     }
 
@@ -1245,9 +1260,9 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
         mbname_free(&mbname);
         if (!res) return 0;
 
-        xsyslog(LOG_NOTICE, "adding missing J record to mboxlist",
-                "mboxname=<%s> jmapid=<%s>",
-                mbentry->name, mbentry->jmapid);
+        xsyslog_ev(LOG_NOTICE, "ctl_mboxlist.mailboxid.added",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("mbox.mailboxid", mbentry->jmapid));
     }
     else {
         struct mailbox *mailbox = NULL;
@@ -1265,23 +1280,23 @@ static int fix_cb(const mbentry_t *mbentry, void *rockp __attribute__((unused)))
         byunqid->jmapid = buf_release(&jmapid);
         buf_free(&jmapid);
 
-        xsyslog(LOG_NOTICE, "adding new J record to mboxlist",
-                "mboxname=<%s> jmapid=<%s>",
-                byunqid->name, byunqid->jmapid);
+        xsyslog_ev(LOG_NOTICE, "ctl_mboxlist.mailboxid.added",
+                   lf_intname("mbox.name", byunqid->name),
+                   lf_s("mbox.mailboxid", byunqid->jmapid));
 
         r = mailbox_commit(mailbox);
         if (r) {
-            xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                    "error=<%s>", cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "ctl.mboxlist.commit.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
             goto done;
         }
     }
 
     r = mboxlist_updatelock(byunqid, /*localonly*/1);
     if (r) {
-        xsyslog(LOG_ERR, "failed to update mboxlist",
-                "mboxname=<%s> error=<%s>",
-                mbentry->name, error_message(r));
+        xsyslog_ev(LOG_ERR, "ctl.mboxlist.update.failed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
     }
 
 done:
@@ -1435,7 +1450,8 @@ int main(int argc, char *argv[])
 
     switch (op) {
     case M_POPULATE:
-        syslog(LOG_NOTICE, "%spopulating mupdate", warn_only ? "test " : "");
+        xsyslog_ev(LOG_NOTICE, "ctl_mboxlist.populate.starting",
+                   lf_b("ctl_mboxlist.dryrun", warn_only));
         mboxlist_init();
         mboxlist_open(mboxdb_fname);
 
@@ -1444,7 +1460,8 @@ int main(int argc, char *argv[])
         mboxlist_close();
         mboxlist_done();
 
-        syslog(LOG_NOTICE, "done %spopulating mupdate", warn_only ? "test " : "");
+        xsyslog_ev(LOG_NOTICE, "ctl_mboxlist.populate.done",
+                   lf_b("ctl_mboxlist.dryrun", warn_only));
         break;
 
     case DUMP:

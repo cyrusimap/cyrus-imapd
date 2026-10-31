@@ -58,7 +58,7 @@ xsyslog_ev(LOG_ERR, "mailbox.append.failed",
 ```
 
 This is the direct replacement for `syslog()` and `xsyslog()`, and it's what
-the bulk of the conversion produces.
+the bulk of the conversion produces.  It works in C++ too.
 
 `xsyslog_ev()` adds some fields for you:
 
@@ -144,6 +144,27 @@ Rules:
 - An event name is an interface.  Once something outside the tree parses it,
   renaming it is a breaking change; see "Changing an existing event" below.
 
+### One event, with a key for the step
+
+An operation that can give up in a dozen places does not want a dozen event
+names.  Give the whole operation one event, and let a key say where it was:
+
+```c
+xsyslog_ev(LOG_ERR, "caldav.defaultalarms.migrate.failed",
+           lf_s("cal.step", "open_mailbox"),
+           lf_mbname("mbox.name", mbname),
+           lf_err("error", r));
+```
+
+The key is named for the subsystem -- `cal.step`, `alarm.step`, `http.step`,
+`xfer.step` -- and its values are a short, fixed vocabulary.
+`<subsystem>.reason` does the same for a decision rather than a position:
+why a message was skipped, why a record was dropped.
+
+Failures by step are then a group-by rather than a dozen separate counters,
+and a new step is a new value instead of a new name for every consumer to
+learn.
+
 ## Naming keys
 
 ```
@@ -176,15 +197,19 @@ The registered namespaces:
 | `http.`, `jmap.`, `dav.`           | those protocols                                                   |
 | `error`                            | why the operation failed (bare, no prefix — it's universal)       |
 
-Two structural prefixes stack on top of the above:
+These structural prefixes stack on top of the above:
 
 - **`old.`** — the value before a change: `old.mbox.name`, `old.msg.sysflags`.
   Always paired with the unprefixed key carrying the new value.
 - **`out.`** — a value on the way out, where the event also mentions one coming
   in: `msg.id` and `out.msg.id` in Sieve redirect logging.
-- **`other.`** — the second mailbox in an event about two of them, such as a
-  clash: `mbox.uniqueid` is the one being written, `other.mbox.uniqueid` the
-  one already there.
+- **`other.`** — the second mailbox or message in an event about two of them,
+  such as a clash: `mbox.uniqueid` is the one being written,
+  `other.mbox.uniqueid` the one already there.
+- **`replica.`** — the replica's copy of a value, in a replication event that
+  compares the two ends: `mbox.highestmodseq` is the master's,
+  `replica.mbox.highestmodseq` the replica's.  This holds whichever end logged
+  the event, so a reader never needs to know which process it came from.
 
 Rules:
 

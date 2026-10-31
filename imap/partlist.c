@@ -463,7 +463,8 @@ static void partition_filldata(partlist_t *part_list, int idx)
         if (errno == ENOENT) {
             /* try to create path */
             if ((cyrus_mkdir(item->value, 0755) == -1) || (mkdir(item->value, 0755) == -1)) {
-                syslog(LOG_ERR, "IOERROR: creating %s: %m", item->value);
+                xsyslog_ev(LOG_ERR, "partlist.mkdir.failed",
+                           lf_s("sys.path", item->value));
                 return;
             }
             else {
@@ -472,14 +473,17 @@ static void partition_filldata(partlist_t *part_list, int idx)
         }
 
         if (error) {
-            syslog(LOG_ERR, "IOERROR: statvfs[%s]: %m", item->value);
+            xsyslog_ev(LOG_ERR, "partlist.statvfs.failed",
+                       lf_s("sys.path", item->value));
             return;
         }
     }
 
     if (stat.f_blocks <= 0) {
         /* error retrieving statvfs info */
-        syslog(LOG_ERR, "IOERROR: statvfs[%s]: non-positive number of blocks", item->value);
+        xsyslog_ev(LOG_ERR, "partlist.statvfs.failed",
+                   lf_s("sys.path", item->value),
+                   lf_s("partlist.reason", "no_blocks"));
         return;
     }
 

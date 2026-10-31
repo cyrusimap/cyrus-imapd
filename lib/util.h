@@ -451,6 +451,7 @@ static inline int logfmt_want(int priority)
  *
  * n.b. the arguments are only evaluated if the event will be logged.
  */
+#ifndef __cplusplus
 #define xsyslog_ev(priority, event, ...)                                    \
     do {                                                                    \
         int se = errno;                                                     \
@@ -459,6 +460,35 @@ static inline int logfmt_want(int priority)
                         __FILE__, __LINE__, __func__,                       \
                         XSYSLOG_EV_ARG_LIST(__VA_ARGS__));                  \
     } while (0)
+#else
+/* C++ can't take the address of an array literal, so the arguments arrive as
+ * an initializer_list instead.  They have to be built in the same expression
+ * as the call: an argument like lf_s("error", e.get_description().c_str())
+ * points into a temporary that dies at the end of its full-expression.
+ */
+extern "C++" {
+#include <initializer_list>
+
+static inline void xsyslog_ev_cxx(int saved_errno, int priority,
+                                  const char *event, const char *file,
+                                  int line, const char *func,
+                                  std::initializer_list<xsyslog_ev_arg> args)
+{
+    xsyslog_ev_arg_list list = {
+        args.size(), const_cast<xsyslog_ev_arg *>(args.begin())
+    };
+    _xsyslog_ev(saved_errno, priority, event, file, line, func, &list);
+}
+}
+
+#define xsyslog_ev(priority, event, ...)                                    \
+    do {                                                                    \
+        int se = errno;                                                     \
+        if (logfmt_want(priority))                                          \
+            xsyslog_ev_cxx(se, priority, event,                             \
+                           __FILE__, __LINE__, __func__, { __VA_ARGS__ });  \
+    } while (0)
+#endif
 
 enum xsyslog_ev_arg_type {
     LF_C,

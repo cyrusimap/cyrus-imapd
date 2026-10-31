@@ -108,13 +108,17 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
 
     identifier2 = strdup(identifier);
     if (tmp = strchr(identifier2, '+')) {
-        syslog(LOG_DEBUG, "afspts_canonifyid stripping: %s", identifier2);
+        xsyslog_ev(LOG_DEBUG, "pts.afs.canonify.stripping",
+                   lf_s("pts.id", identifier2));
         tmp[0] = 0;
-        syslog(LOG_DEBUG, "afspts_canonifyid stripped: %s", identifier2);
+        xsyslog_ev(LOG_DEBUG, "pts.afs.canonify.stripped",
+                   lf_s("pts.id", identifier2));
     }
 
     if (krb5_init_context(&context)) {
-        syslog(LOG_ERR, "afspts_canonifyid krb5_init_context failed");
+        xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                   lf_s("pts.module", "afskrb"),
+                   lf_s("pts.step", "krb5_init_context"));
         return NULL;
     }
 
@@ -122,7 +126,9 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
     {
         krb5_free_context(context);
         free(identifier2);
-        syslog(LOG_ERR, "afspts_canonifyid krb5_parse_name failed");
+        xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                   lf_s("pts.module", "afskrb"),
+                   lf_s("pts.step", "krb5_parse_name"));
         return NULL;
     }
     free(identifier2);
@@ -133,7 +139,9 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
         {
             krb5_free_principal(context,princ);
             krb5_free_context(context);
-            syslog(LOG_ERR, "afspts_canonifyid krb5_get_default_realm failed");
+            xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                       lf_s("pts.module", "afskrb"),
+                       lf_s("pts.step", "krb5_get_default_realm"));
             return NULL;
         }
 
@@ -144,7 +152,9 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
             krb5_free_principal(context,princ);
             krb5_free_context(context);
             free(realm);
-            syslog(LOG_ERR, "afspts_canonifyid krb5_build_principal failed");
+            xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                       lf_s("pts.module", "afskrb"),
+                       lf_s("pts.step", "krb5_build_principal"));
             return NULL;
         }
 
@@ -178,7 +188,9 @@ static char *afspts_canonifyid(const char *identifier, size_t len)
         {
             krb5_free_principal(context,princ);
             krb5_free_context(context);
-            syslog(LOG_ERR, "afspts_canonifyid krb5_unparse_name failed");
+            xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                       lf_s("pts.module", "afskrb"),
+                       lf_s("pts.step", "krb5_unparse_name"));
             return NULL;
         }
     }
@@ -214,7 +226,8 @@ static void myinit(void)
 {
     int r = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
     if (r) {
-        syslog(LOG_DEBUG, "pr_Initialize failed: %d", r);
+        xsyslog_ev(LOG_DEBUG, "pts.afs.init.failed",
+                   lf_d("error.code", r));
         fatal("pr_initialize failed", EX_TEMPFAIL);
     }
 
@@ -234,7 +247,9 @@ static struct auth_state *myauthstate(const char *identifier,
     struct auth_state *newstate;
 
     if (canon_id == NULL) {
-       syslog(LOG_ERR, "afspts_canonifyid failed for %s", identifier);
+       xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                  lf_s("pts.module", "afskrb"),
+                  lf_s("pts.id", identifier));
        return NULL;
     }
 
@@ -253,7 +268,8 @@ static struct auth_state *myauthstate(const char *identifier,
         pr_End();
         rc = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
         if (rc) {
-            syslog(LOG_DEBUG, "pr_Initialize failed: %d", rc);
+            xsyslog_ev(LOG_DEBUG, "pts.afs.init.failed",
+                       lf_d("error.code", rc));
             fatal("pr_Initialize failed", EX_TEMPFAIL);
         }
         /* Okay, rerun it now */
@@ -262,7 +278,9 @@ static struct auth_state *myauthstate(const char *identifier,
 
     /* Don't die because of afs, but log the error */
     if(rc) {
-        syslog(LOG_ERR, "pr_ListMembers %s: %s", canon_id, error_message(rc));
+        xsyslog_ev(LOG_ERR, "pts.afs.members.failed",
+                   lf_s("pts.id", canon_id),
+                   lf_err("error", rc));
     }
 
     /* fill in our new state structure */

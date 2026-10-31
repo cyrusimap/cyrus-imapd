@@ -2180,10 +2180,9 @@ static json_t *jscard_from_vcard(jscontact_ctx_t *ctx, vcardcomponent *vcard)
              * unpatched card as defined in RFC 9555, Section 3.2.1.  The
              * JSPROP contents are preserved in the stored vCard and a client
              * that requests them directly can still retrieve them. */
-            syslog(LOG_NOTICE,
-                   "jscard_from_vcard: patch failed for record %u:%s",
-                   record  ? record->uid : 0,
-                   mailbox ? mailbox_name(mailbox) : "<none>");
+            xsyslog_ev(LOG_NOTICE, "jscontact.patch.failed",
+                       record ? lf_u("msg.imapuid", record->uid) : lf_skip(),
+                       mailbox ? lf_mailbox(mailbox) : lf_skip());
         }
     }
 

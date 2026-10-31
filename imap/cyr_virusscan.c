@@ -100,7 +100,9 @@ void *clamav_init()
 
     /* initialise ClamAV library */
     if ((r = cl_init(0)) != CL_SUCCESS) {
-        syslog(LOG_ERR, "cl_init: %s", cl_strerror(r));
+        xsyslog_ev(LOG_ERR, "virusscan.clamav.failed",
+                   lf_s("virusscan.step", "init"),
+                   lf_s("error", cl_strerror(r)));
         fatal("Failed to initialise ClamAV library", EX_SOFTWARE);
     }
 
@@ -118,7 +120,9 @@ void *clamav_init()
     if (verbose) puts("Loading virus signatures...");
     starttime = now_ms();
     if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
-        syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
+        xsyslog_ev(LOG_ERR, "virusscan.clamav.failed",
+                   lf_s("virusscan.step", "load"),
+                   lf_s("error", cl_strerror(r)));
         fatal(cl_strerror(r), EX_SOFTWARE);
     }
 
@@ -127,8 +131,9 @@ void *clamav_init()
 
     /* build av_engine */
     if ((r = cl_engine_compile(st->av_engine))) {
-        syslog(LOG_ERR,
-               "Database initialization error: %s", cl_strerror(r));
+        xsyslog_ev(LOG_ERR, "virusscan.clamav.failed",
+                   lf_s("virusscan.step", "compile"),
+                   lf_s("error", cl_strerror(r)));
         cl_engine_free(st->av_engine);
         fatal(cl_strerror(r), EX_SOFTWARE);
     }
@@ -180,7 +185,9 @@ int clamav_scanfile(void *state, const char *fname,
 
     default:
         printf("cl_scanfile error: %s\n", cl_strerror(r));
-        syslog(LOG_ERR, "cl_scanfile error: %s", cl_strerror(r));
+        xsyslog_ev(LOG_ERR, "virusscan.clamav.failed",
+                   lf_s("virusscan.step", "scan"),
+                   lf_s("error", cl_strerror(r)));
         break;
     }
 
@@ -291,14 +298,15 @@ int main (int argc, char *argv[])
         /* load notification template early, so if it fails we haven't wasted
          * time initialising the av engine */
         if (load_notification_template(&notification_template)) {
-            syslog(LOG_ERR, "Couldn't load notification template");
+            xsyslog_ev(LOG_ERR, "virusscan.template.failed");
             fatal("Couldn't load notification template", EX_CONFIG);
         }
     }
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&scan_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "virusscan.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
     srock.namespace = &scan_namespace;
@@ -321,7 +329,7 @@ int main (int argc, char *argv[])
         prot_free(scan_out);
 
         if (c == EOF) {
-            syslog(LOG_ERR, "Invalid search string");
+            xsyslog_ev(LOG_ERR, "virusscan.search.invalid");
             fatal("Invalid search string", EX_USAGE);
         }
     }
@@ -556,9 +564,8 @@ static int load_notification_template(struct buf *dst)
 
     int fd = open(template_fname, O_RDONLY);
     if (fd == -1) {
-        syslog(LOG_WARNING, "unable to read notification template file %s (%m), "
-                            "using default instead",
-                            template_fname);
+        xsyslog_ev(LOG_WARNING, "virusscan.template.failed",
+                   lf_s("sys.path", template_fname));
         buf_setcstr(dst, default_notification_template);
         return 0;
     }
@@ -598,8 +605,8 @@ static int check_notification_template(const struct buf *template)
     for (i = 0; i < sizeof(subs) / sizeof(subs[0]); i++) {
         if (!memmem(buf_base(template), buf_len(template),
                     subs[i], strlen(subs[i])))
-            syslog(LOG_WARNING, "notification template is missing %s substitution",
-                                subs[i]);
+            xsyslog_ev(LOG_WARNING, "virusscan.template.incomplete",
+                       lf_s("virusscan.substitution", subs[i]));
     }
 
     /* stub a message, and do minimal checking for RFC 822 compliance */
@@ -782,9 +789,9 @@ static void append_notifications(const struct buf *template)
             fclose(f);
 user_done:
             if (r) {
-                syslog(LOG_ERR, "couldn't send notification to user %s: %s",
-                                mbname_userid(owner),
-                                error_message(r));
+                xsyslog_ev(LOG_ERR, "virusscan.notify.failed",
+                           lf_s("u.username", mbname_userid(owner)),
+                           lf_err("error", r));
             }
 
             mbname_free(&owner);

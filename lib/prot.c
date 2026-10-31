@@ -419,8 +419,8 @@ EXPORTED int prot_setcompress(struct protstream *s)
     return 0;
 
 error:
-    syslog(LOG_NOTICE, "failed to start %scompression",
-           s->write ? "" : "de");
+    xsyslog_ev(LOG_NOTICE, "prot.compress.init.failed",
+               lf_s("prot.direction", s->write ? "write" : "read"));
     free(zstrm);
     return EOF;
 }
@@ -665,8 +665,13 @@ EXPORTED int prot_fill(struct protstream *s)
             s->zstrm->avail_out = s->zbuf_size;
             zr = inflate(s->zstrm, Z_SYNC_FLUSH);
             if (!(zr == Z_OK || zr == Z_BUF_ERROR || zr == Z_STREAM_END)) {
-                /* Error decompressing */
-                syslog(LOG_ERR, "zlib inflate error: %d %s", zr, s->zstrm->msg);
+                /* Error decompressing: Z_DATA_ERROR is the peer's corrupt
+                 * input, anything else is ours */
+                xsyslog_ev(zr == Z_DATA_ERROR ? LOG_WARNING : LOG_ERR,
+                           "prot.compress.failed",
+                           lf_s("prot.direction", "read"),
+                           lf_d("prot.zlib.result", zr),
+                           lf_s_opt("error", s->zstrm->msg));
                 s->error = xstrdup("Error decompressing data");
                 return EOF;
             }
@@ -761,7 +766,7 @@ EXPORTED int prot_fill(struct protstream *s)
                 }
             }
             else if (r == -1) {
-                syslog(LOG_ERR, "select() failed: %m");
+                xsyslog_ev(LOG_ERR, "prot.select.failed");
                 s->error = xstrdup(strerror(errno));
                 return EOF;
             }
@@ -923,8 +928,9 @@ static int prot_flush_encode(struct protstream *s,
         do {
             /* should never be needed, but it's better to always check! */
             if (!s->zstrm->avail_out) {
-                syslog(LOG_DEBUG, "growing compress buffer from %lu to %lu bytes",
-                       s->zbuf_size, s->zbuf_size + PROT_BUFSIZE);
+                xsyslog_ev(LOG_DEBUG, "prot.compress.buffer.grown",
+                           lf_lu("old.prot.buffer.size", (unsigned long) s->zbuf_size),
+                           lf_lu("prot.buffer.size", (unsigned long) (s->zbuf_size + PROT_BUFSIZE)));
 
                 s->zbuf = (unsigned char *)
                     xrealloc(s->zbuf, s->zbuf_size + PROT_BUFSIZE);
@@ -936,7 +942,10 @@ static int prot_flush_encode(struct protstream *s,
             zr = deflate(s->zstrm, Z_SYNC_FLUSH);
             if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR)) {
                 /* something went wrong */
-                syslog(LOG_ERR, "zlib deflate error: %d %s", zr, s->zstrm->msg);
+                xsyslog_ev(LOG_ERR, "prot.compress.failed",
+                           lf_s("prot.direction", "write"),
+                           lf_d("prot.zlib.result", zr),
+                           lf_s_opt("error", s->zstrm->msg));
                 s->error = xstrdup("Error compressing data");
                 return EOF;
             }
@@ -1158,8 +1167,7 @@ int prot_flush_internal(struct protstream *s, int force)
             do {
                 n = write(s->big_buffer, ptr, left);
                 if (n == -1 && (errno != EINTR || signals_poll())) {
-                    syslog(LOG_ERR, "write to protstream buffer failed: %s",
-                           strerror(errno));
+                    xsyslog_ev(LOG_ERR, "prot.write.failed");
 
                     fatal("write to big buffer failed", EX_OSFILE);
                 }
@@ -1171,7 +1179,7 @@ int prot_flush_internal(struct protstream *s, int force)
 
             /* We did a write to the bigbuffer, refresh the memory map */
             if (fstat(s->big_buffer, &sbuf) == -1) {
-                syslog(LOG_ERR, "IOERROR: fstating temp protlayer buffer: %m");
+                xsyslog_ev(LOG_ERR, "prot.buffer.fstat.failed");
                 fatal("failed to fstat protlayer buffer", EX_IOERR);
             }
 
@@ -1744,7 +1752,7 @@ EXPORTED void protgroup_delete(struct protgroup *group, struct protstream *item)
             return;
         }
     }
-    syslog(LOG_ERR, "protgroup_delete(): can't find protstream in group");
+    xsyslog_ev(LOG_ERR, "prot.group.missing");
 }
 
 EXPORTED struct protstream *protgroup_getelement(struct protgroup *group,

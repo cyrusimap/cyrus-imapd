@@ -39,13 +39,14 @@ sub test_loginject_via_logheaders
     });
 
     my @lines = $self->{instance}->getsyslog();
-    my @hits  = grep { /X-Cassandane-Test="/i } @lines;
+    my @hits  = grep { /http\.logheader\.x-cassandane-test=/i } @lines;
 
     # We must see exactly one access log line containing the header, and
     # that line must contain BOTH the leading "valid" and the trailing
     # forged-looking suffix -- i.e., the two halves did not get split
     # into two log lines by an unescaped newline.
     $self->assert_num_equals(1, scalar @hits);
-    $self->assert_matches(qr/X-Cassandane-Test="valid\\x0a/i, $hits[0]);
+    $self->assert_matches(qr/http\.logheader\.x-cassandane-test="valid\\n/i,
+                          $hits[0]);
     $self->assert_matches(qr/CRITICAL forged log entry/, $hits[0]);
 }

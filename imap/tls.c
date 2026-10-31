@@ -124,7 +124,7 @@ EXPORTED int tls_enabled(void)
     if (!val || !strcasecmp(val, "disabled")) return 0;
 
     if (config_getswitch(IMAPOPT_CHATTY))
-            xsyslog(LOG_INFO, "TLS is available.", NULL);
+            xsyslog_ev(LOG_INFO, "tls.available");
 
     return 1;
 }
@@ -151,21 +151,27 @@ static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 
     if (where & SSL_CB_LOOP) {
         if (tls_serverengine && (var_imapd_tls_loglevel >= 2))
-            syslog(LOG_DEBUG, "%s:%s", str, SSL_state_string_long(s));
+            xsyslog_ev(LOG_DEBUG, "tls.handshake.state",
+                       lf_s("tls.step", str),
+                       lf_s("tls.state", SSL_state_string_long(s)));
     } else if (where & SSL_CB_ALERT) {
         str = (where & SSL_CB_READ) ? "read" : "write";
         if ((tls_serverengine && (var_imapd_tls_loglevel >= 2)) ||
             ((ret & 0xff) != SSL3_AD_CLOSE_NOTIFY))
-            syslog(LOG_DEBUG, "SSL3 alert %s:%s:%s", str,
-                   SSL_alert_type_string_long(ret),
-                   SSL_alert_desc_string_long(ret));
+            xsyslog_ev(LOG_DEBUG, "tls.alert",
+                       lf_s("tls.direction", str),
+                       lf_s("tls.alert.type", SSL_alert_type_string_long(ret)),
+                       lf_s("tls.alert.desc", SSL_alert_desc_string_long(ret)));
     } else if (where & SSL_CB_EXIT) {
         if (ret == 0)
-            syslog(LOG_DEBUG, "%s:failed in %s",
-                   str, SSL_state_string_long(s));
+            xsyslog_ev(LOG_DEBUG, "tls.handshake.failed",
+                       lf_s("tls.step", str),
+                       lf_s("tls.state", SSL_state_string_long(s)));
         else if (ret < 0) {
-            syslog(LOG_DEBUG, "%s:error in %s",
-                   str, SSL_state_string_long(s));
+            xsyslog_ev(LOG_DEBUG, "tls.handshake.failed",
+                       lf_s("tls.step", str),
+                       lf_s("tls.state", SSL_state_string_long(s)),
+                       lf_d("tls.result", ret));
         }
     }
 }
@@ -179,7 +185,7 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     int     err;
     int     depth;
 
-    syslog(LOG_DEBUG, "Doing a peer verify");
+    xsyslog_ev(LOG_DEBUG, "tls.verify.started");
 
     err_cert = X509_STORE_CTX_get_current_cert(ctx);
     err = X509_STORE_CTX_get_error(ctx);
@@ -188,8 +194,12 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     X509_NAME_oneline(X509_get_subject_name(err_cert), buf, sizeof(buf));
     if (ok==0)
     {
-      syslog(LOG_ERR, "verify error:num=%d:%s", err,
-             X509_verify_cert_error_string(err));
+      /* the peer's certificate, which the handshake refuses */
+      xsyslog_ev(LOG_WARNING, "tls.verify.failed",
+                 lf_s("tls.peer.subject", buf),
+                 lf_d("tls.verify.depth", depth),
+                 lf_d("error.code", err),
+                 lf_s("error", X509_verify_cert_error_string(err)));
 
         if (verify_depth >= depth) {
             ok = 0;
@@ -202,18 +212,25 @@ static int verify_callback(int ok, X509_STORE_CTX * ctx)
     switch (err) {
     case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
         X509_NAME_oneline(X509_get_issuer_name(err_cert), buf, sizeof(buf));
-        syslog(LOG_NOTICE, "issuer= %s", buf);
+        xsyslog_ev(LOG_NOTICE, "tls.verify.issuer.unknown",
+                   lf_s("tls.peer.issuer", buf));
         break;
     case X509_V_ERR_CERT_NOT_YET_VALID:
     case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD:
-        syslog(LOG_NOTICE, "cert not yet valid");
+        xsyslog_ev(LOG_NOTICE, "tls.verify.cert.invalid",
+                   lf_s("tls.peer.subject", buf),
+                   lf_s("tls.reason", "not_yet_valid"));
         break;
     case X509_V_ERR_CERT_HAS_EXPIRED:
     case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:
-        syslog(LOG_NOTICE, "cert has expired");
+        xsyslog_ev(LOG_NOTICE, "tls.verify.cert.invalid",
+                   lf_s("tls.peer.subject", buf),
+                   lf_s("tls.reason", "expired"));
         break;
     case X509_V_ERR_CERT_REVOKED:
-        syslog(LOG_NOTICE, "cert has been revoked");
+        xsyslog_ev(LOG_NOTICE, "tls.verify.cert.invalid",
+                   lf_s("tls.peer.subject", buf),
+                   lf_s("tls.reason", "revoked"));
     }
 
     return (ok);
@@ -226,8 +243,8 @@ static int servername_callback(SSL *ssl, int *ad __attribute__((unused)),
     const char *servername = SSL_get_servername(ssl, TLSEXT_NAMETYPE_host_name);
 
     if (servername) {
-        syslog(LOG_DEBUG, "TLS Server Name Indication (SNI) Extension: \"%s\"",
-               servername);
+        xsyslog_ev(LOG_DEBUG, "tls.sni.received",
+                   lf_s("tls.sni", servername));
     }
 
     return SSL_TLSEXT_ERR_OK;
@@ -300,14 +317,16 @@ static int tls_dump(const char *s, int len)
          * we will move the selection point in the debug window
          */
         if (var_imapd_tls_loglevel>0)
-          syslog(LOG_DEBUG, "%s", buf);
+          xsyslog_ev(LOG_DEBUG, "tls.dump",
+                     lf_s("tls.dump", buf));
         ret += strlen(buf);
     }
 #ifdef TRUNCATE
     if (trunc > 0) {
         snprintf(buf, sizeof(buf), "%04x - <SPACES/NULS>\n", len+ trunc);
         if (var_imapd_tls_loglevel>0)
-          syslog(LOG_DEBUG, "%s", buf);
+          xsyslog_ev(LOG_DEBUG, "tls.dump",
+                     lf_s("tls.dump", buf));
         ret += strlen(buf);
     }
 #endif
@@ -333,7 +352,9 @@ static void set_groups(SSL_CTX *ctx, const char *list)
             buf_appendcstr(&known, name);
         }
         else {
-            xsyslog(LOG_WARNING, "unknown TLS group", "group=<%s>", name);
+            xsyslog_ev(LOG_WARNING, "tls.group.unknown",
+                       lf_s("tls.group", name),
+                       lf_s("config.option", "tls_eccurve"));
         }
     }
     ERR_clear_error();
@@ -341,8 +362,9 @@ static void set_groups(SSL_CTX *ctx, const char *list)
     /* An empty list leaves OpenSSL's own default */
     if (buf_len(&known) &&
         !SSL_CTX_set1_groups_list(ctx, buf_cstring(&known))) {
-        xsyslog(LOG_ERR, "cannot set TLS groups", "groups=<%s>",
-                buf_cstring(&known));
+        xsyslog_ev(LOG_ERR, "tls.groups.set.failed",
+                   lf_buf("tls.group", &known),
+                   lf_s("config.option", "tls_eccurve"));
         ERR_clear_error();
     }
 
@@ -381,22 +403,29 @@ static int set_cert_stuff(SSL_CTX * ctx,
 
     if (SSL_CTX_use_certificate_chain_file(ctx, cf1) <= 0) {
         err = ERR_get_error();
-        syslog(LOG_ERR, "unable to get certificate from '%s': %s",
-               cf1, ERR_reason_error_string(err));
+        xsyslog_ev(LOG_ERR, "tls.cert.load.failed",
+                   lf_s("sys.path", cf1),
+                   lf_s("tls.step", "certificate"),
+                   lf_s("error", ERR_reason_error_string(err)));
         goto done;
     }
     if (SSL_CTX_use_PrivateKey_file(ctx, kf1, SSL_FILETYPE_PEM) <= 0) {
         err = ERR_get_error();
-        syslog(LOG_ERR, "unable to get private key from '%s': %s",
-               kf1, ERR_reason_error_string(err));
+        xsyslog_ev(LOG_ERR, "tls.cert.load.failed",
+                   lf_s("sys.path", kf1),
+                   lf_s("tls.step", "private_key"),
+                   lf_s("error", ERR_reason_error_string(err)));
         goto done;
     }
     /* Now we know that a key and cert have been set against
      * the SSL context */
     if (!SSL_CTX_check_private_key(ctx)) {
         err = ERR_get_error();
-        syslog(LOG_ERR, "Private key '%s' does not match public key '%s': %s",
-               kf1, cf1, ERR_reason_error_string(err));
+        xsyslog_ev(LOG_ERR, "tls.cert.load.failed",
+                   lf_s("sys.path", cf1),
+                   lf_s("tls.key.path", kf1),
+                   lf_s("tls.step", "key_mismatch"),
+                   lf_s("error", ERR_reason_error_string(err)));
         goto done;
     }
 
@@ -404,24 +433,31 @@ static int set_cert_stuff(SSL_CTX * ctx,
         /* Load second certificate */
         if (SSL_CTX_use_certificate_chain_file(ctx, cf2) <= 0) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "unable to get certificate from '%s': %s",
-                   cf2, ERR_reason_error_string(err));
+            xsyslog_ev(LOG_ERR, "tls.cert.load.failed",
+                       lf_s("sys.path", cf2),
+                       lf_s("tls.step", "certificate"),
+                       lf_s("error", ERR_reason_error_string(err)));
             goto done;
         }
         // if no second key file, use second certificate file
         if (!kf2) kf2 = cf2;
         if (SSL_CTX_use_PrivateKey_file(ctx, kf2, SSL_FILETYPE_PEM) <= 0) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "unable to get private key from '%s': %s",
-                   kf2, ERR_reason_error_string(err));
+            xsyslog_ev(LOG_ERR, "tls.cert.load.failed",
+                       lf_s("sys.path", kf2),
+                       lf_s("tls.step", "private_key"),
+                       lf_s("error", ERR_reason_error_string(err)));
             goto done;
         }
         /* Now we know that a key and cert have been set against
          * the SSL context */
         if (!SSL_CTX_check_private_key(ctx)) {
             err = ERR_get_error();
-            syslog(LOG_ERR, "Private key '%s' does not match public key '%s': %s",
-                   kf2, cf2, ERR_reason_error_string(err));
+            xsyslog_ev(LOG_ERR, "tls.cert.load.failed",
+                       lf_s("sys.path", cf2),
+                       lf_s("tls.key.path", kf2),
+                       lf_s("tls.step", "key_mismatch"),
+                       lf_s("error", ERR_reason_error_string(err)));
             goto done;
         }
     }
@@ -471,7 +507,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     /* transform the session into its ASN1 representation */
     asn = data + sizeof(time_t);
     len = i2d_SSL_SESSION(sess, &asn);
-    if (!len) syslog(LOG_ERR, "i2d_SSL_SESSION failed");
+    if (!len) xsyslog_ev(LOG_ERR, "tls.session.encode_failed");
 
     /* set the expire time for the external cache, and prepend it to data */
 #if OPENSSL_VERSION_NUMBER >= 0x30300000L
@@ -504,8 +540,11 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
         for (i = 0; i < session_id_length; i++) {
             sprintf(idstr+i*2, "%02X", session_id[i]);
         }
-        syslog(LOG_DEBUG, "new TLS session: id=%s, expire=%s, status=%s",
-               idstr, ctime(&expire), ret ? "failed" : "ok");
+        xsyslog_ev(LOG_DEBUG, "tls.session.cache",
+                   lf_s("tls.step", "store"),
+                   lf_s("tls.session.id", idstr),
+                   lf_time("tls.session.expire", expire),
+                   lf_s("tls.result", ret ? "failed" : "ok"));
     }
 
     return 0;
@@ -533,7 +572,9 @@ static void remove_session(const unsigned char *id, int idlen)
         char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 
         bin_to_hex(id, idlen, idstr, BH_UPPER);
-        syslog(LOG_DEBUG, "remove TLS session: id=%s", idstr);
+        xsyslog_ev(LOG_DEBUG, "tls.session.cache",
+                   lf_s("tls.step", "remove"),
+                   lf_s("tls.session.id", idstr));
     }
 }
 
@@ -600,7 +641,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
                into an SSL_SESSION object */
             const unsigned char *asn = (unsigned char *) data + sizeof(time_t);
             sess = d2i_SSL_SESSION(NULL, &asn, len - sizeof(time_t));
-            if (!sess) syslog(LOG_ERR, "d2i_SSL_SESSION failed");
+            if (!sess) xsyslog_ev(LOG_ERR, "tls.session.decode_failed");
         }
     }
 
@@ -611,9 +652,11 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
         for (i = 0; i < idlen; i++)
             sprintf(idstr+i*2, "%02X", id[i]);
 
-        syslog(LOG_DEBUG, "get TLS session: id=%s, expire=%s, status=%s",
-               idstr, ctime(&expire),
-               !data ? "not found" : expire < now ? "expired" : "ok");
+        xsyslog_ev(LOG_DEBUG, "tls.session.cache",
+                   lf_s("tls.step", "fetch"),
+                   lf_s("tls.session.id", idstr),
+                   lf_time("tls.session.expire", expire),
+                   lf_s("tls.result", !data ? "not_found" : expire < now ? "expired" : "ok"));
     }
 
     *copy = 0;
@@ -758,14 +801,12 @@ static int alpn_select_cb(SSL *ssl __attribute__((unused)),
 done:
     if (r != SSL_TLSEXT_ERR_OK) {
         strarray_t *client_wanted = hash_keys(&client_protos);
-        char *print_client = strarray_join(client_wanted, ", ");
         char *print_server = alpn_to_string(server_list);
 
-        xsyslog(LOG_NOTICE, "ALPN failed",
-                            "client_protos=<%s> server_protos=<%s>",
-                            print_client, print_server);
+        xsyslog_ev(LOG_NOTICE, "tls.alpn.failed",
+                   lf_strarray("tls.alpn.client", client_wanted),
+                   lf_s("tls.alpn.server", print_server));
 
-        free(print_client);
         free(print_server);
         strarray_free(client_wanted);
     }
@@ -817,12 +858,15 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         return (0);                             /* already running */
 
     if (var_imapd_tls_loglevel >= 2)
-        syslog(LOG_DEBUG, "starting TLS server engine");
+        xsyslog_ev(LOG_DEBUG, "tls.engine.starting",
+                   lf_s("tls.engine", "server"));
 
     SSL_library_init();
     SSL_load_error_strings();
     if (tls_rand_init() == -1) {
-        syslog(LOG_ERR,"TLS server engine: cannot seed PRNG");
+        xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
+                   lf_s("tls.engine", "server"),
+                   lf_s("tls.step", "seed_prng"));
         return -1;
     }
 
@@ -868,11 +912,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHERS);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
-        syslog(
-                LOG_ERR,
-                "TLS server engine: cannot load cipher list '%s'",
-                cipher_list
-            );
+        xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
+                   lf_s("tls.engine", "server"),
+                   lf_s("tls.step", "cipher_list"),
+                   lf_s("tls.ciphers", cipher_list));
 
         return (-1);
     }
@@ -886,10 +929,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
 
             if (config_debug) {
-                    syslog(
-                        LOG_DEBUG, "tls_client_ca_dir=%s tls_client_ca_file=%s",
-                        IS_NULL(client_ca_dir), IS_NULL(client_ca_file)
-                    );
+                    xsyslog_ev(LOG_DEBUG, "tls.engine.config",
+                               lf_s("tls.engine", "server"),
+                               lf_s("tls.client_ca_dir", client_ca_dir),
+                               lf_s("tls.client_ca_file", client_ca_file));
             }
 
         if (client_ca_dir || client_ca_file) {
@@ -898,16 +941,15 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                 (!SSL_CTX_set_default_verify_paths(s_ctx))) {
 
                 // Just a warning since this is only necessary for client auth.
-                syslog(
-                        LOG_WARNING,
-                        "TLS server engine: Failed loading client CA data, cert auth disabled."
-                    );
+                xsyslog_ev(LOG_WARNING, "tls.engine.client_ca.failed",
+                           lf_s("tls.client_ca_dir", client_ca_dir),
+                           lf_s("tls.client_ca_file", client_ca_file));
 
                 use_client_certs = 0;
             }
         } else { // (client_ca_dir || client_ca_file)
             // We have no CA to verify client certificates against.
-            syslog(LOG_DEBUG, "TLS server engine: No client CA data configured.");
+            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.missing");
 
             // This is fatal should client certificates be required.
             if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) {
@@ -927,10 +969,10 @@ EXPORTED int     tls_init_serverengine(const char *ident,
     server_key_file = config_getstring(IMAPOPT_TLS_SERVER_KEY);
 
     if (config_debug) {
-            syslog(
-                LOG_DEBUG, "tls_server_cert=%s tls_server_key=%s",
-                IS_NULL(server_cert_file), IS_NULL(server_key_file)
-            );
+            xsyslog_ev(LOG_DEBUG, "tls.engine.config",
+                       lf_s("tls.engine", "server"),
+                       lf_s("tls.server_cert", server_cert_file),
+                       lf_s("tls.server_key", server_key_file));
     }
 
     /* Only consider adding additional CA certificates -used to verify certificates
@@ -945,43 +987,38 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         if (filebio) {
             X509 *cacert;
 
-            syslog(
-                    LOG_DEBUG,
-                    "TLS server engine: loading additional client CA information from file %s",
-                    server_ca_file
-                );
+            xsyslog_ev(LOG_DEBUG, "tls.engine.server_ca.loading",
+                       lf_s("sys.path", server_ca_file));
 
             while ((cacert = PEM_read_bio_X509(filebio,NULL,NULL,NULL)) != NULL) {
                 char buf[256];
                 X509_NAME_oneline(X509_get_subject_name(cacert), buf, sizeof(buf));
 
                 if (!SSL_CTX_add_extra_chain_cert(s_ctx, cacert)) {
-                    syslog(
-                            LOG_ERR,
-                            "TLS server engine: failed to add client_ca_cert to chain: %s",
-                            buf
-                        );
+                    xsyslog_ev(LOG_ERR, "tls.engine.server_ca.failed",
+                               lf_s("sys.path", server_ca_file),
+                               lf_s("tls.cert.subject", buf));
 
                     X509_free(cacert);
                 } else {
-                    syslog(LOG_DEBUG, "TLS server engine: added CA cert to chain: %s", buf);
+                    xsyslog_ev(LOG_DEBUG, "tls.engine.server_ca.added",
+                               lf_s("tls.cert.subject", buf));
                 }
             }
 
             BIO_free(filebio);
         } else {
-            syslog(
-                    LOG_ERR,
-                    "TLS server engine: Cannot load additional client CA information from file %s",
-                    server_ca_file
-                );
+            xsyslog_ev(LOG_ERR, "tls.engine.server_ca.failed",
+                       lf_s("sys.path", server_ca_file));
 
             return (-1);
         }
     }
 
     if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
-        syslog(LOG_ERR, "TLS server engine: cannot load cert/key data, may be a cert/key mismatch?");
+        xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
+                   lf_s("tls.engine", "server"),
+                   lf_s("tls.step", "cert_key"));
         return (-1);
     }
 
@@ -993,16 +1030,15 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     if (!use_client_certs) {
         if ((tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) && askcert)
-            syslog(LOG_ERR, "TLS server engine: No client cert CA specified.");
+            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.missing",
+                       lf_s("tls.reason", "required"));
 
     } else {
         STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
 
         if (!CAnames || sk_X509_NAME_num(CAnames) < 1) {
-            syslog(
-                    LOG_ERR,
-                    "TLS server engine: No client CA certs specified. Client side certs may not work"
-                );
+            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.empty",
+                       lf_s("tls.client_ca_file", client_ca_file));
 
         } else {
             if (askcert || tls_client_certs)
@@ -1013,12 +1049,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
             SSL_CTX_set_client_CA_list(s_ctx, CAnames);
 
-            syslog(
-                    LOG_DEBUG,
-                    "Set client CA list: Client cert %srequested, %srequired",
-                    verify_flags & SSL_VERIFY_PEER ? "" : "not ",
-                    verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT ? "":"not "
-                );
+            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.set",
+                       lf_b("tls.client_cert.requested", !!(verify_flags & SSL_VERIFY_PEER)),
+                       lf_b("tls.client_cert.required", !!(verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT)));
         }
     }
 
@@ -1039,7 +1072,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                                  X509_V_FLAG_CRL_CHECK |
                                  X509_V_FLAG_CRL_CHECK_ALL);
         } else {
-            syslog(LOG_ERR, "Can't load CRL file %s.", crl_file_path);
+            xsyslog_ev(LOG_ERR, "tls.engine.crl.failed",
+                       lf_s("sys.path", crl_file_path));
         }
 
         BIO_free(crl_file);
@@ -1108,8 +1142,9 @@ EXPORTED int     tls_init_serverengine(const char *ident,
          * just before it could be resumed once more. */
         r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_NOSYNC, &sessdb);
         if (r != 0) {
-            syslog(LOG_ERR, "DBERROR: opening %s: %s",
-                   fname, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "tls.session.db.open.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         else
             sess_dbopen = 1;
@@ -1201,14 +1236,15 @@ static int read_early_data(SSL *conn, struct protstream *pin, int timeout)
                             SSL_get_wfd(conn) : pin->fd,
                             err == SSL_ERROR_WANT_WRITE, timeout);
             if (r > 0) continue;
-            if (r == 0) syslog(LOG_DEBUG, "SSL_read_early_data() timed out");
+            if (r == 0) xsyslog_ev(LOG_DEBUG, "tls.early_data.failed",
+                       lf_s("tls.reason", "timeout"));
         }
         else if (err == SSL_ERROR_SYSCALL && errno == EINTR) {
             continue;
         }
         else {
-            syslog(LOG_DEBUG, "SSL_read_early_data() failed: %s",
-                   ERR_reason_error_string(ERR_get_error()));
+            xsyslog_ev(LOG_DEBUG, "tls.early_data.failed",
+                       lf_s("error", ERR_reason_error_string(ERR_get_error())));
         }
 
         return -1;
@@ -1241,7 +1277,6 @@ static int start_servertls(int readfd, int writefd, int timeout,
     const char *tls_cipher_name = NULL;
     const unsigned char *alpn = NULL;
     unsigned int alpn_len = 0;
-    struct buf log = BUF_INITIALIZER;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
     SSL *tls_conn;
@@ -1251,7 +1286,7 @@ static int start_servertls(int readfd, int writefd, int timeout,
     assert(tls_serverengine);
     assert(ret);
     if (var_imapd_tls_loglevel >= 1)
-        syslog(LOG_DEBUG, "setting up TLS connection");
+        xsyslog_ev(LOG_DEBUG, "tls.connection.starting");
 
     saslprops_reset(saslprops);
 
@@ -1310,10 +1345,11 @@ static int start_servertls(int readfd, int writefd, int timeout,
         sts = wait_for_fd(readfd, 0, timeout);
         if (sts <= 0) {
             if (sts == 0) {
-                syslog(LOG_DEBUG, "SSL_accept() timed out -> fail");
+                xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                           lf_s("tls.reason", "timeout"));
             } else {
-                syslog(LOG_DEBUG,
-                       "tls_start_servertls() failed in select() -> fail: %m");
+                xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                           lf_s("tls.reason", "select"));
             }
             r = -1;
             goto done;
@@ -1321,7 +1357,7 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
         sts = SSL_accept(tls_conn);
         if (sts > 0) {
-            syslog(LOG_DEBUG, "SSL_accept() succeeded -> done");
+            xsyslog_ev(LOG_DEBUG, "tls.accept.succeeded");
             break;
         }
 
@@ -1330,37 +1366,41 @@ static int start_servertls(int readfd, int writefd, int timeout,
         switch (err) {
         case SSL_ERROR_WANT_READ:
         case SSL_ERROR_WANT_WRITE:
-            syslog(LOG_DEBUG, "SSL_accept() incomplete -> wait");
+            xsyslog_ev(LOG_DEBUG, "tls.accept.waiting",
+                       lf_s("tls.reason", "incomplete"));
             continue;
         case SSL_ERROR_SYSCALL:
             if (sts == 0) {
-                syslog(LOG_DEBUG, "EOF in SSL_accept() -> fail");
+                xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                           lf_s("tls.reason", "eof"));
             } else if (errno == EINTR || errno == EAGAIN) {
-                syslog(LOG_DEBUG,
-                       "SSL_accept() interrupted by signal %m -> retry");
+                xsyslog_ev(LOG_DEBUG, "tls.accept.waiting",
+                           lf_s("tls.reason", "interrupted"));
                 continue;
             } else {
-                syslog(LOG_DEBUG,
-                       "SSL_accept() interrupted by signal %m -> fail");
+                xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                           lf_s("tls.reason", "syscall"));
             }
             break;
         case SSL_ERROR_SSL:
             err = ERR_get_error();
             if (err == 0) {
-                syslog(LOG_DEBUG, "protocol error in SSL_accept() -> fail");
+                xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                           lf_s("tls.reason", "protocol_error"));
             } else {
-                syslog(LOG_DEBUG, "%s in SSL_accept() -> fail",
-                       ERR_reason_error_string(err));
+                xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                           lf_s("tls.reason", "ssl_error"),
+                           lf_s("error", ERR_reason_error_string(err)));
             }
             break;
         case SSL_ERROR_ZERO_RETURN:
-            syslog(LOG_DEBUG,
-                   "TLS/SSL connection closed in SSL_accept() -> fail");
+            xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                       lf_s("tls.reason", "closed"));
             break;
         default:
-            syslog(LOG_DEBUG,
-                   "SSL_accept() failed with unknown error %d -> fail",
-                   err);
+            xsyslog_ev(LOG_DEBUG, "tls.accept.failed",
+                       lf_s("tls.reason", "unknown"),
+                       lf_d("error.code", err));
             break;
         }
         r = -1;
@@ -1379,35 +1419,33 @@ static int start_servertls(int readfd, int writefd, int timeout,
      */
     peer = SSL_get_peer_certificate(tls_conn);
     if (peer != NULL) {
-        char fingerprint[EVP_MAX_MD_SIZE * 3];
+        char fingerprint[EVP_MAX_MD_SIZE * 3] = "";
         char issuer_CN[CCERT_BUFSIZ];
         char peer_issuer[CCERT_BUFSIZ];
         char peer_CN[CCERT_BUFSIZ];
         char peer_subject[CCERT_BUFSIZ];
         unsigned char md[EVP_MAX_MD_SIZE];
 
-        syslog(LOG_DEBUG, "received client certificate");
-
         X509_NAME_oneline(X509_get_subject_name(peer),
                           peer_subject, CCERT_BUFSIZ);
-        syslog(LOG_DEBUG, "subject=%s", peer_subject);
         X509_NAME_oneline(X509_get_issuer_name(peer),
                           peer_issuer, CCERT_BUFSIZ);
-        if (var_imapd_tls_loglevel >= 2)
-            syslog(LOG_DEBUG, "issuer=%s", peer_issuer);
 
-        if (X509_digest(peer, EVP_md5(), md, &n)) {
+        if (X509_digest(peer, EVP_md5(), md, &n))
             bin_to_hex(md, n, fingerprint, BH_UPPER|BH_SEPARATOR('_'));
-            if (var_imapd_tls_loglevel >= 2)
-                syslog(LOG_DEBUG, "fingerprint=%s", fingerprint);
-        }
         X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
                           NID_commonName, peer_CN, CCERT_BUFSIZ);
         X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
                           NID_commonName, issuer_CN, CCERT_BUFSIZ);
-        if (var_imapd_tls_loglevel >= 3)
-            syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s",
-                   peer_CN, issuer_CN);
+        /* tls_loglevel decides how much of the certificate is logged */
+        int level = var_imapd_tls_loglevel;
+        xsyslog_ev(LOG_DEBUG, "tls.peer.cert.received",
+                   lf_s("tls.peer.subject", peer_subject),
+                   level >= 2 ? lf_s("tls.peer.issuer", peer_issuer) : lf_skip(),
+                   level >= 2 && fingerprint[0]
+                       ? lf_s("tls.peer.fingerprint", fingerprint) : lf_skip(),
+                   level >= 3 ? lf_s("tls.peer.subject_cn", peer_CN) : lf_skip(),
+                   level >= 3 ? lf_s("tls.peer.issuer_cn", issuer_CN) : lf_skip());
 
         /* XXX verify that we like the peer_issuer/issuer_CN */
 
@@ -1466,27 +1504,17 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
     SSL_get0_alpn_selected(tls_conn, &alpn, &alpn_len);
 
-    buf_printf(&log, "starttls: %s with cipher %s (%d/%d bits %s) ",
-               tls_protocol, tls_cipher_name,
-               tls_cipher_usebits, tls_cipher_algbits,
-               SSL_session_reused(tls_conn) ? "reused" : "new");
-
-    if (buf_len(&saslprops->authid)) {
-        buf_printf(&log, "authenticated as %s", buf_cstring(&saslprops->authid));
-    }
-    else {
-        buf_appendcstr(&log, "no authentication");
-    }
-
-    if (alpn) {
-        buf_printf(&log, "; application protocol = %.*s",
-                   alpn_len, (const char *) alpn);
-    }
-
-    if (early) buf_appendcstr(&log, "; early data accepted");
-
-    syslog(LOG_NOTICE, "%s", buf_cstring(&log));
-    buf_free(&log);
+    xsyslog_ev(LOG_NOTICE, "tls.session.started",
+               lf_s("tls.protocol", tls_protocol),
+               lf_s("tls.cipher", tls_cipher_name),
+               lf_d("tls.cipher.bits", tls_cipher_usebits),
+               lf_d("tls.cipher.algbits", tls_cipher_algbits),
+               lf_b("tls.reused", SSL_session_reused(tls_conn)),
+               buf_len(&saslprops->authid)
+                   ? lf_buf("tls.authid", &saslprops->authid) : lf_skip(),
+               alpn ? lf_raw("tls.alpn", "%.*s", alpn_len, (const char *) alpn)
+                    : lf_skip(),
+               lf_flag("tls.early_data", early));
 
  done:
     nonblock(readfd, 0);
@@ -1588,8 +1616,8 @@ EXPORTED int tls_shutdown_serverengine(void)
         if (sess_dbopen) {
             r = cyrusdb_close(sessdb);
             if (r) {
-                syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
-                       cyrusdb_strerror(r));
+                xsyslog_ev(LOG_ERR, "tls.session.db.close.failed",
+                           lf_s("error", cyrusdb_strerror(r)));
             }
             sessdb = NULL;
             sess_dbopen = 0;
@@ -1633,8 +1661,10 @@ static int prune_p(void *rock, const char *id, size_t idlen,
             sprintf(idstr+i*2, "%02X", (unsigned char) id[i]);
         }
 
-        syslog(LOG_DEBUG, "found TLS session: id=%s, expire=%s",
-               idstr, ctime(&expire));
+        xsyslog_ev(LOG_DEBUG, "tls.session.cache",
+                   lf_s("tls.step", "prune_check"),
+                   lf_s("tls.session.id", idstr),
+                   lf_time("tls.session.expire", expire));
     }
 
     /* check if the session has expired */
@@ -1680,16 +1710,21 @@ EXPORTED int tls_prune_sessions(void)
         sessdb = NULL;
         sess_dbopen = 0;
 
-        syslog(LOG_NOTICE, "tls_prune: purged %d out of %d entries",
-               prock.deletions, prock.count);
+        xsyslog_ev(LOG_NOTICE, "tls.session.pruned",
+                   lf_s("sys.path", fname),
+                   lf_d("tls.sessions.purged", prock.deletions),
+                   lf_d("tls.sessions", prock.count));
     }
     else if (ret == CYRUSDB_NOTFOUND) {
-        syslog(LOG_NOTICE, "tls_prune: %s not found, nothing to do", fname);
+        xsyslog_ev(LOG_NOTICE, "tls.session.pruned",
+                   lf_s("sys.path", fname),
+                   lf_s("tls.reason", "no_db"));
         ret = 0;
     }
     else {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s",
-               fname, cyrusdb_strerror(ret));
+        xsyslog_ev(LOG_ERR, "tls.session.db.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(ret)));
     }
 
     if (tofree)
@@ -1753,7 +1788,8 @@ HIDDEN int tls_init_clientengine(int verifydepth,
         return (0);                             /* already running */
 
     if (var_proxy_tls_loglevel >= 2)
-        syslog(LOG_DEBUG, "starting TLS client engine");
+        xsyslog_ev(LOG_DEBUG, "tls.engine.starting",
+                   lf_s("tls.engine", "client"));
 
     SSL_library_init();
     SSL_load_error_strings();
@@ -1779,17 +1815,19 @@ HIDDEN int tls_init_clientengine(int verifydepth,
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
 
     if (config_debug) {
-            syslog(
-                LOG_DEBUG, "tls_server_ca_dir=%s tls_server_ca_file=%s",
-                IS_NULL(server_ca_dir), IS_NULL(server_ca_file)
-            );
+            xsyslog_ev(LOG_DEBUG, "tls.engine.config",
+                       lf_s("tls.engine", "client"),
+                       lf_s("tls.server_ca_dir", server_ca_dir),
+                       lf_s("tls.server_ca_file", server_ca_file));
     }
 
     if (server_ca_dir || server_ca_file) {
         if ((!SSL_CTX_load_verify_locations(c_ctx, server_ca_file, server_ca_dir)) ||
             (!SSL_CTX_set_default_verify_paths(c_ctx))) {
             /* just a warning since this is only necessary for client auth */
-            syslog(LOG_NOTICE,"TLS client engine: cannot load CA data");
+            xsyslog_ev(LOG_NOTICE, "tls.engine.server_ca.failed",
+                       lf_s("tls.server_ca_dir", server_ca_dir),
+                       lf_s("tls.server_ca_file", server_ca_file));
         }
     }
 
@@ -1805,7 +1843,9 @@ HIDDEN int tls_init_clientengine(int verifydepth,
 
     if (client_cert || client_key) {
         if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
-            syslog(LOG_ERR,"TLS client engine: cannot load cert/key data, may be a cert/key mismatch?");
+            xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
+                       lf_s("tls.engine", "client"),
+                       lf_s("tls.step", "cert_key"));
             return -1;
         }
     }
@@ -1834,7 +1874,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     assert(tls_clientengine);
     assert(ret);
     if (var_proxy_tls_loglevel >= 1)
-        syslog(LOG_DEBUG, "setting up TLS connection");
+        xsyslog_ev(LOG_DEBUG, "tls.connection.starting");
 
     if (authid) *authid = NULL;
 
@@ -1845,7 +1885,7 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
         alpn_get_protos(alpn_map, &protos, &protos_len);
 
         if (SSL_CTX_set_alpn_protos(c_ctx, protos, protos_len)) {
-            syslog(LOG_ERR, "TLS client engine: failed to set ALPN protos");
+            xsyslog_ev(LOG_ERR, "tls.alpn.set.failed");
         }
 
         free(protos);
@@ -1924,15 +1964,15 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
         char issuer_CN[CCERT_BUFSIZ];
         char peer_CN[CCERT_BUFSIZ];
 
-        syslog(LOG_DEBUG, "received server certificate");
-
         X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
                                   NID_commonName, peer_CN, CCERT_BUFSIZ);
         X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
                                   NID_commonName, issuer_CN, CCERT_BUFSIZ);
-        if (var_proxy_tls_loglevel >= 3)
-            syslog(LOG_DEBUG, "subject_CN=%s, issuer_CN=%s",
-                   peer_CN, issuer_CN);
+        xsyslog_ev(LOG_DEBUG, "tls.peer.cert.received",
+                   var_proxy_tls_loglevel >= 3
+                       ? lf_s("tls.peer.subject_cn", peer_CN) : lf_skip(),
+                   var_proxy_tls_loglevel >= 3
+                       ? lf_s("tls.peer.issuer_cn", issuer_CN) : lf_skip());
 
         /* XXX verify that we like the peer_issuer/issuer_CN */
 
@@ -1950,11 +1990,13 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
     if (layerbits != NULL)
         *layerbits = tls_cipher_usebits;
 
-    syslog(LOG_DEBUG, "starttls: %s with cipher %s (%d/%d bits %s client)"
-           " no authentication",
-           tls_protocol, tls_cipher_name,
-           tls_cipher_usebits, tls_cipher_algbits,
-           SSL_session_reused(tls_conn) ? "reused" : "new");
+    xsyslog_ev(LOG_DEBUG, "tls.session.started",
+               lf_s("tls.engine", "client"),
+               lf_s("tls.protocol", tls_protocol),
+               lf_s("tls.cipher", tls_cipher_name),
+               lf_d("tls.cipher.bits", tls_cipher_usebits),
+               lf_d("tls.cipher.algbits", tls_cipher_algbits),
+               lf_b("tls.reused", SSL_session_reused(tls_conn)));
 
   done:
     if (r && tls_conn) {

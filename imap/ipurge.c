@@ -238,7 +238,9 @@ static int purge_one(const mbname_t *mbname)
     do {
         r = mailbox_open_iwl(name, &mailbox);
         if (r) { /* did we find it? */
-            syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
+            xsyslog_ev(LOG_ERR, "ipurge.mailbox.open.failed",
+                       lf_intname("mbox.name", name),
+                       lf_err("error", r));
             return r;
         }
 

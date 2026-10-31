@@ -31,7 +31,8 @@ char* notify_external(const char *class, const char *priority,
 
     /* check/parse options */
     if (!(notify = config_getstring(IMAPOPT_NOTIFY_EXTERNAL))) {
-        syslog(LOG_ERR, "ERROR: no external recipient (program) specified");
+        xsyslog_ev(LOG_ERR, "notify.external.failed",
+                   lf_s("notify.reason", "no_program"));
         return strdup("NO Recipient unspecified");
     }
 
@@ -49,8 +50,8 @@ char* notify_external(const char *class, const char *priority,
     buf[11] = NULL;
 
     if (pipe(fds) < 0) {
-       syslog(LOG_ERR,
-              "notify_external: pipe() returned %s", strerror(errno));
+       xsyslog_ev(LOG_ERR, "notify.external.failed",
+                  lf_s("notify.step", "pipe"));
        return strdup("NO notify_external pipe failed");
     }
 
@@ -62,7 +63,8 @@ char* notify_external(const char *class, const char *priority,
         execv(notify, (char **) buf);
 
         /* should never reach here */
-        syslog(LOG_ERR, "notify_external: exec returned %s", strerror(errno));
+        xsyslog_ev(LOG_ERR, "notify.external.failed",
+                   lf_s("notify.step", "exec"));
         return strdup("NO notify_external exec failed");
     }
     /* i'm the parent */

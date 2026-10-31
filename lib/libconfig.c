@@ -243,9 +243,9 @@ EXPORTED int config_parseduration(const char *str, int defunit, int32_t *out_dur
 
 done:
     if (r) {
-        xsyslog(LOG_ERR, "unable to parse duration from string",
-                         "value=<%s> parse_err=<%s>",
-                         str, buf_cstring_or_empty(&parse_err));
+        xsyslog_ev(LOG_ERR, "config.duration.invalid",
+                   lf_s("config.value", str),
+                   lf_buf("error", &parse_err));
     }
 
     buf_free(&parse_err);
@@ -360,9 +360,9 @@ EXPORTED int config_parsebytesize(const char *str,
 
 done:
     if (r) {
-        xsyslog(LOG_ERR, "unable to parse bytesize from string",
-                         "value=<%s> parse_err=<%s>",
-                         str, buf_cstring_or_empty(&parse_err));
+        xsyslog_ev(LOG_ERR, "config.bytesize.invalid",
+                   lf_s("config.value", str),
+                   lf_buf("error", &parse_err));
     }
     else if (out_bytesize) {
         *out_bytesize = bytesize;
@@ -429,8 +429,8 @@ EXPORTED const char *config_partitiondir(const char *partition)
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_WARNING, "requested partition directory for unknown partition '%s'",
-                            partition);
+        xsyslog_ev(LOG_WARNING, "config.partition.unknown",
+                   lf_s("mbox.part", partition));
 
     return dir;
 }
@@ -446,8 +446,9 @@ EXPORTED const char *config_metapartitiondir(const char *partition)
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_DEBUG, "requested meta partition directory for unknown partition '%s'",
-                          partition);
+        xsyslog_ev(LOG_DEBUG, "config.partition.unknown",
+                   lf_s("mbox.part", partition),
+                   lf_s("config.option", "metapartition"));
 
     return dir;
 }
@@ -466,8 +467,9 @@ EXPORTED const char *config_archivepartitiondir(const char *partition)
 
     const char *dir = config_getoverflowstring(buf, NULL);
     if (!dir)
-        syslog(LOG_DEBUG, "requested archive partition directory for unknown partition '%s'",
-                          partition);
+        xsyslog_ev(LOG_DEBUG, "config.partition.unknown",
+                   lf_s("mbox.part", partition),
+                   lf_s("config.option", "archivepartition"));
 
     return dir;
 }
@@ -487,14 +489,16 @@ static void config_option_deprecate(const int dopt)
     const char *since = imapopts[dopt].deprecated_since;
 
     if (opt == IMAPOPT_ZERO) {
-        syslog(LOG_WARNING, "Option '%s' is deprecated in version %s.",
-               imapopts[dopt].name, since);
+        xsyslog_ev(LOG_WARNING, "config.option.deprecated",
+                   lf_s("config.option", imapopts[dopt].name),
+                   lf_s("config.since", since));
         return;
     }
 
-    syslog(LOG_WARNING,
-           "Option '%s' is deprecated in favor of '%s' since version %s.",
-           imapopts[dopt].name, imapopts[opt].name, since);
+    xsyslog_ev(LOG_WARNING, "config.option.deprecated",
+               lf_s("config.option", imapopts[dopt].name),
+               lf_s("config.replacement", imapopts[opt].name),
+               lf_s("config.since", since));
 
     /* Don't override values if the preferred option has been seen */
     if (imapopts[opt].seen) return;
@@ -765,8 +769,8 @@ EXPORTED int config_read(const char *alt_config,
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; p && *p; p++) {
         if (!Uisalnum(*p)) {
-            syslog(LOG_ERR, "INVALID defaultpartition: %s",
-                   config_defpartition);
+            xsyslog_ev(LOG_ERR, "config.defaultpartition.invalid",
+                       lf_s("config.value", config_defpartition));
             if (err) {
                 buf_appendcstr(err,
                     "defaultpartition option contains non-alnum character\n");
@@ -830,7 +834,7 @@ EXPORTED int config_read(const char *alt_config,
     if (config_iolog) {
         if (access("/proc/self/io", R_OK)) {
             config_iolog = 0;
-            syslog(LOG_WARNING,"iolog directive needs a kernel built with I/O accounting");
+            xsyslog_ev(LOG_WARNING, "config.iolog.unsupported");
         }
     }
 
@@ -1263,10 +1267,10 @@ static int config_read_file(const char *filename, struct buf *err)
                         for (; pref > imapopts[opt].enum_options &&
                                  pref[-1].val == e->val; pref--);
                         if (pref != e) {
-                            syslog(LOG_WARNING,
-                                   "Value '%s' for option '%s'"
-                                   " is deprecated in favor of value '%s'",
-                                   e->name, imapopts[opt].name, pref->name);
+                            xsyslog_ev(LOG_WARNING, "config.value.deprecated",
+                                       lf_s("config.option", imapopts[opt].name),
+                                       lf_s("config.value", e->name),
+                                       lf_s("config.replacement", pref->name));
                         }
 
                         imapopts[opt].val.u64 |= e->val;
@@ -1467,9 +1471,9 @@ static void check_no_dups(const char *value, void *vpkeys, void *vprock)
         char *joined_keys = NULL;
 
         joined_keys = strarray_join(keys, ",");
-        xsyslog(LOG_ERR, "disk path used by multiple partitions",
-                         "path=<%s> partitions=<%s>",
-                         value, joined_keys);
+        xsyslog_ev(LOG_ERR, "config.partition.path.shared",
+                   lf_s("sys.path", value),
+                   lf_s("config.partitions", joined_keys));
         free(joined_keys);
 
         if (user_output) {
@@ -1514,9 +1518,9 @@ static int check_no_subdirs(hash_table *by_value, FILE *user_output)
             && value[prev_len] == '/')
         {
             /* XXX only logs first example, and no keys... */
-            xsyslog(LOG_ERR, "disk path is a prefix of others",
-                             "path1=<%s> path2=<%s>",
-                             prev, value);
+            xsyslog_ev(LOG_ERR, "config.partition.path.nested",
+                       lf_s("sys.path", value),
+                       lf_s("other.sys.path", prev));
             if (user_output) {
                 dump_kv(user_output, by_value, prev);
                 dump_kv(user_output, by_value, value);

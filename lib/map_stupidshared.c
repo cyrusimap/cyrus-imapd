@@ -13,6 +13,7 @@
 #include "map.h"
 #include "slowio.h"
 #include "xmalloc.h"
+#include "util.h"
 
 EXPORTED const char map_method_desc[] = "stupidshared";
 
@@ -35,8 +36,10 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
     if (newlen == MAP_UNKNOWN_LEN) {
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            xsyslog_ev(LOG_ERR, "map.failed",
+                       lf_s("map.step", "fstat"),
+                       lf_s("map.file", name),
+                       lf_s_opt("map.owner", mboxname));
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -58,8 +61,10 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
     *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, flags, fd, 0L);
     if (*base == (char *)MAP_FAILED) {
-        syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
-               mboxname ? " for " : "", mboxname ? mboxname : "");
+        xsyslog_ev(LOG_ERR, "map.failed",
+                   lf_s("map.step", "mmap"),
+                   lf_s("map.file", name),
+                   lf_s_opt("map.owner", mboxname));
         snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
         fatal(buf, EX_IOERR);
     }

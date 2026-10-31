@@ -245,10 +245,11 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
         if (!mboxlist_lookup_by_uniqueid(mbentry->uniqueid, &owner, NULL)
             && strcmpsafe(owner->name, mbentry->name)
             && !mboxname_isdeletedmailbox(owner->name, NULL)) {
-            xsyslog(LOG_ERR, "keeping user files still owned by another mailbox",
-                             "userid=<%s> mboxname=<%s> uniqueid=<%s> ownername=<%s>",
-                             userid, mbentry->name, mbentry->uniqueid,
-                             owner->name);
+            xsyslog_ev(LOG_NOTICE, "user.files.kept",
+                       lf_s("u.username", userid),
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_s("mbox.uniqueid", mbentry->uniqueid),
+                       lf_intname("other.mbox.name", owner->name));
             shared = 1;
         }
         mboxlist_entry_free(&owner);
@@ -315,8 +316,8 @@ EXPORTED int user_deletedata(const mbentry_t *mbentry, int wipe_user)
     /* a handle held over this write keeps writing to an inode which is no
        longer there, and only finds out at SQLDB_ERR_DBMOVED time */
     if (strarray_size(&paths) && sqldb_isopen_forscope(SQLDB_SCOPE_USER, userid)) {
-        xsyslog(LOG_ERR, "removing user files with a sqldb still open on them",
-                         "userid=<%s>", userid);
+        xsyslog_ev(LOG_ERR, "user.files.sqldb_open",
+                   lf_s("u.username", userid));
     }
 
     /* delete paths in our list */
@@ -429,18 +430,23 @@ static int user_renamesieve(const char *olduser, const char *newuser)
     if (!r) r = cyrus_rename(oldpath, newpath);
     if (r < 0) {
         if (errno == ENOENT) {
-            syslog(LOG_WARNING, "error renaming %s to %s: %m",
-                   oldpath, newpath);
+            xsyslog_ev(LOG_WARNING, "user.sieve.rename.failed",
+                       lf_s("old.sys.path", oldpath),
+                       lf_s("sys.path", newpath));
             /* but maybe the user doesn't have any scripts ? */
             r = 0;
         }
         else if (errno == EXDEV) {
-            syslog(LOG_ERR, "error renaming %s to %s: different filesystems",
-                   oldpath, newpath);
+            xsyslog_ev(LOG_ERR, "user.sieve.rename.failed",
+                       lf_s("old.sys.path", oldpath),
+                       lf_s("sys.path", newpath),
+                       lf_s("user.reason", "cross_device"));
             /* doh!  need to copy entire directory tree */
         }
         else {
-            syslog(LOG_ERR, "error renaming %s to %s: %m", oldpath, newpath);
+            xsyslog_ev(LOG_ERR, "user.sieve.rename.failed",
+                       lf_s("old.sys.path", oldpath),
+                       lf_s("sys.path", newpath));
         }
     }
 

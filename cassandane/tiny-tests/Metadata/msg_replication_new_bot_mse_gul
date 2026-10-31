@@ -55,12 +55,11 @@ sub test_msg_replication_new_bot_mse_gul
     xlog $self, "Check that annotations in the master and replica DB match";
     $self->check_msg_annotation_replication($master_store, $replica_store);
 
-    # We should have generated a SYNCERROR or two
+    # We should have logged a guid mismatch or two
     my $pattern = qr{
-        \bSYNCERROR:\sguid\smismatch
-        (?: \suser\.cassandane\s1\b
-            | :\smailbox=<user\.cassandane>\suid=<1>
-        )
+        \bevent=sync\.record\.guid\.mismatch\b
+        .*\bmbox\.name=user\.cassandane\b
+        .*\bmsg\.imapuid=1\b
     }x;
     $self->assert_syslog_matches($self->{instance}, $pattern);
 }

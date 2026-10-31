@@ -38,8 +38,8 @@ sub test_service_exit_during_start ($self)
 
     if ($self->{instance}->{have_syslog_replacement}) {
         xlog $self, "check that the error was syslogged";
-        my @lines = $self->{instance}->getsyslog(qr/too many failures for service/);
+        my @lines = $self->{instance}->getsyslog(qr/\bevent=master\.service\.disabled\b/);
         $self->assert_num_equals(1, scalar @lines);
-        $self->assert_matches(qr/disabling until next SIGHUP/, $lines[0]);
+        $self->assert_matches(qr/\bmaster\.disabled\.until=sighup\b/, $lines[0]);
     }
 }

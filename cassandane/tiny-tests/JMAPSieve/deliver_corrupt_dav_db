@@ -113,7 +113,7 @@ EOF
     # think it better to write a potentially fragile test, because with it we
     # see whether the expected code paths are still reached.
     # Cassandane::Instance::_check_syslog() faults these if it sees them:
-    my @dberror = grep /: DBERROR: get user version failed: sessionid=<[^>]+> fname=<\Q$found[0]\E> error=<file is not a database>/, @lines;
+    my @dberror = grep /\bevent=db\.sqldb\.open\.failed\b.*\bsys\.path=\Q$found[0]\E .*\bdb\.step=get_version\b.*\berror="file is not a database"/, @lines;
     $self->assert_num_equals(2, scalar @dberror, '2 expected fatal log lines found');
     # The getsyslog() above drained this line, which is why it doesn't also
     # reach _check_syslog() and fault the test on its severity:

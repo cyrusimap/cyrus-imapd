@@ -29,8 +29,12 @@ sub test_legacy_sieve_replication
     # sync_client should have logged the failure
     if ($self->{instance}->{have_syslog_replacement}) {
         my @mlines = $self->{instance}->getsyslog();
-        $self->assert_matches(qr/IOERROR: user replication failed/, "@mlines");
-        $self->assert_matches(qr/MAILBOX received NO response: IMAP_SYNC_BADSIEVE/, "@mlines");
+        $self->assert_matches(qr/event=sync\.user\.failed\b/, "@mlines");
+        $self->assert_matches(qr/event=sync\.command\.rejected\b.*sync\.command=MAILBOX error="IMAP_SYNC_BADSIEVE\b/, "@mlines");
+
+        # and the replica, why it refused
+        $self->assert_syslog_matches($self->{replica},
+                                     qr/event=sync\.sieve\.script\.invalid\b/);
     }
 
     # immediately delete the #sieve mailbox to prevent _check_sanity()

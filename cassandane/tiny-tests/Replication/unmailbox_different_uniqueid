@@ -44,8 +44,10 @@ sub test_unmailbox_different_uniqueid
         },
     );
     $self->assert_not_equals(0, $exit_code);
+    $self->assert_syslog_matches($self->{instance},
+        qr/event=sync\.command\.rejected\b.*sync\.command=UNMAILBOX error="IMAP_SYNC_WRONG_MAILBOX\b/);
     $self->assert_syslog_matches($self->{replica},
-                                 qr/refusing to UNMAILBOX a different mailbox/);
+                                 qr/event=sync\.unmailbox\.refused\b/);
 
     xlog $self, "The replica's mailbox and its message are untouched";
     $replica_store->disconnect();

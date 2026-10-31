@@ -273,7 +273,8 @@ int main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "reconstruct.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -879,9 +880,9 @@ static int do_reconstruct(struct findall_data *data, void *rock)
                 if (!r) {
                     r = mailbox_open_irl(name, &mailbox);
                     if (r) {
-                        syslog(LOG_ERR,
-                               "Failed to open mailbox '%s' to set file timestamps: %s",
-                               extname, error_message(r));
+                        xsyslog_ev(LOG_ERR, "reconstruct.mailbox.open.failed",
+                                   lf_intname("mbox.name", name),
+                                   lf_err("error", r));
                     }
                     else {
                         mailbox_unlock_index(mailbox, NULL);
@@ -1029,7 +1030,9 @@ static int do_reconstruct(struct findall_data *data, void *rock)
 
     if (mbentry_dirty && make_changes) {
         r = mboxlist_update(mbentry_byname, 1);
-        if (r) syslog(LOG_ERR, "IOERROR: failed to update mbentry for %s (%s)", name, error_message(r));
+        if (r) xsyslog_ev(LOG_ERR, "reconstruct.mbentry.update.failed",
+                          lf_intname("mbox.name", name),
+                          lf_err("error", r));
     }
     mboxlist_entry_free(&mbentry_byname);
 
@@ -1196,9 +1199,10 @@ static void reconstruct_mbentry(const char *header_path)
                 goto done;
             }
 
-            xsyslog(LOG_INFO, "mailbox header had no uniqueid, setting from path",
-                    "mboxname=<%s> newuniqueid=<%s>",
-                    mbentry->name, mbentry->uniqueid);
+            xsyslog_ev(LOG_INFO, "reconstruct.uniqueid.fixed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_s("mbox.uniqueid", mbentry->uniqueid),
+                       lf_s("reconstruct.source", "path"));
         }
         else {
             /* Look for an existing N record */
@@ -1214,14 +1218,16 @@ static void reconstruct_mbentry(const char *header_path)
                 /* Generate a new UID */
                 mbentry->uniqueid = xstrdup(makeuuid());
 
-                xsyslog(LOG_INFO, "mailbox header had no uniqueid, creating one",
-                        "mboxname=<%s> newuniqueid=<%s>",
-                        mbentry->name, mbentry->uniqueid);
+                xsyslog_ev(LOG_INFO, "reconstruct.uniqueid.fixed",
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("mbox.uniqueid", mbentry->uniqueid),
+                           lf_s("reconstruct.source", "new"));
             }
             else {
-                xsyslog(LOG_INFO, "mailbox header had no uniqueid, setting from mbentry",
-                        "mboxname=<%s> newuniqueid=<%s>",
-                        mbentry->name, mbentry->uniqueid);
+                xsyslog_ev(LOG_INFO, "reconstruct.uniqueid.fixed",
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_s("mbox.uniqueid", mbentry->uniqueid),
+                           lf_s("reconstruct.source", "mbentry"));
             }
 
             mbentry->mbtype |= MBTYPE_LEGACY_DIRS;
@@ -1230,9 +1236,10 @@ static void reconstruct_mbentry(const char *header_path)
         fix_header = 1;
     }
     else {
-        xsyslog(LOG_INFO, "setting mbentry uniqueid from header",
-                "mboxname=<%s> newuniqueid=<%s>",
-                mbentry->name, mbentry->uniqueid);
+        xsyslog_ev(LOG_INFO, "reconstruct.uniqueid.fixed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("mbox.uniqueid", mbentry->uniqueid),
+                   lf_s("reconstruct.source", "header"));
     }
 
     if (!mbentry->name) {
@@ -1246,15 +1253,14 @@ static void reconstruct_mbentry(const char *header_path)
         mboxlist_entry_free(&mbentry_byid);
 
         if (!mbentry->name) {
-            xsyslog(LOG_INFO, "neither the mailbox header nor mbentry"
-                    " had a mailbox name, can NOT continue",
-                    "uniqueid=<%s>", mbentry->uniqueid);
+            xsyslog_ev(LOG_ERR, "reconstruct.name.missing",
+                       lf_s("mbox.uniqueid", mbentry->uniqueid));
             goto done;
         }
 
-        xsyslog(LOG_INFO, "mailbox header had no name, setting from mbentry",
-                "mboxname=<%s> uniqueid=<%s>",
-                mbentry->name, mbentry->uniqueid);
+        xsyslog_ev(LOG_INFO, "reconstruct.name.fixed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_s("mbox.uniqueid", mbentry->uniqueid));
 
         fix_header = 1;
     }

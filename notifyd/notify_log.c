@@ -30,8 +30,13 @@ char* notify_log(const char *class, const char *priority,
         buf_putc(&opt_str, ')');
     }
 
-    syslog(LOG_INFO, "%s, %s, %s, %s, %s \"%s\"",
-           class, priority, user, mailbox, buf_cstring(&opt_str), message);
+    xsyslog_ev(LOG_INFO, "notify.logged",
+               lf_s("notify.class", class),
+               lf_s("notify.priority", priority),
+               lf_s_opt("u.username", user),
+               lf_s_opt("mbox.name", mailbox),
+               lf_buf("notify.options", &opt_str),
+               lf_s("notify.message", message));
 
     buf_free(&opt_str);
     return strdup("OK log notification successful");

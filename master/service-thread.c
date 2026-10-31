@@ -30,6 +30,7 @@
 #include "xmalloc.h"
 #include "strarray.h"
 #include "signals.h"
+#include "util.h"
 
 extern int optind;
 extern char *optarg;
@@ -41,11 +42,14 @@ static int verbose = 0;
 void notify_master(int fd, int msg)
 {
     struct notify_message notifymsg;
-    if (verbose) syslog(LOG_DEBUG, "telling master %x", msg);
+    if (verbose)
+        xsyslog_ev(LOG_DEBUG, "service.master.notifying",
+                   lf_raw("master.message", "0x%x", msg));
     notifymsg.message = msg;
     notifymsg.service_pid = getpid();
     if (write(fd, &notifymsg, sizeof(notifymsg)) != sizeof(notifymsg)) {
-        syslog(LOG_ERR, "unable to tell master %x: %m", msg);
+        xsyslog_ev(LOG_ERR, "service.master.notify.failed",
+                   lf_raw("master.message", "0x%x", msg));
     }
 }
 
@@ -85,7 +89,8 @@ static int libwrap_ask(struct request_info *req, int fd)
 
     a = hosts_access(req);
     if (!a) {
-        syslog(deny_severity, "refused connection from %s", eval_client(req));
+        xsyslog_ev(deny_severity, "service.connection.refused",
+                   lf_s("r.clienthost", eval_client(req)));
     }
 
     return a;
@@ -169,13 +174,15 @@ int main(int argc, char **argv, char **envp)
     if (p) verbose = atoi(p) + 1;
 
     if (verbose > 30) {
-        syslog(LOG_DEBUG, "waiting 15 seconds for debugger");
+        xsyslog_ev(LOG_DEBUG, "service.debugger.waiting",
+                   lf_d("sys.pid", getpid()));
         sleep(15);
     }
 
     p = getenv("CYRUS_SERVICE");
     if (p == NULL) {
-        syslog(LOG_ERR, "could not getenv(CYRUS_SERVICE); exiting");
+        xsyslog_ev(LOG_ERR, "service.env.missing",
+                   lf_s("master.reason", "CYRUS_SERVICE"));
         exit(EX_SOFTWARE);
     }
     service = xstrdup(p);
@@ -200,19 +207,23 @@ int main(int argc, char **argv, char **envp)
             snprintf(debugbuf, sizeof(debugbuf), debugger,
                      argv[0], getpid(), service);
 #pragma GCC diagnostic pop
-            syslog(LOG_DEBUG, "running external debugger: %s", debugbuf);
+            xsyslog_ev(LOG_DEBUG, "service.debugger.running",
+                       lf_s("master.service.cmd", debugbuf));
             ret = system(debugbuf); /* run debugger */
-            syslog(LOG_DEBUG, "debugger returned exit status: %d", ret);
+            xsyslog_ev(LOG_DEBUG, "service.debugger.exited",
+                       lf_d("sys.exitcode", ret));
         }
     }
-    syslog(LOG_DEBUG, "executed");
+    xsyslog_ev(LOG_DEBUG, "service.started",
+               lf_s("master.service", service));
 
     /* set close on exec */
     fdflags = fcntl(LISTEN_FD, F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(LISTEN_FD, F_SETFD,
                                        fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
-        syslog(LOG_ERR, "unable to set close on exec: %m");
+        xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                   lf_s("master.step", "cloexec"));
         if (MESSAGE_MASTER_ON_EXIT)
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
         return 1;
@@ -221,7 +232,8 @@ int main(int argc, char **argv, char **envp)
     if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD,
                                        fdflags | FD_CLOEXEC);
     if (fdflags == -1) {
-        syslog(LOG_ERR, "unable to set close on exec: %m");
+        xsyslog_ev(LOG_ERR, "service.socket.setup.failed",
+                   lf_s("master.step", "cloexec"));
         if (MESSAGE_MASTER_ON_EXIT)
             notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
         return 1;
@@ -258,7 +270,7 @@ int main(int argc, char **argv, char **envp)
                 case ECONNABORTED:
                     break;
                 default:
-                    syslog(LOG_ERR, "accept failed: %m");
+                    xsyslog_ev(LOG_ERR, "service.accept.failed");
                     if (MESSAGE_MASTER_ON_EXIT)
                         notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
                     service_abort(EX_OSERR);
@@ -275,7 +287,7 @@ int main(int argc, char **argv, char **envp)
             continue;
         }
 
-        syslog(LOG_DEBUG, "accepted connection");
+        xsyslog_ev(LOG_DEBUG, "service.connection.accepted");
 
         use_count++;
         notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);

@@ -48,8 +48,9 @@ EXPORTED int zoneinfo_open(const char *fname)
 
     ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &zoneinfodb);
     if (ret != 0) {
-        syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+        xsyslog_ev(LOG_ERR, "zoneinfo.db.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(ret)));
     }
     else zoneinfo_dbopen = 1;
 
@@ -66,14 +67,14 @@ EXPORTED void zoneinfo_close(struct txn *tid)
         if (tid) {
             r = cyrusdb_commit(zoneinfodb, tid);
             if (r) {
-                syslog(LOG_ERR, "DBERROR: error committing zoneinfo: %s",
-                       cyrusdb_strerror(r));
+                xsyslog_ev(LOG_ERR, "zoneinfo.db.commit.failed",
+                           lf_s("error", cyrusdb_strerror(r)));
             }
         }
         r = cyrusdb_close(zoneinfodb);
         if (r) {
-            syslog(LOG_ERR, "DBERROR: error closing zoneinfo: %s",
-                   cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "zoneinfo.db.close.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         zoneinfo_dbopen = 0;
 
@@ -160,8 +161,9 @@ EXPORTED int zoneinfo_store(const char *tzid, struct zoneinfo *zi, struct txn **
                   buf_cstring(&databuf), buf_len(&databuf), tid);
 
     if (r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "DBERROR: error updating zoneinfo: %s (%s)",
-               tzid, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "zoneinfo.db.store.failed",
+                   lf_s("cal.tzid", tzid),
+                   lf_s("error", cyrusdb_strerror(r)));
     }
 
     return r;

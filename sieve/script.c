@@ -183,13 +183,17 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 
     res = sieve_register_vacation(interpreter, &stub_vacation);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_vacation() returns %d", res);
+        xsyslog_ev(LOG_ERR, "sieve.interp.setup.failed",
+                   lf_s("sieve.step", "register_vacation"),
+                   lf_d("sieve.result", res));
         goto done;
     }
 
     res = sieve_register_duplicate(interpreter, &stub_duplicate);
     if (res != SIEVE_OK) {
-        syslog(LOG_ERR, "sieve_register_duplicate() returns %d", res);
+        xsyslog_ev(LOG_ERR, "sieve.interp.setup.failed",
+                   lf_s("sieve.step", "register_duplicate"),
+                   lf_d("sieve.result", res));
         goto done;
     }
 
@@ -506,11 +510,12 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
 
     if (stat(fname, &sbuf) == -1) {
         if (errno == ENOENT) {
-            xsyslog(LOG_DEBUG, "WARNING: sieve script doesn't exist",
-                               "fname=<%s>", fname);
+            xsyslog_ev(LOG_DEBUG, "sieve.script.missing",
+                       lf_s("sys.path", fname));
         } else {
-            xsyslog(LOG_DEBUG, "IOERROR: fstating sieve script",
-                               "fname=<%s>", fname);
+            xsyslog_ev(LOG_DEBUG, "sieve.script.read.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("sieve.step", "fstat"));
         }
         return SIEVE_FAIL;
     }
@@ -537,14 +542,16 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
         /* new script -- load it */
         fd = open(fname, O_RDONLY);
         if (fd == -1) {
-            xsyslog(LOG_ERR, "IOERROR: can not open sieve script",
-                             "fname=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "sieve.script.read.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("sieve.step", "open"));
             if (dofree) free(ex);
             return SIEVE_FAIL;
         }
         if (fstat(fd, &sbuf) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: fstating sieve script",
-                             "fname=<%s>", fname);
+            xsyslog_ev(LOG_ERR, "sieve.script.read.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("sieve.step", "fstat"));
             close(fd);
             if (dofree) free(ex);
             return SIEVE_FAIL;

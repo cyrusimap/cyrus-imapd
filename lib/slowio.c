@@ -47,14 +47,14 @@ EXPORTED void slowio_maybe_delay_impl(struct slowio *slowio, ssize_t n_bytes)
             slowio_min_elapsed = res.tv_sec + res.tv_nsec / 1000000000.0;
         }
         else {
-            xsyslog(LOG_DEBUG, "clock_getres failed", NULL);
+            xsyslog_ev(LOG_DEBUG, "slowio.clock_getres.failed");
             errno = 0;
             slowio_min_elapsed = 0.000001; /* XXX idk, 1μs */
         }
     }
 
     if (cyrus_gettime(CLOCK_PROCESS_CPUTIME_ID, &now)) {
-        xsyslog(LOG_DEBUG, "cyrus_gettime failed", NULL);
+        xsyslog_ev(LOG_DEBUG, "slowio.gettime.failed");
         errno = 0;
         return;
     }

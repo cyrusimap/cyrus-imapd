@@ -13,6 +13,7 @@
 #include "slowio.h"
 #include "xmalloc.h"
 #include "map.h"
+#include "util.h"
 
 #define SLOP (4*1024)
 
@@ -33,8 +34,10 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
     if (newlen == MAP_UNKNOWN_LEN) {
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            xsyslog_ev(LOG_ERR, "map.failed",
+                       lf_s("map.step", "fstat"),
+                       lf_s("map.file", name),
+                       lf_s_opt("map.owner", mboxname));
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -57,14 +60,16 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
         n = read(fd, p, left);
         if (n <= 0) {
             if (n == 0) {
-                syslog(LOG_ERR, "IOERROR: reading %s file%s%s: end of file",
-                       name,
-                       mboxname ? " for " : "", mboxname ? mboxname : "");
+                xsyslog_ev(LOG_ERR, "map.failed",
+                           lf_s("map.step", "read_eof"),
+                           lf_s("map.file", name),
+                           lf_s_opt("map.owner", mboxname));
             }
             else {
-                syslog(LOG_ERR, "IOERROR: reading %s file%s%s: %m",
-                       name,
-                       mboxname ? " for " : "", mboxname ? mboxname : "");
+                xsyslog_ev(LOG_ERR, "map.failed",
+                           lf_s("map.step", "read"),
+                           lf_s("map.file", name),
+                           lf_s_opt("map.owner", mboxname));
             }
             snprintf(buf, sizeof(buf), "failed to read %s file", name);
             fatal(buf, EX_IOERR);

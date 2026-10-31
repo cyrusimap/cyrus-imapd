@@ -47,12 +47,11 @@ sub test_splitbrain
 
     $self->run_replication();
 
-    # replication will generate a couple of SYNCERRORS in syslog
+    # replication will log a guid mismatch or two
     my $pattern = qr{
-        \bSYNCERROR:\sguid\smismatch
-        (?: \suser\.cassandane\s5\b
-            | :\smailbox=<user\.cassandane>\suid=<5>
-        )
+        \bevent=sync\.record\.guid\.mismatch\b
+        .*\bmbox\.name=user\.cassandane\b
+        .*\bmsg\.imapuid=5\b
     }x;
     $self->assert_syslog_matches($self->{instance}, $pattern);
 

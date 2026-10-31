@@ -275,7 +275,8 @@ static int sieve_isactive(const char *sievepath, const char *name)
 
     len = readlink(linkname, activelink, sizeof(activelink)-1);
     if(len < 0) {
-        if(errno != ENOENT) syslog(LOG_ERR, "readlink(defaultbc): %m");
+        if(errno != ENOENT) xsyslog_ev(LOG_ERR, "mbdump.sieve.readlink.failed",
+                                       lf_s("sys.path", linkname));
         return 0;
     }
 
@@ -343,18 +344,23 @@ static int dump_file(int first, int sync,
     int c;
 
     /* map file */
-    syslog(LOG_DEBUG, "wanting to dump %s", filename);
+    xsyslog_ev(LOG_DEBUG, "mbdump.file.dumping",
+               lf_s("sys.path", filename));
     if (fbase) {
         /* already mapped */
         base = fbase;
 
         /* we need to check real file size since actual mmap size may be larger */
         if (stat(filename, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: stat on %s: %m", filename);
+            xsyslog_ev(LOG_ERR, "mbdump.file.failed",
+                       lf_s("mbdump.step", "stat"),
+                       lf_s("sys.path", filename));
             fatal("can't stat message file", EX_OSFILE);
         }
         if ((unsigned long)sbuf.st_size > flen) {
-           syslog(LOG_ERR, "IOERROR: size mismatch on %s", filename);
+           xsyslog_ev(LOG_ERR, "mbdump.file.failed",
+                      lf_s("mbdump.step", "size"),
+                      lf_s("sys.path", filename));
            return IMAP_SYS_ERROR;
         }
         len = sbuf.st_size;
@@ -364,12 +370,16 @@ static int dump_file(int first, int sync,
         if (filefd == -1) {
             /* If an optional file doesn't exist, skip it */
             if (errno == ENOENT) return 0;
-            syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
+            xsyslog_ev(LOG_ERR, "mbdump.file.failed",
+                       lf_s("mbdump.step", "open"),
+                       lf_s("sys.path", filename));
             return IMAP_SYS_ERROR;
         }
 
         if (fstat(filefd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
+            xsyslog_ev(LOG_ERR, "mbdump.file.failed",
+                       lf_s("mbdump.step", "fstat"),
+                       lf_s("sys.path", filename));
             fatal("can't fstat message file", EX_OSFILE);
         }
 
@@ -391,7 +401,8 @@ static int dump_file(int first, int sync,
             eatline(pin, c); /* We eat it no matter what */
             if (c != '+') {
                 /* Synchronization Failure, Abort! */
-                syslog(LOG_ERR, "Sync Error: expected '+' got '%c'",c);
+                xsyslog_ev(LOG_ERR, "mbdump.sync.failed",
+                           lf_raw("mbdump.response", "%c", c));
                 return IMAP_SERVER_UNAVAILABLE;
             }
         }
@@ -451,12 +462,14 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
     mbdir = opendir(dirpath);
     if (!mbdir && errno == EACCES) {
-        syslog(LOG_ERR,
-               "could not dump mailbox %s (permission denied)", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "mbdump.failed",
+                   lf_mailbox(mailbox),
+                   lf_err("error", IMAP_PERMISSION_DENIED));
         return IMAP_PERMISSION_DENIED;
     } else if (!mbdir) {
-        syslog(LOG_ERR,
-               "could not dump mailbox %s (unknown error)", mailbox_name(mailbox));
+        xsyslog_ev(LOG_ERR, "mbdump.failed",
+                   lf_mailbox(mailbox),
+                   lf_err("error", IMAP_SYS_ERROR));
         return IMAP_SYS_ERROR;
     }
 
@@ -512,8 +525,9 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
         if (df->metaname == META_INDEX && oldversion < MAILBOX_MINOR_VERSION) {
             expunged_seq = seqset_init(mailbox->i.last_uid, SEQ_SPARSE);
-            syslog(LOG_NOTICE, "%s downgrading index to version %d for XFER",
-                   mailbox_name(mailbox), oldversion);
+            xsyslog_ev(LOG_NOTICE, "mbdump.index.downgrading",
+                       lf_mailbox(mailbox),
+                       lf_d("mbox.version", oldversion));
 
             r = dump_index(mailbox, oldversion, expunged_seq,
                            first, !tag, pin, pout);
@@ -618,8 +632,8 @@ EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid
 
             if (!mbdir) {
                 if (errno != ENOENT)
-                    syslog(LOG_ERR,
-                           "could not dump sieve scripts in %s: %m)", sieve_path);
+                    xsyslog_ev(LOG_ERR, "mbdump.sieve.failed",
+                               lf_s("sys.path", sieve_path));
             } else {
                 char tag_fname[2048];
 
@@ -1061,10 +1075,9 @@ EXPORTED int undump_mailbox(const char *mbname,
 
             if(sieve_usehomedir) {
                 /* XXX! */
-                syslog(LOG_ERR,
-                       "dropping sieve file %s since this host is " \
-                       "configured for sieve_usehomedir",
-                       realname);
+                xsyslog_ev(LOG_ERR, "mbdump.sieve.dropped",
+                           lf_s("sieve.script", realname),
+                           lf_s("mbdump.reason", "sieveusehomedir"));
                 continue;
             } else {
                 if(snprintf(fnamebuf, sizeof(fnamebuf),
@@ -1083,8 +1096,9 @@ EXPORTED int undump_mailbox(const char *mbname,
                         }
                     }
                     if(ret) {
-                        syslog(LOG_ERR, "symlink(%s, %s): %m", realname,
-                               linkbuf);
+                        xsyslog_ev(LOG_ERR, "mbdump.sieve.symlink.failed",
+                                   lf_s("sieve.script", realname),
+                                   lf_s("sys.path", linkbuf));
                         /* Non-fatal,
                            let's get the file transferred if we can */
                     }
@@ -1124,7 +1138,9 @@ EXPORTED int undump_mailbox(const char *mbname,
         }
 
         if(curfile == -1) {
-            syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebuf);
+            xsyslog_ev(LOG_ERR, "mbdump.undump.failed",
+                       lf_s("mbdump.step", "create"),
+                       lf_s("sys.path", fnamebuf));
             r = IMAP_IOERROR;
             goto done;
         }
@@ -1134,8 +1150,9 @@ EXPORTED int undump_mailbox(const char *mbname,
             char buf[4096+1];
             int n = prot_read(pin, buf, size > 4096 ? 4096 : size);
             if (!n) {
-                syslog(LOG_ERR,
-                       "IOERROR: reading message: unexpected end of file");
+                xsyslog_ev(LOG_ERR, "mbdump.undump.failed",
+                           lf_s("mbdump.step", "read"),
+                           lf_s("sys.path", fnamebuf));
                 r = IMAP_IOERROR;
                 goto done;
             }
@@ -1143,7 +1160,9 @@ EXPORTED int undump_mailbox(const char *mbname,
             size -= n;
 
             if (write(curfile, buf, n) != n) {
-                syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
+                xsyslog_ev(LOG_ERR, "mbdump.undump.failed",
+                           lf_s("mbdump.step", "write"),
+                           lf_s("sys.path", fnamebuf));
                 r = IMAP_IOERROR;
                 goto done;
             }

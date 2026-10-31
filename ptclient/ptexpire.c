@@ -56,7 +56,8 @@ static int expire_cb(void *rockp,
                      size_t datalen __attribute__((unused)))
 {
     /* We only get called when we want to delete it */
-    syslog(LOG_DEBUG, "deleting entry for %s", key);
+    xsyslog_ev(LOG_DEBUG, "pts.expire.deleting",
+               lf_s("pts.id", key));
 
     /* XXX maybe we should use transactions for this */
     cyrusdb_delete((struct db *)rockp, key, keylen, NULL, 0);
@@ -98,7 +99,7 @@ int main(int argc, char *argv[])
                     "\n\t-C <filename>\tAlternate Config File"
                     "\n\t-E <seconds>\tExpiration time"
                     "\n");
-            syslog(LOG_ERR, "Invalid command line option");
+            xsyslog_ev(LOG_ERR, "pts.expire.usage");
             exit(-1);
             break;
             /* just pass through */
@@ -107,7 +108,8 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "ptexpire", 0, 0);
 
-    syslog(LOG_DEBUG, "ptexpire.c %s", PACKAGE_VERSION);
+    xsyslog_ev(LOG_DEBUG, "pts.expire.started",
+               lf_s("sys.version", PACKAGE_VERSION));
 
     /* open database */
     fname = config_getstring(IMAPOPT_PTSCACHE_DB_PATH);
@@ -118,8 +120,9 @@ int main(int argc, char *argv[])
 
     r = cyrusdb_open(config_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
-        syslog(LOG_ERR, "error opening %s (%s)", fname,
-               cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "pts.cache.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
         exit(1);
     }
 
@@ -128,14 +131,16 @@ int main(int argc, char *argv[])
         for (i = optind; i < argc; i++) {
             const char *userid = argv[i];
             int r = cyrusdb_delete(ptdb, userid, strlen(userid), /*tid*/NULL, /*force*/0);
-            syslog(LOG_INFO, "Removing cache for %s (%s)", userid,
-                   r == CYRUSDB_OK ? "found" : "not-found");
+            xsyslog_ev(LOG_INFO, "pts.expire.removed",
+                       lf_s("u.username", userid),
+                       lf_b("pts.found", r == CYRUSDB_OK));
         }
     }
     else {
         timenow = time(0);
-        syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
-               (int)expire_time, (int)timenow);
+        xsyslog_ev(LOG_INFO, "pts.expire.expiring",
+                   lf_d("pts.expire.age", (int)expire_time),
+                   lf_time("pts.time", timenow));
 
         /* iterate through db, wiping expired entries */
         cyrusdb_foreach(ptdb, "", 0, expire_p, expire_cb, ptdb, NULL);
@@ -147,6 +152,6 @@ int main(int argc, char *argv[])
 
     if (tofree) free(tofree);
 
-    syslog(LOG_INFO, "finished");
+    xsyslog_ev(LOG_INFO, "pts.expire.finished");
     return 0;
 }

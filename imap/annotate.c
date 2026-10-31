@@ -4689,10 +4689,9 @@ bad:
  * syslog message to aid the admin ...
  */
     if (state.nerrors)
-        syslog(LOG_ERR, "%s: encountered %u errors.  Struggling on, but "
-                        "some of your annotation definitions may be "
-                        "ignored.  Please fix this file!",
-                        state.filename, state.nerrors);
+        xsyslog_ev(LOG_ERR, "annot.definitions.invalid",
+                   lf_s("sys.path", state.filename),
+                   lf_u("annot.errors", state.nerrors));
 #endif
 
     fclose(f);
@@ -4803,12 +4802,11 @@ EXPORTED int annotatemore_upgrade(void)
             annotate_abort(db);
         } else {
             r2 = annotate_commit(db);
-        }
 
-        if (r2) {
-            xsyslog_ev(LOG_ERR, "annot.db.txn.failed",
-                       lf_s("annot.txn.op", r ? "abort" : "commit"),
-                       lf_s("error", cyrusdb_strerror(r2)));
+            if (r2) {
+                xsyslog_ev(LOG_ERR, "annot.db.txn.failed",
+                           lf_s("error", cyrusdb_strerror(r2)));
+            }
         }
     }
 

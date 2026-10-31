@@ -68,11 +68,11 @@ sub test_recover_create_missing_uniqueid_legacymb
         my $syslog = join(q{}, $self->{instance}->getsyslog());
 
         # expect to find it was missing in the header
-        $self->assert_matches(qr{mailbox header had no uniqueid, creating one},
+        $self->assert_matches(qr{\bevent=ctl_cyrusdb\.uniqueid\.created\b},
                               $syslog);
 
         # expect to find it was missing from mbentry
-        $self->assert_matches(qr{mbentry had no uniqueid, setting from header},
+        $self->assert_matches(qr{\bevent=ctl_cyrusdb\.uniqueid\.copied\b},
                               $syslog);
     }
 

@@ -150,7 +150,8 @@ static void opstack_dump(SquatBuilderData *bb, const char *where)
     char *desc;
     struct buf line = BUF_INITIALIZER;
 
-    syslog(LOG_NOTICE, "Squat opstack %s {", where);
+    xsyslog_ev(LOG_NOTICE, "search.squat.opstack",
+               lf_s("search.step", where));
     for (i = 0 ; i < bb->depth ; i++) {
         struct opstack *o = bb->stack+i;
 
@@ -163,9 +164,11 @@ static void opstack_dump(SquatBuilderData *bb, const char *where)
         buf_printf(&line, " msg_vector=%s", desc);
         free(desc);
 
-        syslog(LOG_NOTICE, "Squat    %s", buf_cstring(&line));
+        xsyslog_ev(LOG_NOTICE, "search.squat.opstack",
+                   lf_buf("search.value", &line));
     }
-    syslog(LOG_NOTICE, "Squat }");
+    xsyslog_ev(LOG_NOTICE, "search.squat.opstack",
+               lf_s("search.step", "end"));
     buf_free(&line);
 }
 #endif
@@ -181,7 +184,9 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat opstack_push(op=%s)", search_op_as_string(op));
+        xsyslog_ev(LOG_NOTICE, "search.squat.query.trace",
+                   lf_s("search.step", "opstack_push"),
+                   lf_s("search.op", search_op_as_string(op)));
 #endif
 
     /* push a new op on the stack */
@@ -211,7 +216,8 @@ static void opstack_pop(SquatBuilderData *bb)
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat opstack_pop()");
+        xsyslog_ev(LOG_NOTICE, "search.squat.query.trace",
+                   lf_s("search.step", "opstack_pop"));
 #endif
 
     /* pop the last operator off the stack */
@@ -265,7 +271,9 @@ static void begin_boolean(search_builder_t *bx, int op)
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat begin_boolean(op=%s)", search_op_as_string(op));
+        xsyslog_ev(LOG_NOTICE, "search.squat.query.trace",
+                   lf_s("search.step", "begin_boolean"),
+                   lf_s("search.op", search_op_as_string(op)));
 #endif
 
     opstack_push(bb, op);
@@ -277,7 +285,8 @@ static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat end_boolean()");
+        xsyslog_ev(LOG_NOTICE, "search.squat.query.trace",
+                   lf_s("search.step", "end_boolean"));
 #endif
     opstack_pop(bb);
 }
@@ -291,7 +300,10 @@ static void match(search_builder_t *bx, enum search_part part, const char *str)
 
 #if DEBUG
     if (bb->verbose > 1)
-        syslog(LOG_NOTICE, "Squat match(part=%d str=\"%s\")", part, str);
+        xsyslog_ev(LOG_NOTICE, "search.squat.query.trace",
+                   lf_s("search.step", "match"),
+                   lf_d("search.part", part),
+                   lf_s("search.value", str));
 #endif
 
     if (!doctypes_by_part[part])
@@ -311,9 +323,10 @@ static void match(search_builder_t *bx, enum search_part part, const char *str)
     if (r != SQUAT_OK) {
         if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
             goto out; /* The rest of the search is still viable */
-        syslog(LOG_ERR, "SQUAT string list search failed on string %s "
-                          "with part types %s: %s",
-                          str, bb->part_types, squat_strerror(r));
+        xsyslog_ev(LOG_ERR, "search.squat.search.failed",
+                   lf_s("search.value", str),
+                   lf_s("search.part", bb->part_types),
+                   lf_s("error", squat_strerror(r)));
         goto out;
     }
     top->valid = 1;
@@ -368,7 +381,8 @@ static search_builder_t *begin_search(search_session_t *session)
     int opts = session->opts;
 
     if ((opts & SEARCH_MULTIPLE)) {
-        syslog(LOG_ERR, "Squat does not support multiple-folder searches, sorry");
+        xsyslog_ev(LOG_ERR, "search.squat.search.unsupported",
+                   lf_s("search.reason", "multiple_folders"));
         /* although it could with some extra work, but why bother */
         return NULL;
     }
@@ -376,13 +390,17 @@ static search_builder_t *begin_search(search_session_t *session)
     fname = mailbox_meta_fname(mailbox, META_SQUAT);
     if ((fd = open(fname, O_RDONLY)) < 0) {
         if (errno != ENOENT)
-            syslog(LOG_ERR, "SQUAT failed to open index file %s: %s",
-                   fname, squat_strerror(squat_get_last_error()));
+            xsyslog_ev(LOG_ERR, "search.squat.index.open.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("search.step", "open"),
+                       lf_s("error", squat_strerror(squat_get_last_error())));
         return NULL;   /* probably not found. Just bail */
     }
     if ((index = squat_search_open(fd)) == NULL) {
-        syslog(LOG_ERR, "SQUAT failed to open index %s: %s",
-               fname, squat_strerror(squat_get_last_error()));
+        xsyslog_ev(LOG_ERR, "search.squat.index.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("search.step", "search_open"),
+                   lf_s("error", squat_strerror(squat_get_last_error())));
         close(fd);
         return NULL;
     }
@@ -418,13 +436,15 @@ static int add_unindexed(SquatBuilderData *bb)
 
     r = squat_search_list_docs(bb->index, drop_indexed_docs, bb);
     if (r != SQUAT_OK) {
-        syslog(LOG_ERR, "SQUAT failed to get list of indexed documents: %s",
-               squat_strerror(r));
+        xsyslog_ev(LOG_ERR, "search.squat.index.read.failed",
+                   lf_s("search.step", "list_documents"),
+                   lf_s("error", squat_strerror(r)));
         r = IMAP_IOERROR;
         goto out;
     }
     if (!bb->found_validity) {
-        syslog(LOG_ERR, "SQUAT didn't find validity record");
+        xsyslog_ev(LOG_ERR, "search.squat.index.read.failed",
+                   lf_s("search.reason", "no_validity"));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -447,7 +467,7 @@ static int run(search_builder_t *bx, search_hit_cb_t proc, void *rock)
     unsigned int uid;
     int r = 0;
 
-    syslog(bb->verbose > 1 ? LOG_NOTICE : LOG_DEBUG, "Squat run()");
+    xsyslog_ev(bb->verbose > 1 ? LOG_NOTICE : LOG_DEBUG, "search.squat.run");
 
     /* check we had balanced ->begin_boolean and ->end_boolean calls */
     if (bb->depth != 1)
@@ -553,13 +573,12 @@ static void stop_stats(SquatStats *stats)
 
 static void print_stats(const char *which, const SquatStats *stats)
 {
-    syslog(LOG_NOTICE, "squat: %s indexed %lu messages (%lu bytes) "
-            "into %lu index bytes in %d seconds",
-            which,
-            stats->indexed_messages,
-            stats->indexed_bytes,
-            stats->index_size,
-            (int)(stats->end_time - stats->start_time));
+    xsyslog_ev(LOG_NOTICE, "search.squat.indexed",
+               lf_s("search.step", which),
+               lf_lu("search.messages", stats->indexed_messages),
+               lf_lu("search.bytes", stats->indexed_bytes),
+               lf_lu("search.index.bytes", stats->index_size),
+               lf_d("search.duration", (int)(stats->end_time - stats->start_time)));
 }
 
 static const char *squat_strerror(int err)
@@ -627,15 +646,16 @@ static int do_append(SquatReceiverData *d, const struct buf *text)
     int s;          /* SQUAT error */
 
     if (d->verbose > 3)
-        syslog(LOG_ERR, "squat: writing %llu bytes into message %u",
-               (unsigned long long)text->len, d->uid);
+        xsyslog_ev(LOG_DEBUG, "search.squat.document.writing",
+                   lf_llu("search.bytes", (unsigned long long)text->len),
+                   lf_u("msg.imapuid", d->uid));
 
     s = squat_index_append_document(d->index, text->s, text->len);
     if (s != SQUAT_OK) {
-        syslog(LOG_ERR, "squat: error writing index data "
-                        "for mailbox %s uid %u: %s",
-                        mailbox_name(d->mailbox), d->uid,
-                        squat_strerror(s));
+        xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                   lf_mailbox(d->mailbox),
+                   lf_u("msg.imapuid", d->uid),
+                   lf_s("error", squat_strerror(s)));
         return IMAP_IOERROR;
     }
     d->mailbox_stats.indexed_bytes += text->len;
@@ -662,15 +682,16 @@ static int append_text(search_text_receiver_t *rx,
 
         /* just went over the threshold */
         if (d->verbose > 2)
-            syslog(LOG_NOTICE, "squat: opening document part '%s'",
-                    d->doc_name);
+            xsyslog_ev(LOG_NOTICE, "search.squat.document.opening",
+                       lf_s("search.document", d->doc_name));
 
         s = squat_index_open_document(d->index, d->doc_name);
         if (s != SQUAT_OK) {
-            syslog(LOG_ERR, "squat: error opening document %s "
-                            "for mailbox %s: %s",
-                            d->doc_name, mailbox_name(d->mailbox),
-                            squat_strerror(s));
+            xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                       lf_mailbox(d->mailbox),
+                       lf_s("search.document", d->doc_name),
+                       lf_s("search.step", "open_document"),
+                       lf_s("error", squat_strerror(s)));
             return IMAP_IOERROR;
         }
         d->doc_is_open = 1;
@@ -695,10 +716,12 @@ static void end_part(search_text_receiver_t *rx)
     if (d->doc_is_open) {
         s = squat_index_close_document(d->index);
         if (s != SQUAT_OK) {
-            syslog(LOG_ERR, "squat: error closing document %s "
-                            "for mailbox %s uid %u: %s",
-                            d->doc_name, mailbox_name(d->mailbox),
-                            d->uid, squat_strerror(s));
+            xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                       lf_mailbox(d->mailbox),
+                       lf_u("msg.imapuid", d->uid),
+                       lf_s("search.document", d->doc_name),
+                       lf_s("search.step", "close_document"),
+                       lf_s("error", squat_strerror(s)));
             return;
         }
     }
@@ -759,7 +782,8 @@ static int doc_check(void *closure, const SquatListDoc *doc)
     }
 
     if (!strchr(valid_part_chars, doc->doc_name[0])) {
-        syslog(LOG_ERR, "squat: invalid document name: %s", doc->doc_name);
+        xsyslog_ev(LOG_ERR, "search.squat.document.invalid",
+                   lf_s("search.document", doc->doc_name));
         d->valid = 0;
         /* TODO: is this right?? */
         return (1);
@@ -795,8 +819,9 @@ static int begin_mailbox(search_text_receiver_t *rx,
 
     filename = mailbox_meta_newfname(mailbox, META_SQUAT);
     if ((fd = open(filename, O_CREAT | O_TRUNC | O_WRONLY, 0666)) < 0) {
-        syslog(LOG_ERR, "squat: unable to create temporary index file %s: %m",
-               filename);
+        xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                   lf_s("sys.path", filename),
+                   lf_s("search.step", "create"));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -807,8 +832,10 @@ static int begin_mailbox(search_text_receiver_t *rx,
     options.stats_callback_closure = (void *)d;
     index = squat_index_init(fd, &options);
     if (index == NULL) {
-        syslog(LOG_ERR, "squat: unable to initialise index %s: %s",
-               filename, squat_strerror(squat_get_last_error()));
+        xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                   lf_s("sys.path", filename),
+                   lf_s("search.step", "init"),
+                   lf_s("error", squat_strerror(squat_get_last_error())));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -836,20 +863,20 @@ static int begin_mailbox(search_text_receiver_t *rx,
         squat_index_add_existing(index, old_index, doc_check, d);
 
         if (!d->valid) {
-            syslog(LOG_ERR, "squat: corrupt old index for mailbox %s, "
-                            "forcing full update",
-                            mailbox_name(mailbox));
+            xsyslog_ev(LOG_ERR, "search.squat.index.rebuilding",
+                       lf_mailbox(mailbox),
+                       lf_s("search.reason", "corrupt"));
             incremental = 0;
         }
 
         if (incremental &&
             d->uidvalidity != mailbox->i.uidvalidity) {
             /* Squat file refers to old mailbox: force full rebuild */
-            syslog(LOG_ERR, "squat: mailbox %s uidvalidity changed "
-                            "from %u to %u, forcing full update",
-                            mailbox_name(mailbox),
-                            mailbox->i.uidvalidity,
-                            d->uidvalidity);
+            xsyslog_ev(LOG_NOTICE, "search.squat.index.rebuilding",
+                       lf_mailbox(mailbox),
+                       lf_s("search.reason", "uidvalidity"),
+                       lf_u("mbox.uidvalidity", mailbox->i.uidvalidity),
+                       lf_u("old.mbox.uidvalidity", d->uidvalidity));
             incremental = 0;
         }
     }
@@ -863,16 +890,17 @@ static int begin_mailbox(search_text_receiver_t *rx,
                  "validity.%u", mailbox->i.uidvalidity);
         s = squat_index_open_document(index, d->doc_name);
         if (s != SQUAT_OK) {
-            syslog(LOG_ERR, "squat: cannot write uidvalidity nonce: %s",
-                   squat_strerror(s));
+            xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                       lf_s("search.step", "write_nonce"),
+                       lf_s("error", squat_strerror(s)));
             r = IMAP_IOERROR;
             goto out;
         }
         s = squat_index_close_document(index);
         if (s != SQUAT_OK) {
-            syslog(LOG_ERR, "squat: cannot close document for "
-                            "uidvalidity nonce: %s",
-                            squat_strerror(s));
+            xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                       lf_s("search.step", "close_nonce"),
+                       lf_s("error", squat_strerror(s)));
             r = IMAP_IOERROR;
             goto out;
         }
@@ -936,16 +964,18 @@ static int end_mailbox(search_text_receiver_t *rx,
 
     s = squat_index_finish(d->index);
     if (s != SQUAT_OK) {
-        syslog(LOG_ERR,
-               "squat: failed to close index for mailbox %s (error %d)",
-               mailbox_name(d->mailbox), s);
+        xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                   lf_mailbox(d->mailbox),
+                   lf_s("search.step", "finish"),
+                   lf_d("error.code", s));
         r = IMAP_IOERROR;
         goto out;
     }
 
     /* Check how big the resulting file is */
     if (fstat(d->fd, &sb) < 0) {
-        syslog(LOG_ERR, "squat: unable to stat temporary index file: %m");
+        xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                   lf_s("search.step", "stat"));
         r = IMAP_IOERROR;
         goto out;
     }
@@ -956,8 +986,8 @@ static int end_mailbox(search_text_receiver_t *rx,
     d->fd = -1;
     if (r < 0) {
         /* This isn't going to happen unless we're on NFS */
-        syslog(LOG_ERR, "squat: unable to complete writing "
-                        "temporary index file: %m");
+        xsyslog_ev(LOG_ERR, "search.squat.index.write.failed",
+                   lf_s("search.step", "complete"));
         r = IMAP_IOERROR;
         goto out;
     }

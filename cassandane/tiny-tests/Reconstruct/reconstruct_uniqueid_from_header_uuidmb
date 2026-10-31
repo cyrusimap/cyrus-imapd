@@ -62,11 +62,11 @@ sub test_reconstruct_uniqueid_from_header_uuidmb
         my $syslog = join(q{}, $self->{instance}->getsyslog());
 
         # should have still existed in cyrus.header
-        $self->assert_does_not_match(qr{mailbox header had no uniqueid},
+        $self->assert_does_not_match(qr{\bevent=reconstruct\.uniqueid\.fixed\b.*\breconstruct\.source=(?:path|new|mbentry)\b},
                                      $syslog);
 
         # expect to find the log line
-        $self->assert_matches(qr{setting mbentry uniqueid from header},
+        $self->assert_matches(qr{\bevent=reconstruct\.uniqueid\.fixed\b.*\breconstruct\.source=header\b},
                               $syslog);
     }
 

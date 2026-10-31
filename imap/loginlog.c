@@ -33,8 +33,7 @@ static void loginlog_good_begin(struct logfmt *lf,
 
 static void loginlog_good_finish(struct logfmt *lf)
 {
-    syslog(LOG_NOTICE, "%s", logfmt_cstring(lf));
-    logfmt_fini(lf);
+    logfmt_emit(lf, LOG_NOTICE);
 }
 
 EXPORTED void loginlog_good(const char *clienthost,
@@ -136,6 +135,5 @@ EXPORTED void loginlog_bad(const char *clienthost,
 
     logfmt_push(&lf, "error", error);
 
-    syslog(LOG_NOTICE, "%s", logfmt_cstring(&lf));
-    logfmt_fini(&lf);
+    logfmt_emit(&lf, LOG_NOTICE);
 }

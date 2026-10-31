@@ -40,7 +40,7 @@ static void extractor_disconnect(struct extractor_ctx *ext)
     if (!ext) return;
 
     struct backend *be = ext->be;
-    syslog(LOG_DEBUG, "extractor_disconnect(%p)", be);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.disconnecting");
 
     if (!be || (be->sock == -1)) {
         /* already disconnected */
@@ -63,7 +63,7 @@ extractor_idle_timeout_cb(struct protstream *s __attribute__((unused)),
 {
     struct extractor_ctx *ext = rock;
 
-    syslog(LOG_DEBUG, "extractor_idle_timeout(%p)", ext);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.idle_timeout");
 
     /* too long since we last used the extractor - disconnect */
     extractor_disconnect(ext);
@@ -107,20 +107,21 @@ static int extractor_connect(struct extractor_ctx *ext)
     struct backend *be;
     time_t now = time(NULL);
 
-    syslog(LOG_DEBUG, "extractor_connect()");
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.connecting",
+               lf_s("sys.host", ext->hostname));
 
     be = ext->be;
     if (be && be->sock != -1) {
         // extend the timeout
         if (be->timeout) {
             be->timeout->mark = now + attachextract_idle_timeout;
-            xsyslog(LOG_DEBUG, "keep using socket with timeout mark",
-                    "sockfd=<%d> timeout_mark=<" TIME_T_FMT ">",
-                    be->sock, be->timeout->mark);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.connection.reused",
+                       lf_d("search.attachextract.socket", be->sock),
+                       lf_time("search.attachextract.timeout", be->timeout->mark));
         }
         else {
-            xsyslog(LOG_DEBUG, "keep using socket",
-                    "sockfd=<%d>", be->sock);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.connection.reused",
+                       lf_d("search.attachextract.socket", be->sock));
         }
         return 0;
     }
@@ -131,8 +132,8 @@ static int extractor_connect(struct extractor_ctx *ext)
                                    &http, NULL, NULL, NULL, -1);
 
     if (!be) {
-        syslog(LOG_ERR, "extract_connect: failed to connect to %s",
-               ext->hostname);
+        xsyslog_ev(LOG_ERR, "search.attachextract.connect.failed",
+                   lf_s("sys.host", ext->hostname));
         return IMAP_IOERROR;
     }
 
@@ -167,8 +168,9 @@ static int extractor_httpreq(struct extractor_ctx *ext,
     buf_printf(&url_buf, "%s/%s", ext->path, guidstr);
     const char *url = buf_cstring(&url_buf);
 
-    xsyslog(LOG_DEBUG, "starting HTTP request",
-            "method=<%s> guid=<%s>", method, guidstr);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.request.started",
+               lf_s("http.method", method),
+               lf_s("msg.guid", guidstr));
 
     // Prepare request
     buf_printf(&req_buf,
@@ -216,10 +218,11 @@ static int extractor_httpreq(struct extractor_ctx *ext,
 
         if (r == EOF) {
             r = IMAP_IOERROR;
-            xsyslog(LOG_DEBUG,
-                    "failed to send HTTP request",
-                    "method=<%s> url=<%s> err=<%s>",
-                    method, url, error_message(r));
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.request.failed",
+                       lf_s("http.method", method),
+                       lf_s("http.uri", url),
+                       lf_s("search.step", "send"),
+                       lf_err("error", r));
             extractor_disconnect(ext);
             retry++;
             continue;
@@ -240,9 +243,10 @@ static int extractor_httpreq(struct extractor_ctx *ext,
         if (r == HTTP_BAD_GATEWAY &&
                 be->in->eof && prev_bytes_in == be->in->bytes_in &&
                 time(NULL) < be->in->timeout_mark) {
-            xsyslog(LOG_DEBUG,
-                    "no bytes read from socket - retrying",
-                    "method=<%s> url=<%s>", method, url);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.request.retry",
+                       lf_s("http.method", method),
+                       lf_s("http.uri", url),
+                       lf_s("search.reason", "no_bytes"));
             extractor_disconnect(ext);
             retry++;
         }
@@ -252,26 +256,29 @@ static int extractor_httpreq(struct extractor_ctx *ext,
                  (hdr = spool_getheader(res_hdrs, "Connection")) &&
                  !strcasecmpsafe(hdr[0], "close") &&
                  time(NULL) < be->in->timeout_mark)) {
-            xsyslog(LOG_DEBUG,
-                    "keep-alive connection got closed - retrying",
-                    "method=<%s> url=<%s>", method, url);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.request.retry",
+                       lf_s("http.method", method),
+                       lf_s("http.uri", url),
+                       lf_s("search.reason", "closed"));
             extractor_disconnect(ext);
             retry++;
         }
         // Handle response
         else {
             if (r) {
-                xsyslog(LOG_ERR,
-                        "failed to read HTTP response",
-                        "method=<%s> url=<%s> res_err=<%s> err=<%s>",
-                        method, url, res_err, error_message(r));
+                xsyslog_ev(LOG_ERR, "search.attachextract.request.failed",
+                           lf_s("http.method", method),
+                           lf_s("http.uri", url),
+                           lf_s("search.step", "read"),
+                           lf_s("error.description", res_err),
+                           lf_err("error", r));
                 *res_statuscode = 599;
             }
-            else xsyslog(
-                    (*res_statuscode == 200 || *res_statuscode == 201 ||
-                     *res_statuscode == 404) ? LOG_DEBUG : LOG_WARNING,
-                    "got HTTP response", "method=<%s> url=<%s> statuscode=<%d>",
-                    method, url, *res_statuscode);
+            else xsyslog_ev((*res_statuscode == 200 || *res_statuscode == 201 ||
+                     *res_statuscode == 404) ? LOG_DEBUG : LOG_WARNING, "search.attachextract.response",
+                            lf_s("http.method", method),
+                            lf_s("http.uri", url),
+                            lf_d("http.status", *res_statuscode));
 
             if (*res_statuscode == 200 || *res_statuscode == 201) {
                 /* Abide by server's timeout, if any */
@@ -288,14 +295,19 @@ static int extractor_httpreq(struct extractor_ctx *ext,
     } while (retry && retry < 3);
 
 done:
-    xsyslog(LOG_DEBUG, "ending HTTP request",
-            "method=<%s> guid=<%s> statuscode=<%d> r=<%s>",
-            method, guidstr, *res_statuscode, error_message(r));
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.request.ended",
+               lf_s("http.method", method),
+               lf_s("msg.guid", guidstr),
+               lf_d("http.status", *res_statuscode),
+               r ? lf_err("error", r) : lf_skip());
 
     if (r) {
-        xsyslog(LOG_WARNING, "failed HTTP request - resetting connection",
-                "method=<%s> guid=<%s> statuscode=<%d> r=<%s>",
-                method, guidstr, *res_statuscode, error_message(r));
+        xsyslog_ev(LOG_WARNING, "search.attachextract.request.failed",
+                   lf_s("http.method", method),
+                   lf_s("msg.guid", guidstr),
+                   lf_d("http.status", *res_statuscode),
+                   lf_s("search.step", "reset"),
+                   lf_err("error", r));
         extractor_disconnect(ext);
     }
 
@@ -362,21 +374,24 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     if (!global_extractor) {
         /* This is a legitimate case for sieve and lmtpd (so we don't need
          * to spam the logs! */
-        xsyslog(LOG_DEBUG, "ignoring uninitialized extractor", NULL);
+        xsyslog_ev(LOG_DEBUG, "search.attachextract.skipped",
+                   lf_s("search.reason", "uninitialized"));
         return 0;
     }
 
     if (!axrec->type || !axrec->subtype) {
-        xsyslog(LOG_DEBUG, "ignoring incomplete MIME type",
-                "type=<%s> subtype<%s>",
-               axrec->type ? axrec->type : "<null>",
-               axrec->subtype ? axrec->subtype : "<null>");
+        xsyslog_ev(LOG_DEBUG, "search.attachextract.skipped",
+                   lf_s("search.reason", "incomplete_type"),
+                   lf_s_opt("part.type", axrec->type),
+                   lf_s_opt("part.subtype", axrec->subtype));
         return IMAP_NOTFOUND;
     }
 
     if (message_guid_isnull(&axrec->guid)) {
-        xsyslog(LOG_DEBUG, "ignoring null guid", "mime_type=<%s/%s>",
-               axrec->type, axrec->subtype);
+        xsyslog_ev(LOG_DEBUG, "search.attachextract.skipped",
+                   lf_s("search.reason", "null_guid"),
+                   lf_s("part.type", axrec->type),
+                   lf_s("part.subtype", axrec->subtype));
         return 0;
     }
 
@@ -397,8 +412,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
         buf_reset(&buf);
     }
     else if (attachextract_cacheonly) {
-        xsyslog(LOG_ERR,
-                "cache-only flag is set, but no cache directory is configured", NULL);
+        xsyslog_ev(LOG_ERR, "search.attachextract.config.invalid",
+                   lf_s("config.option", "search_attachment_extractor_cache_dir"));
         r = IMAP_NOTFOUND;
         goto done;
     }
@@ -417,14 +432,14 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
             buf_free(&cache_data);
             close(fd);
 
-            xsyslog(LOG_DEBUG, "read from cache",
-                    "cachefname=<%s>", cachefname);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.cache.hit",
+                       lf_s("sys.path", cachefname));
             is_cached = 1;
             goto gotdata;
         }
         else {
-            xsyslog(LOG_DEBUG, "not found in cache",
-                    "cachefname=<%s>", cachefname);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.cache.miss",
+                       lf_s("sys.path", cachefname));
         }
     }
 
@@ -458,7 +473,8 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     /* Decode data */
     if (encoding) {
         if (charset_decode(&buf, buf_base(data), buf_len(data), encoding)) {
-            syslog(LOG_ERR, "extract_attachment: failed to decode data");
+            xsyslog_ev(LOG_ERR, "search.attachextract.decode.failed",
+                       lf_s("msg.guid", guidstr));
             r = IMAP_IOERROR;
             goto done;
         }
@@ -496,17 +512,18 @@ EXPORTED int attachextract_extract(const struct attachextract_record *axrec,
     }
 
     // dropped out of the loop?  Then we failed!
-    xsyslog(LOG_ERR, "exhausted retry attempts - giving up",
-            "retry=<%d>", retry);
+    xsyslog_ev(LOG_ERR, "search.attachextract.request.failed",
+               lf_s("search.step", "retry"),
+               lf_d("search.retries", retry));
     r = IMAP_IOERROR;
     goto done;
 
 gotdata:
-    xsyslog(LOG_DEBUG, is_cached ?
-            "read cached attachment extract" :
-            "extracted text from attachment",
-            "guid=<%s> content_type=<%s> size=<%zu>",
-            guidstr, ctype, buf_len(text));
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.extracted",
+               lf_s("msg.guid", guidstr),
+               lf_s("part.type", ctype),
+               lf_zu("search.bytes", buf_len(text)),
+               lf_b("search.cached", is_cached));
 
     if (!is_cached && cachefname) {
         /* Add to cache */
@@ -517,23 +534,26 @@ gotdata:
             close(fd);
 
             if (wr == -1) {
-                xsyslog(LOG_WARNING, "failed to write temp file",
-                        "tempfname=<%s>", tempfname);
+                xsyslog_ev(LOG_WARNING, "search.attachextract.cache.write.failed",
+                           lf_s("search.tmp.path", tempfname),
+                           lf_s("search.step", "write"));
             }
             else {
                 if (cyrus_rename(tempfname, cachefname)) {
-                    xsyslog(LOG_WARNING, "failed to rename tempfile to cache file",
-                            "tempfname=<%s> cachefname=<%s>",
-                            tempfname, cachefname);
+                    xsyslog_ev(LOG_WARNING, "search.attachextract.cache.write.failed",
+                               lf_s("search.tmp.path", tempfname),
+                               lf_s("sys.path", cachefname),
+                               lf_s("search.step", "rename"));
                 }
-                else xsyslog(LOG_DEBUG, "wrote to cache",
-                            "cachefname=<%s>", cachefname);
+                else xsyslog_ev(LOG_DEBUG, "search.attachextract.cache.written",
+                                lf_s("sys.path", cachefname));
             }
 
             xunlink(tempfname);
         }
-        else xsyslog(LOG_WARNING, "could not create temp file",
-                    "tempfname=<%s>", tempfname);
+        else xsyslog_ev(LOG_WARNING, "search.attachextract.cache.write.failed",
+                        lf_s("search.tmp.path", tempfname),
+                        lf_s("search.step", "create"));
         free(tempfname);
     }
 
@@ -550,7 +570,7 @@ done:
 
 EXPORTED void attachextract_init(struct protstream *clientin)
 {
-    syslog(LOG_DEBUG, "extractor_init(%p)", clientin);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.init");
 
     /* Read config */
     attachextract_idle_timeout =
@@ -575,8 +595,9 @@ EXPORTED void attachextract_init(struct protstream *clientin)
                    scheme, server, path);
     if (n != 3 ||
         strncmp(lcase(scheme), "http", 4) || (scheme[4] && scheme[4] != 's')) {
-        syslog(LOG_ERR,
-               "extract_attachment: unexpected non-HTTP URL %s", exturl);
+        xsyslog_ev(LOG_ERR, "search.attachextract.config.invalid",
+                   lf_s("config.option", "search_attachment_extractor_url"),
+                   lf_s("http.uri", exturl));
         return;
     }
 
@@ -603,7 +624,7 @@ EXPORTED void attachextract_destroy(void)
 {
     struct extractor_ctx *ext = global_extractor;
 
-    syslog(LOG_DEBUG, "extractor_destroy(%p)", ext);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.destroy");
 
     if (!ext) return;
 
@@ -620,8 +641,9 @@ EXPORTED void attachextract_set_cachedir(const char *cachedir)
 {
     char *old_cachedir = attachextract_cachedir;
     attachextract_cachedir = xstrdupnull(cachedir);
-    xsyslog(LOG_DEBUG, "updated attachextract cache directory",
-            "old_cachedir=<%s> new_cachedir=<%s>", old_cachedir, cachedir);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.config.changed",
+               lf_s_opt("old.sys.path", old_cachedir),
+               lf_s_opt("sys.path", cachedir));
     free(old_cachedir);
 }
 
@@ -634,8 +656,9 @@ EXPORTED void attachextract_set_cacheonly(int cacheonly)
 {
     int old_cacheonly = attachextract_cacheonly;
     attachextract_cacheonly = cacheonly;
-    xsyslog(LOG_DEBUG, "updated attachextract cache-only flag",
-            "old_cacheonly=<%d> new_cacheonly=<%d>", old_cacheonly, cacheonly);
+    xsyslog_ev(LOG_DEBUG, "search.attachextract.config.changed",
+               lf_b("old.search.cacheonly", old_cacheonly),
+               lf_b("search.cacheonly", cacheonly));
 }
 
 EXPORTED int attachextract_get_cacheonly(void)

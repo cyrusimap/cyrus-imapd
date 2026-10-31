@@ -41,4 +41,7 @@ sub test_connect_once
     my $output = slurp_file($errfile);
     $self->assert_matches(qr/Can not connect to server/, $output);
     $self->assert_does_not_match(qr/retrying in \d+ seconds/, $output);
+
+    $self->assert_syslog_matches($self->{instance},
+                                 qr/\bevent=sync\.connect\.failed\b/);
 }

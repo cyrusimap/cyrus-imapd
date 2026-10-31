@@ -60,7 +60,8 @@ EXPORTED int mupdate_connect(const char *server,
     const char *status = NULL;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
@@ -90,7 +91,9 @@ EXPORTED int mupdate_connect(const char *server,
     if (!h->conn) {
         free_callbacks(h->sasl_cb);
         h->sasl_cb = NULL;
-        syslog(LOG_ERR, "mupdate_connect failed: %s", status ? status : "no auth status");
+        xsyslog_ev(LOG_ERR, "mupdate.connect.failed",
+                   lf_s("sys.host", server),
+                   lf_s("error", status ? status : "no auth status"));
         return MUPDATE_NOCONN;
     }
 
@@ -132,7 +135,8 @@ static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((un
                              const char *cmd,
                              void *context __attribute__((unused)))
 {
-    syslog(LOG_ERR, "mupdate_scarf_one was called, but shouldn't be.  Command received was %s", cmd);
+    xsyslog_ev(LOG_ERR, "mupdate.response.unexpected",
+               lf_s("mupdate.command", cmd));
     return -1;
 }
 
@@ -145,17 +149,20 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
     const char *p;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!mailbox) {
-        syslog(LOG_ERR, "%s: no mailbox", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_mailbox"));
         return MUPDATE_BADPARAM;
     }
 
     if (!location) {
-        syslog(LOG_ERR, "%s: no location", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_location"));
         return MUPDATE_BADPARAM;
     }
 
@@ -163,12 +170,9 @@ EXPORTED int mupdate_activate(mupdate_handle *handle,
 
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p+1, '!')) {
-        syslog(
-                LOG_ERR,
-                "%s: double ! detected in location '%s'",
-                __func__,
-                location
-            );
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "double_bang"),
+                   lf_s("mupdate.location", location));
 
         return MUPDATE_BADPARAM;
     }
@@ -207,17 +211,20 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
     const char *p;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!mailbox) {
-        syslog(LOG_ERR, "%s: no mailbox", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_mailbox"));
         return MUPDATE_BADPARAM;
     }
 
     if (!location) {
-        syslog(LOG_ERR, "%s: no location", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_location"));
         return MUPDATE_BADPARAM;
     }
 
@@ -225,12 +232,9 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
 
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p+1, '!')) {
-        syslog(
-                LOG_ERR,
-                "%s: double ! detected in location '%s'",
-                __func__,
-                location
-            );
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "double_bang"),
+                   lf_s("mupdate.location", location));
 
         return MUPDATE_BADPARAM;
     }
@@ -267,17 +271,20 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
     const char *p;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!mailbox) {
-        syslog(LOG_ERR, "%s: no mailbox", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_mailbox"));
         return MUPDATE_BADPARAM;
     }
 
     if (!location) {
-        syslog(LOG_ERR, "%s: no location", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_location"));
         return MUPDATE_BADPARAM;
     }
 
@@ -285,12 +292,9 @@ EXPORTED int mupdate_deactivate(mupdate_handle *handle,
 
     /* make sure we don't have a double server!partition */
     if ((p = strchr(location, '!')) && strchr(p+1, '!')) {
-        syslog(
-                LOG_ERR,
-                "%s: double ! detected in location '%s'",
-                __func__,
-                location
-            );
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "double_bang"),
+                   lf_s("mupdate.location", location));
 
         return MUPDATE_BADPARAM;
     }
@@ -326,12 +330,14 @@ EXPORTED int mupdate_delete(mupdate_handle *handle,
     enum mupdate_cmd_response response;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!mailbox) {
-        syslog(LOG_ERR, "%s: no mailbox", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_mailbox"));
         return MUPDATE_BADPARAM;
     }
 
@@ -392,17 +398,20 @@ EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
     enum mupdate_cmd_response response;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!mailbox) {
-        syslog(LOG_ERR, "%s: no mailbox", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_mailbox"));
         return MUPDATE_BADPARAM;
     }
 
     if (!target) {
-        syslog(LOG_ERR, "%s: no target", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_target"));
         return MUPDATE_BADPARAM;
     }
 
@@ -437,12 +446,14 @@ EXPORTED int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
     enum mupdate_cmd_response response;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!callback) {
-        syslog(LOG_ERR, "%s: no callback", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_callback"));
         return MUPDATE_BADPARAM;
     }
 
@@ -474,12 +485,14 @@ EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
     enum mupdate_cmd_response response;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!callback) {
-        syslog(LOG_ERR, "%s: no callback", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_callback"));
         return MUPDATE_BADPARAM;
     }
 
@@ -496,8 +509,11 @@ EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
 }
 
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->conn->in); \
-                                 if ((ch) != '\n') { syslog(LOG_ERR, \
-                             "extra arguments received, aborting connection");\
+                                 if ((ch) != '\n') {                         \
+                                     xsyslog_ev(LOG_ERR,                     \
+                                         "mupdate.response.invalid",         \
+                                         lf_s("mupdate.reason",              \
+                                              "extra_arguments"));           \
                                  r = MUPDATE_PROTOCOL_ERROR;\
                                  goto done; }} while(0)
 
@@ -512,12 +528,14 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
     int r = 0;
 
     if (!handle) {
-        syslog(LOG_ERR, "%s: no mupdate_handle", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_handle"));
         return MUPDATE_BADPARAM;
     }
 
     if (!callback) {
-        syslog(LOG_ERR, "%s: no callback", __func__);
+        xsyslog_ev(LOG_ERR, "mupdate.client.call.invalid",
+                   lf_s("mupdate.reason", "no_callback"));
         return MUPDATE_BADPARAM;
     }
 
@@ -558,14 +576,16 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
 
         if (ch != ' ') {
             /* We always have a command */
-            syslog(LOG_ERR, "Protocol error from master: no tag");
+            xsyslog_ev(LOG_ERR, "mupdate.response.invalid",
+                       lf_s("mupdate.reason", "no_tag"));
             r = MUPDATE_PROTOCOL_ERROR;
             goto done;
         }
         ch = getword(handle->conn->in, &(handle->cmd));
         if (ch != ' ') {
             /* We always have an argument */
-            syslog(LOG_ERR, "Protocol error from master: no keyword");
+            xsyslog_ev(LOG_ERR, "mupdate.response.invalid",
+                       lf_s("mupdate.reason", "no_keyword"));
             r = MUPDATE_PROTOCOL_ERROR;
             break;
         }
@@ -584,7 +604,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
-                syslog(LOG_ERR, "mupdate BAD response: %s", handle->arg1.s);
+                xsyslog_ev(LOG_ERR, "mupdate.response.bad",
+                           lf_buf("error", &handle->arg1));
                 if (wait_for_ok && response) {
                     *response = MUPDATE_BAD;
                 }
@@ -593,7 +614,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
-                syslog(LOG_ERR, "mupdate BYE response: %s", handle->arg1.s);
+                xsyslog_ev(LOG_ERR, "mupdate.response.bye",
+                           lf_buf("error", &handle->arg1));
                 if (wait_for_ok && response) {
                     *response = MUPDATE_BYE;
                 }
@@ -612,8 +634,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 /* Handle delete command */
                 r = callback(&box, handle->cmd.s, context);
                 if (r) {
-                    syslog(LOG_ERR,
-                           "error deleting mailbox: callback returned %d", r);
+                    xsyslog_ev(LOG_ERR, "mupdate.callback.failed",
+                               lf_s("mupdate.command", "DELETE"),
+                               lf_d("error.code", r));
                     goto done;
                 }
                 break;
@@ -647,8 +670,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 box.acl = handle->arg3.s;
                 r = callback(&box, handle->cmd.s, context);
                 if (r) { /* callback error ? */
-                    syslog(LOG_ERR,
-                           "error activating mailbox: callback returned %d", r);
+                    xsyslog_ev(LOG_ERR, "mupdate.callback.failed",
+                               lf_s("mupdate.command", "MAILBOX"),
+                               lf_d("error.code", r));
                     goto done;
                 }
                 break;
@@ -659,7 +683,8 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 ch = getmstring(handle->conn->in, handle->conn->out, &(handle->arg1));
                 CHECKNEWLINE(handle, ch);
 
-                syslog(LOG_DEBUG, "mupdate NO response: %s", handle->arg1.s);
+                xsyslog_ev(LOG_DEBUG, "mupdate.response.no",
+                           lf_buf("error", &handle->arg1));
                 if (wait_for_ok) {
                     if (response) *response = MUPDATE_NO;
                     goto done;
@@ -699,8 +724,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
                 box.location = handle->arg2.s;
                 r = callback(&box, handle->cmd.s, context);
                 if (r) { /* callback error ? */
-                    syslog(LOG_ERR,
-                           "error reserving mailbox: callback returned %d", r);
+                    xsyslog_ev(LOG_ERR, "mupdate.callback.failed",
+                               lf_s("mupdate.command", "RESERVE"),
+                               lf_d("error.code", r));
                     goto done;
                 }
 
@@ -711,8 +737,9 @@ EXPORTED int mupdate_scarf(mupdate_handle *handle,
         default:
         badcmd:
             /* Bad Command */
-            syslog(LOG_ERR, "bad/unexpected command from master: %s",
-                   handle->cmd.s);
+            xsyslog_ev(LOG_ERR, "mupdate.response.invalid",
+                       lf_s("mupdate.reason", "unknown_command"),
+                       lf_buf("mupdate.command", &handle->cmd));
             r = MUPDATE_PROTOCOL_ERROR;
             goto done;
         }
@@ -744,16 +771,18 @@ EXPORTED void kick_mupdate(void)
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-        syslog(LOG_ERR, "socket: %m");
+        xsyslog_ev(LOG_ERR, "mupdate.kick.failed",
+                   lf_s("mupdate.step", "socket"));
         return;
     }
 
     buf_appendcstr(&addrbuf, config_dir);
     buf_appendcstr(&addrbuf, FNAME_MUPDATE_TARGET_SOCK);
     if (buf_len(&addrbuf) >= sizeof(srvaddr.sun_path)) {
-        syslog(LOG_ERR, "kick_mupdate: configured socket path '%s' is too long"
-                        " (maximum length is %zu)",
-                        buf_cstring(&addrbuf), sizeof(srvaddr.sun_path) - 1);
+        xsyslog_ev(LOG_ERR, "mupdate.kick.failed",
+                   lf_s("mupdate.step", "socket_path"),
+                   lf_buf("sys.path", &addrbuf),
+                   lf_zu("limit.value", sizeof(srvaddr.sun_path) - 1));
         fatal("socket path too long", EX_CONFIG);
     }
 
@@ -764,13 +793,17 @@ EXPORTED void kick_mupdate(void)
 
     r = connect(s, (struct sockaddr *)&srvaddr, len);
     if (r == -1) {
-        syslog(LOG_ERR, "kick_mupdate: can't connect to target: %m");
+        xsyslog_ev(LOG_ERR, "mupdate.kick.failed",
+                   lf_s("mupdate.step", "connect"),
+                   lf_buf("sys.path", &addrbuf));
         goto done;
     }
 
     r = read(s, buf, sizeof(buf));
     if (r <= 0) {
-        syslog(LOG_ERR, "kick_mupdate: can't read from target: %m");
+        xsyslog_ev(LOG_ERR, "mupdate.kick.failed",
+                   lf_s("mupdate.step", "read"),
+                   lf_buf("sys.path", &addrbuf));
     }
 
  done:

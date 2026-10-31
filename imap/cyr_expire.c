@@ -454,7 +454,8 @@ static int expire(const mbentry_t *mbentry, void *rock)
     if (mbentry->mbtype & MBTYPE_DELETED) {
         if (mbentry->mtime < erock->tombstone_mark) {
             verbosep("Removing stale tombstone for %s", mbentry->name);
-            syslog(LOG_NOTICE, "Removing stale tombstone for %s", mbentry->name);
+            xsyslog_ev(LOG_NOTICE, "expire.tombstone.removing",
+                       lf_intname("mbox.name", mbentry->name));
             /* track the deletion so we know we can't calculate Mailbox/changes
              * over this modseq.  Don't do inboxes, because when we delete them
              * we have removed the counters */
@@ -469,8 +470,9 @@ restart:
     r = mailbox_open_iwl(mbentry->name, &mailbox);
     if (r) {
         /* mailbox corrupt/nonexistent -- skip it */
-        syslog(LOG_WARNING, "unable to open mailbox %s: %s",
-               mbentry->name, error_message(r));
+        xsyslog_ev(LOG_WARNING, "expire.mailbox.open.failed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -508,7 +510,9 @@ restart:
                 goto restart;
             }
             if (r)
-                syslog(LOG_ERR, "failed to expire old messages: %s", mbentry->name);
+                xsyslog_ev(LOG_ERR, "expire.messages.failed",
+                           lf_intname("mbox.name", mbentry->name),
+                           lf_err("error", r));
             did_expunge = 1;
         }
     }
@@ -517,8 +521,9 @@ restart:
         r = mailbox_expunge(mailbox, NULL, userflag_cb, erock, NULL,
                             EVENT_MESSAGE_EXPIRE, /*limit*/0);
         if (r)
-            syslog(LOG_ERR, "failed to scan user flags for %s: %s",
-                   mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "expire.userflags.failed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
     }
 
     if (erock->do_userflags)
@@ -540,7 +545,9 @@ cleanup:
     }
 
     if (r) {
-        syslog(LOG_WARNING, "failure expiring %s: %s", mbentry->name, error_message(r));
+        xsyslog_ev(LOG_WARNING, "expire.mailbox.failed",
+                   lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
         annotate_state_abort(&mailbox->annot_state);
     }
 
@@ -663,8 +670,8 @@ done:
 static int do_archive(struct cyr_expire_ctx *ctx)
 {
     if (ctx->args.archive_seconds >= 0) {
-        syslog(LOG_DEBUG, ">> do_archive: archive_seconds(%d) >= 0",
-               ctx->args.archive_seconds);
+        xsyslog_ev(LOG_DEBUG, "expire.archive.starting",
+                   lf_d("expire.archive_seconds", ctx->args.archive_seconds));
         ctx->arock.archive_mark = time(0) - ctx->args.archive_seconds + 1;
 
         if (ctx->args.userid)
@@ -710,12 +717,11 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
             mboxlist_allmbox(ctx->args.mbox_prefix, expire, &ctx->erock,
                              MBOXTREE_TOMBSTONES);
 
-        syslog(LOG_NOTICE, "Expired %lu and expunged %lu out of %lu "
-                            "messages from %lu mailboxes",
-                           ctx->erock.messages_expired,
-                           ctx->erock.messages_expunged,
-                           ctx->erock.messages_seen,
-                           ctx->erock.mailboxes_seen);
+        xsyslog_ev(LOG_NOTICE, "expire.messages.done",
+                   lf_lu("expire.expired", ctx->erock.messages_expired),
+                   lf_lu("mbox.expunged", ctx->erock.messages_expunged),
+                   lf_lu("expire.seen", ctx->erock.messages_seen),
+                   lf_lu("expire.mailboxes", ctx->erock.mailboxes_seen));
         verbosep("Expired %lu and expunged %lu out of %lu "
                        "messages from %lu mailboxes",
                        ctx->erock.messages_expired,
@@ -724,8 +730,8 @@ static int do_expunge(struct cyr_expire_ctx *ctx)
                        ctx->erock.mailboxes_seen);
 
         if (ctx->erock.do_userflags) {
-            syslog(LOG_NOTICE, "Expunged %lu user flags",
-                           ctx->erock.userflags_expunged);
+            xsyslog_ev(LOG_NOTICE, "expire.userflags.done",
+                       lf_lu("expire.userflags", ctx->erock.userflags_expunged));
             verbosep("Expunged %lu user flags",
                            ctx->erock.userflags_expunged);
         }
@@ -767,7 +773,8 @@ done:
         }
 
         if (n) {
-            syslog(LOG_NOTICE, "Cleaned up %d expired mboxlist tombstones", n);
+            xsyslog_ev(LOG_NOTICE, "expire.tombstones.done",
+                       lf_d("expire.removed", n));
             verbosep("Cleaned up %d expired mboxlist tombstones", n);
         }
 
@@ -796,11 +803,10 @@ static int do_cid_expire(struct cyr_expire_ctx *ctx)
         else
             mboxlist_alluser(expire_conversations_user, &ctx->crock);
 
-        syslog(LOG_NOTICE, "Expired %lu entries of %lu entries seen "
-                            "in %lu conversation databases",
-                            ctx->crock.msgids_expired,
-                            ctx->crock.msgids_seen,
-                            ctx->crock.databases_seen);
+        xsyslog_ev(LOG_NOTICE, "expire.conversations.done",
+                   lf_lu("expire.expired", ctx->crock.msgids_expired),
+                   lf_lu("expire.seen", ctx->crock.msgids_seen),
+                   lf_lu("expire.databases", ctx->crock.databases_seen));
         verbosep("Expired %lu entries of %lu entries seen "
                        "in %lu conversation databases",
                        ctx->crock.msgids_expired,
@@ -860,7 +866,8 @@ static int do_delete(struct cyr_expire_ctx *ctx)
 
         verbosep("Removed %d deleted mailboxes", count);
 
-        syslog(LOG_NOTICE, "Removed %d deleted mailboxes", count);
+        xsyslog_ev(LOG_NOTICE, "expire.deleted.done",
+                   lf_d("expire.removed", count));
     }
 
     return ret;
@@ -1020,7 +1027,8 @@ int main(int argc, char *argv[])
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&expire_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "expire.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 

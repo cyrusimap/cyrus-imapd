@@ -31,7 +31,7 @@ EOF
     $self->{instance}->getsyslog(); # clear syslog
     $self->{instance}->run_command({cyrus => 1}, 'squatter');
     if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog(qr/Xapian: truncating/);
+        my @lines = $self->{instance}->getsyslog(qr/\bevent=search\.xapian\.text\.truncated\b/);
         $self->assert_num_equals(1, scalar @lines);
     }
 
@@ -65,7 +65,7 @@ EOF
     ]);
     $self->assert_not_null($res->[0][1]{list}[0]{preview});
     if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog(qr/Xapian: truncating/);
+        my @lines = $self->{instance}->getsyslog(qr/\bevent=search\.xapian\.text\.truncated\b/);
         $self->assert_num_equals(1, scalar @lines);
     }
 
@@ -81,7 +81,7 @@ EOF
     ]);
     $self->assert_null($res->[0][1]{list}[0]{preview});
     if ($self->{instance}->{have_syslog_replacement}) {
-        my @lines = $self->{instance}->getsyslog(qr/Xapian: truncating/);
+        my @lines = $self->{instance}->getsyslog(qr/\bevent=search\.xapian\.text\.truncated\b/);
         $self->assert_num_equals(1, scalar @lines);
     }
 }

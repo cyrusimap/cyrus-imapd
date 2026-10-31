@@ -235,27 +235,30 @@ static int flush_batch(search_text_receiver_t *rx,
             /* The record got removed from the index while we did not hold
              * the mailbox lock. Such a message never needs indexing, so
              * the indexed uid range may cover it. */
-            xsyslog(LOG_INFO, "index record is gone - ignoring",
-                    "mboxname=<%s> imap_uid=<%d>",
-                    mailbox_name(mailbox), uid);
+            xsyslog_ev(LOG_INFO, "search.index.record.skipped",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", uid),
+                       lf_s("search.reason", "record_gone"));
             r = 0;
         }
         else if (r) {
             /* We can not tell if this message needs indexing. Indexing
              * must stop here, or the indexed uid range would get merged
              * across this uid and never cover it again. */
-            xsyslog(LOG_ERR, "could not read index record",
-                    "mboxname=<%s> imap_uid=<%d> err=<%s>",
-                    mailbox_name(mailbox), uid, error_message(r));
+            xsyslog_ev(LOG_ERR, "search.index.record.read.failed",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", uid),
+                       lf_err("error", r));
             goto done;
         }
         else if (record.internal_flags & FLAG_INTERNAL_UNLINKED) {
             /* The message got expunged and its file removed while we did
              * not hold the mailbox lock. Selecting messages skips unlinked
              * records, too, and they never need indexing. */
-            xsyslog(LOG_INFO, "message file is gone - ignoring",
-                    "mboxname=<%s> imap_uid=<%d>",
-                    mailbox_name(mailbox), uid);
+            xsyslog_ev(LOG_INFO, "search.index.record.skipped",
+                       lf_mailbox(mailbox),
+                       lf_u("msg.imapuid", uid),
+                       lf_s("search.reason", "file_gone"));
         }
         else {
             ptrarray_append(&msgs, message_new_from_record(mailbox, &record));
@@ -319,27 +322,32 @@ static int create_attachpart(struct mailbox *mailbox,
     uint32_t imap_uid = 0;
     int r = message_get_uid(msg, &imap_uid);
     if (r) {
-        xsyslog(LOG_ERR, "can not get message uid",
-                "mboxname=<%s> err=<%s>",
-                mailbox_name(mailbox), error_message(r));
+        xsyslog_ev(LOG_ERR, "search.index.record.read.failed",
+                   lf_mailbox(mailbox),
+                   lf_s("search.step", "uid"),
+                   lf_err("error", r));
         goto done;
     }
 
     const struct body *body = NULL;
     r = message_get_cachebody(msg, &body);
     if (r) {
-        xsyslog(LOG_ERR, "can not load cachebody",
-                "mboxname=<%s> uid=<%d> err=<%s>",
-                mailbox_name(mailbox), imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "search.index.record.read.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", imap_uid),
+                   lf_s("search.step", "cachebody"),
+                   lf_err("error", r));
         goto done;
     }
 
     const char *fname = NULL;
     r = message_get_fname(msg, &fname);
     if (r) {
-        xsyslog(LOG_ERR, "can not get file name",
-                "mboxname=<%s> uid=<%d> err=<%s>",
-                mailbox_name(mailbox), imap_uid, error_message(r));
+        xsyslog_ev(LOG_ERR, "search.index.record.read.failed",
+                   lf_mailbox(mailbox),
+                   lf_u("msg.imapuid", imap_uid),
+                   lf_s("search.step", "fname"),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -407,9 +415,10 @@ static size_t warmup_attachextract_cache(dynarray_t *attachparts)
 
             fd = open(ap->fname, O_RDONLY);
             if (fd == -1) {
-                xsyslog(LOG_WARNING, "could not open message file - ignoring",
-                        "file=<%s> guid=<%s>", ap->fname,
-                        message_guid_encode(&ap->axrec.guid));
+                xsyslog_ev(LOG_WARNING, "search.attachextract.warmup.skipped",
+                           lf_s("sys.path", ap->fname),
+                           lf_s("msg.guid", message_guid_encode(&ap->axrec.guid)),
+                           lf_s("search.reason", "open_failed"));
                 fname = NULL;
                 nfailed++;
                 continue;
@@ -421,10 +430,12 @@ static size_t warmup_attachextract_cache(dynarray_t *attachparts)
         }
 
         if (ap->content_offset + ap->content_size > mapped_len) {
-            xsyslog(LOG_ERR, "file size has changed - ignoring",
-                    "file=<%s> guid=<%s> expect_size=<%zu> have_size=<%zu>",
-                    ap->fname, message_guid_encode(&ap->axrec.guid),
-                    ap->content_offset + ap->content_size, mapped_len);
+            xsyslog_ev(LOG_ERR, "search.attachextract.warmup.skipped",
+                       lf_s("sys.path", ap->fname),
+                       lf_s("msg.guid", message_guid_encode(&ap->axrec.guid)),
+                       lf_s("search.reason", "size_changed"),
+                       lf_zu("msg.size", ap->content_offset + ap->content_size),
+                       lf_zu("search.bytes", mapped_len));
             nfailed++;
             continue;
         }
@@ -434,14 +445,16 @@ static size_t warmup_attachextract_cache(dynarray_t *attachparts)
 
         int r = attachextract_extract(&ap->axrec, &data, ap->encoding, &buf);
         if (!r) {
-            xsyslog(LOG_DEBUG, "warmed up attachextract cache for body part",
-                    "file=<%s> imap_partid=<%s>", ap->fname, ap->imap_partid);
+            xsyslog_ev(LOG_DEBUG, "search.attachextract.warmed",
+                       lf_s("sys.path", ap->fname),
+                       lf_s("part.id", ap->imap_partid));
         }
         else {
-            xsyslog(LOG_ERR, "failed to warmup attachextract cache for body part",
-                    "file=<%s> imap_partid=<%s> guid=<%s> err=<%s>",
-                    ap->fname, ap->imap_partid,
-                    message_guid_encode(&ap->axrec.guid), error_message(r));
+            xsyslog_ev(LOG_ERR, "search.attachextract.warmup.failed",
+                       lf_s("sys.path", ap->fname),
+                       lf_s("part.id", ap->imap_partid),
+                       lf_s("msg.guid", message_guid_encode(&ap->axrec.guid)),
+                       lf_err("error", r));
             nfailed++;
         }
 
@@ -488,8 +501,9 @@ static void select_messages_to_index(search_text_receiver_t *rx,
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
         if ((flags & SEARCH_UPDATE_BATCH) && nmsgs >= batch_size) {
-            syslog(LOG_INFO, "search_update_mailbox batching %d messages to %s",
-                    nmsgs, mailbox_name(mailbox));
+            xsyslog_ev(LOG_INFO, "search.index.batching",
+                       lf_mailbox(mailbox),
+                       lf_d("search.messages", nmsgs));
             /* the next update resumes from this message */
             *is_incomplete = 1;
             *nextuid = record->uid;
@@ -561,9 +575,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     // Log timestamp
     if (flags & SEARCH_UPDATE_VERBOSE) {
-        xsyslog(LOG_DEBUG, "released mailbox lock",
-                "mboxname=<%s> unixepoch=<" TIME_T_FMT ">",
-                mboxname, time(NULL));
+        xsyslog_ev(LOG_DEBUG, "search.index.lock.released",
+                   lf_intname("mbox.name", mboxname));
     }
 
     // Extract attachment text and cache results
@@ -609,9 +622,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
 
     // Log timestamp
     if (flags & SEARCH_UPDATE_VERBOSE) {
-        xsyslog(LOG_DEBUG, "reacquired mailbox lock",
-                "mboxname=<%s> unixepoch=<" TIME_T_FMT ">",
-                mboxname, time(NULL));
+        xsyslog_ev(LOG_DEBUG, "search.index.lock.reacquired",
+                   lf_intname("mbox.name", mboxname));
     }
 
     // Index all selected messages. Their attachment text is cached now, so

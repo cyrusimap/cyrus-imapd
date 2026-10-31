@@ -73,10 +73,9 @@ static void prometheus_init(void)
 
     r = snprintf(stats.ident, sizeof(stats.ident), "%s", config_ident);
     if (r < 0 || (size_t) r >= sizeof(stats.ident))
-        syslog(LOG_WARNING, "service name '%s' is longer than %zu"
-                            " characters - prometheus label will be truncated",
-                            config_ident,
-                            sizeof(stats.ident) - 1);
+        xsyslog_ev(LOG_WARNING, "prometheus.ident.truncated",
+                   lf_s("prometheus.ident", config_ident),
+                   lf_zu("limit.value", sizeof(stats.ident) - 1));
 
     r = snprintf(fname, sizeof(fname), "%s%jd",
                  prometheus_stats_dir(), (intmax_t) getpid());
@@ -95,9 +94,9 @@ static void prometheus_init(void)
 
     r = mappedfile_pwrite(handle->mf, &stats, sizeof(stats), 0);
     if (r != sizeof(stats)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write %zubytes, "
-                        "actually wrote %d",
-                        sizeof(stats), r);
+        xsyslog_ev(LOG_ERR, "prometheus.stats.write.failed",
+                   lf_zu("prometheus.bytes.wanted", sizeof(stats)),
+                   lf_d("prometheus.bytes", r));
         goto error;
     }
 
@@ -143,11 +142,15 @@ static void prometheus_done(void *rock __attribute__((unused)))
 
     doneprocs_lock_fd = open(doneprocs_lock_fname, O_CREAT|O_TRUNC|O_RDWR, 0644);
     if (doneprocs_lock_fd == -1) {
-        syslog(LOG_ERR, "can't open doneprocs lock: %s (%m)", doneprocs_lock_fname);
+        xsyslog_ev(LOG_ERR, "prometheus.doneprocs.lock.failed",
+                   lf_s("sys.path", doneprocs_lock_fname),
+                   lf_s("prometheus.step", "open"));
         goto done;
     }
     if (lock_setlock(doneprocs_lock_fd, /*ex*/1, /*nb*/0, doneprocs_lock_fname)) {
-        syslog(LOG_ERR, "can't get exclusive lock on %s", doneprocs_lock_fname);
+        xsyslog_ev(LOG_ERR, "prometheus.doneprocs.lock.failed",
+                   lf_s("sys.path", doneprocs_lock_fname),
+                   lf_s("prometheus.step", "lock"));
         close(doneprocs_lock_fd);
         doneprocs_lock_fd = -1;
         goto done;
@@ -158,8 +161,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
                                 ".", config_ident, NULL);
     r = mappedfile_open(&doneprocs, doneprocs_fname, MAPPEDFILE_CREATE | MAPPEDFILE_RW);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
-                        doneprocs_fname, error_message(r));
+        xsyslog_ev(LOG_ERR, "prometheus.doneprocs.open.failed",
+                   lf_s("sys.path", doneprocs_fname),
+                   lf_err("error", r));
         goto done;
     }
 
@@ -176,8 +180,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
     /* read stats from this process */
     r = mappedfile_readlock(promhandle->mf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_open(%s): %s",
-                        doneprocs_fname, error_message(r));
+        xsyslog_ev(LOG_ERR, "prometheus.doneprocs.open.failed",
+                   lf_s("sys.path", doneprocs_fname),
+                   lf_err("error", r));
         goto done;
     }
     memcpy(&thisproc, mappedfile_base(promhandle->mf), mappedfile_size(promhandle->mf));
@@ -198,9 +203,9 @@ static void prometheus_done(void *rock __attribute__((unused)))
     /* and write it out */
     r = mappedfile_pwrite(doneprocs, &accum, sizeof(accum), 0);
     if (r != sizeof(accum)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write %zubytes, "
-                        "actually wrote %d",
-                        sizeof(accum), r);
+        xsyslog_ev(LOG_ERR, "prometheus.stats.write.failed",
+                   lf_zu("prometheus.bytes.wanted", sizeof(accum)),
+                   lf_d("prometheus.bytes", r));
         goto done;
     }
 
@@ -210,7 +215,7 @@ done:
     free(doneprocs_fname);
 
     if (!unlinked) {
-        syslog(LOG_NOTICE, "per-process prometheus statistics file not removed");
+        xsyslog_ev(LOG_NOTICE, "prometheus.stats.unlink.failed");
     }
     mappedfile_close(&promhandle->mf);
 
@@ -249,8 +254,8 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
 
     r = mappedfile_writelock(promhandle->mf);
     if (r) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_writelock unable to obtain lock on %s",
-                        mappedfile_fname(promhandle->mf));
+        xsyslog_ev(LOG_ERR, "prometheus.stats.lock.failed",
+                   lf_s("sys.path", mappedfile_fname(promhandle->mf)));
         return;
     }
 
@@ -265,9 +270,9 @@ EXPORTED void prometheus_apply_delta(enum prom_metric_id metric_id,
 
     r = mappedfile_pwrite(promhandle->mf, &metric, sizeof(metric), offset);
     if (r != sizeof(metric)) {
-        syslog(LOG_ERR, "IOERROR: mappedfile_pwrite: expected to write "
-                        "%zu bytes, actually wrote %d",
-                        sizeof(metric), r);
+        xsyslog_ev(LOG_ERR, "prometheus.stats.write.failed",
+                   lf_zu("prometheus.bytes.wanted", sizeof(metric)),
+                   lf_d("prometheus.bytes", r));
     }
     else {
         mappedfile_commit(promhandle->mf);

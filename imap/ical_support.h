@@ -12,7 +12,7 @@
 
 #undef icalerror_warn
 #define icalerror_warn(message) \
-{syslog(LOG_WARNING, "icalerror: %s(), %s:%d: %s", __FUNCTION__, __FILE__, __LINE__, message);}
+xsyslog_ev(LOG_WARNING, "ical.error", lf_s("error", message))
 
 #include "css3_color.h"
 #include "dav_util.h"

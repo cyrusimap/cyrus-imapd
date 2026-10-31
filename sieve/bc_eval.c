@@ -387,8 +387,9 @@ static int do_comparison(struct needle_t *needle, const char *hay,
         gettimeofday(&end, 0);
         total = timesub(&start, &end);
         if (total > 5.0) {
-            syslog(LOG_NOTICE, "long-running Sieve :regex '%s': %fs",
-                   needle->pat, total);
+            xsyslog_ev(LOG_NOTICE, "sieve.regex.slow",
+                       lf_s("sieve.regex", needle->pat),
+                       lf_duration("sieve.duration", total));
         }
     }
     else {

@@ -122,7 +122,8 @@ int main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&mbexamine_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "mbexamine.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -406,8 +407,8 @@ static int do_quota(struct findall_data *data, void *rock)
         fname = mailbox_record_fname(mailbox, record);
 
         if (stat(fname, &sbuf) != 0) {
-            syslog(LOG_WARNING,
-                   "Can not open message file %s -- skipping", fname);
+            xsyslog_ev(LOG_WARNING, "mbexamine.file.missing",
+                       lf_s("sys.path", fname));
             continue;
         }
 
