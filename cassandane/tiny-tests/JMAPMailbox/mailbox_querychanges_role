@@ -6,21 +6,21 @@ sub test_mailbox_querychanges_role
     ($self)
 {
     my $jmap = $self->{jmap};
-    my $inboxId = $self->getinbox()->{id};
 
+    # only top-level mailboxes can have roles
     my $res = $jmap->CallMethods([['Mailbox/set', {
         create => {
             1 => {
-                parentId => $inboxId,
+                parentId => undef,
                 name => 'A',
             },
             2 => {
-                parentId => $inboxId,
+                parentId => undef,
                 name => 'B',
                 role => 'xspecialuse',
             },
             3 => {
-                parentId => $inboxId,
+                parentId => undef,
                 name => 'C',
                 role => 'junk',
             },

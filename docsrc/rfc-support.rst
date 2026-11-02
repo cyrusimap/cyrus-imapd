@@ -591,12 +591,14 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
           accepted by default; any other attribute must be listed in
           :imapdconf:`specialuse_extra`.  ``\All`` and ``\Flagged`` name
           virtual mailboxes, which Cyrus does not support.
-        * CREATE with USE must target a direct child of a user's INBOX, unless
+        * Only a direct child of a user's INBOX can have special-use, unless
           :imapdconf:`allowspecialusesubfolder` is set, in which case it must
-          still be in a user's namespace.
-        * A mailbox with an attribute in :imapdconf:`specialuse_protect` can
-          only be renamed within those same limits, and non-admins can't
-          delete it.
+          still be in a user's namespace.  This holds however the attribute
+          is set (CREATE with USE, SETMETADATA, a JMAP role, Sieve's
+          ``:specialuse`` or autocreate), and when a non-admin renames a
+          special-use mailbox.
+        * Non-admins can't delete a mailbox with an attribute in
+          :imapdconf:`specialuse_protect`.
         * Mailboxes with an attribute in :imapdconf:`specialuse_nochildren`
           can't have children.
 

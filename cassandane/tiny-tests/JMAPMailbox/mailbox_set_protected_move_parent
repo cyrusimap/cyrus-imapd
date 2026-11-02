@@ -68,5 +68,5 @@ sub test_mailbox_set_protected_move_parent
         }, 'R2'],
     ]);
     $self->assert_str_equals('invalidProperties', $res->[0][1]{notUpdated}{$mboxA}{type});
-    $self->assert(exists $res->[1][1]{updated}{$mboxB});
+    $self->assert_str_equals('invalidProperties', $res->[1][1]{notUpdated}{$mboxB}{type});
 }
