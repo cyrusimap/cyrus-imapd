@@ -780,7 +780,7 @@ err:
                    lf_mailbox(mailbox),
                    lf_u("msg.imapuid", record->uid),
                    lf_err("error", r),
-                   lf_d("mbox.cache.crc", crc),
+                   lf_u("mbox.cache.crc", crc),
                    lf_llu("mbox.cache.offset", record->cache_offset));
 
     if (rewrite == MBCACHE_NOPARSE)
@@ -7508,9 +7508,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
                    lf_u("msg.imapuid", record->uid),
                    lf_zu("old.mbox.cache.offset", oldoff),
                    lf_llu("mbox.cache.offset", record->cache_offset),
-                   lf_d("old.mbox.cache.crc", oldcrc),
-                   lf_d("mbox.cache.crc", newcrc),
-                   lf_d("mbox.cache.crc.written", record->cache_crc));
+                   lf_u("old.mbox.cache.crc", (uint32_t)oldcrc),
+                   lf_u("mbox.cache.crc", (uint32_t)newcrc),
+                   lf_u("mbox.cache.crc.written", record->cache_crc));
     }
 
     r = mailbox_rewrite_index_record(mailbox, record);
