@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_legacy_ids
-    :MailboxLegacyDirs :NoAltNameSpace :Conversations :JMAPExtensions :NoStartInstances
+    :MailboxLegacyDirs :NoAltNameSpace :JMAPExtensions :NoStartInstances
     ($self)
 {
     # Every database the fixture tarball carries is a plain file, so each

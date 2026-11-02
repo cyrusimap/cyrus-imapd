@@ -4,7 +4,6 @@ use Cassandane::Tiny;
 # An expunged record keeps its J key until it is unlinked, so a rebuild
 # over the same records must produce the same J keys as the live db.
 sub test_audit_expunged_jmapid
-    :Conversations
     ($self)
 {
     my $talk = $self->{store}->get_client();

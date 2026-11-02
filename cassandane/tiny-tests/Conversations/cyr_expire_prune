@@ -50,7 +50,7 @@ sub _check_cyr_expire_prune
 # cyr_expire prunes the msgid records a -b batchsize at a time, on a
 # backend with no fetchnext, so each batch restarts the scan
 sub test_cyr_expire_prune
-    :NoStartInstances :Conversations
+    :NoStartInstances
     ($self)
 {
     $self->{instance}->{config}->set('conversations_db' => 'skiplist');
@@ -59,7 +59,7 @@ sub test_cyr_expire_prune
 
 # ... and on a backend which can resume an iteration with fetchnext
 sub test_cyr_expire_prune_chunked
-    :NoStartInstances :Conversations
+    :NoStartInstances
     ($self)
 {
     $self->{instance}->{config}->set('conversations_db' => 'twom');

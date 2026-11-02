@@ -54,9 +54,13 @@ sub test_addressbook_set_shared
     $self->assert_str_equals('manifold', $res->[0][1]{accountId});
     my $AddressBookId = $res->[0][1]{created}{"1"}{id};
     $self->assert_not_null($AddressBookId);
+    my $AddressBookMbox = $self->collection_mboxname({
+        parent => 'user.manifold.#addressbooks',
+        id     => $AddressBookId,
+    });
 
     xlog $self, "share addressbook read-only to user";
-    $admintalk->setacl("user.manifold.#addressbooks.$AddressBookId", "cassandane" => 'lr') or die;
+    $admintalk->setacl($AddressBookMbox, "cassandane" => 'lr') or die;
 
     xlog $self, "update addressbook";
     $res = $jmap->CallMethods([
@@ -75,7 +79,7 @@ sub test_addressbook_set_shared
     $self->assert_str_equals("accountReadOnly", $res->[0][1]{notDestroyed}{$AddressBookId}{type});
 
     xlog $self, "share read-writable to user";
-    $admintalk->setacl("user.manifold.#addressbooks.$AddressBookId", "cassandane" => 'lrswipkxtecdn') or die;
+    $admintalk->setacl($AddressBookMbox, "cassandane" => 'lrswipkxtecdn') or die;
 
     xlog $self, "destroy addressbook $AddressBookId";
     $res = $jmap->CallMethods([['AddressBook/set', {accountId => 'manifold', destroy => [$AddressBookId]}, "R1"]]);

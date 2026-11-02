@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_compactids_always_new_user
-    :min_version_3_13 :CompactIdsAlways
+    :min_version_3_13
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_rename_conversations
-    :Conversations :VirtDomains :min_version_3_0
+    :VirtDomains :min_version_3_0
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();

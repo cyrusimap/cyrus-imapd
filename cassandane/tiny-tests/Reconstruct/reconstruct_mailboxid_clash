@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # written with another live mailbox's id takes the lookup key and is logged,
 # and reconstruct gives the mailbox left without the key a fresh id.
 sub test_reconstruct_mailboxid_clash
-    :NoAltNameSpace :Conversations
+    :NoAltNameSpace
     ($self)
 {
     my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';

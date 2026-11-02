@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_cyr_expire_rename_safe
-    :DelayedDelete :NoMailboxLegacyDirs
+    :DelayedDelete :NoMailboxLegacyDirs :CompactIdsPerUser
     ($self)
 {
     my $adminstore = $self->{adminstore};

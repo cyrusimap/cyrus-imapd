@@ -20,7 +20,6 @@ sub new
     my $config = Cassandane::Config->default()->clone();
 
     $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
                  httpmodules => 'jmap caldav carddav',
                  httpallowcompress => 'no');
 

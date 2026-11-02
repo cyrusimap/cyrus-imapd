@@ -33,7 +33,6 @@ sub new
 
     $config->set(caldav_realm => 'Cassandane',
                  caldav_historical_age => -1,
-                 conversations => 'yes',
                  httpmodules => 'carddav caldav jmap',
                  httpallowcompress => 'no',
                  imipnotifier => 'imip',

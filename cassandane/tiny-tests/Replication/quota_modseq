@@ -25,7 +25,7 @@ sub set_quota_modseq
 }
 
 sub test_quota_modseq
-    :Conversations :NoStartInstances
+    :NoStartInstances
     ($self)
 {
     # quotalegacy keeps one file per root, which run_dbcommand can't read

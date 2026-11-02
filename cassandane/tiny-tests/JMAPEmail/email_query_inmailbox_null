@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_email_query_inmailbox_null
-    :min_version_3_1 :needs_component_sieve :Conversations
+    :min_version_3_1 :needs_component_sieve
     ($self)
 {
     my $jmap = $self->{jmap};

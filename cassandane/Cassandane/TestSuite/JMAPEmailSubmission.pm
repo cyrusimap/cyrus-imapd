@@ -25,7 +25,6 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(caldav_realm => 'Cassandane',
-                 conversations => 'yes',
                  conversations_counted_flags => "\\Draft \\Flagged \$IsMailingList \$IsNotification \$HasAttachment",
                  event_groups => 'mailbox message flags calendar applepushservice jmap',
                  jmapsubmission_deleteonsend => 'no',

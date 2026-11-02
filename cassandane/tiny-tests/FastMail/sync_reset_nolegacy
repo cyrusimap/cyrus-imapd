@@ -3,7 +3,7 @@ use Cassandane::Tiny;
 
 sub test_sync_reset_nolegacy
     :DelayedDelete :min_version_3_5 :NoMailboxLegacyDirs
-    :needs_component_replication
+    :needs_component_replication :CompactIdsPerUser
     ($self)
 {
     my $adminstore = $self->{adminstore};

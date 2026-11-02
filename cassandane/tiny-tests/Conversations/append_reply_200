@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test APPEND of messages to IMAP
 #
 sub test_append_reply_200
-    :min_version_3_1 :Conversations
+    :min_version_3_1
     ($self)
 {
     my %exp;
