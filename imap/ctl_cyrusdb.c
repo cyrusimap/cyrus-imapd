@@ -264,7 +264,7 @@ static void process_mboxlist(int *upgraded)
     /* run fixmbox across all mboxlist entries */
     struct fix_rock frock = { HASH_TABLE_INITIALIZER, BUF_INITIALIZER,
                               BUF_INITIALIZER, BUF_INITIALIZER, UINT64_MAX, 1 };
-    construct_hash_table(&frock.next_mboxnum_by_userid, 4096, 0);
+    construct_hash_table(&frock.next_mboxnum_by_userid, 0, 0);
     mboxlist_allmbox(NULL, fixmbox, &frock, MBOXTREE_INTERMEDIATES);
     free_hash_table(&frock.next_mboxnum_by_userid, NULL);
     buf_free(&frock.last_mboxname);
