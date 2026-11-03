@@ -103,10 +103,11 @@ are skipped.
 
 A calendar deleted after the cutoff is restored whole, into the live
 calendar with the same `DAV:displayname` if there is one, or else into a new
-calendar with that displayname and the old `calendar-color`.  Every record in
-the deleted calendar is appended, expunged ones included, so older versions
-of an event are recreated along with its latest one.  The deleted calendar is then
-removed permanently.  Calendars deleted before the cutoff are ignored.
+calendar with that displayname and the old `calendar-color`.  Each event's
+latest version is recreated, unless the event was destroyed before the
+cutoff.  The live calendar is not checked for an event with the same
+resource name.  The deleted calendar is then removed permanently.
+Calendars deleted before the cutoff are ignored.
 
 Undoing a change to an event with an ORGANIZER sends iTIP through
 `sched_defer()`, as if the user had made the change:

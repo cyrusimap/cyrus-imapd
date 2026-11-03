@@ -1258,63 +1258,108 @@ static int recreate_calendar(const mbentry_t *mbentry,
     return r;
 }
 
+/* Recreate the events of a deleted calendar in newmailbox: each event's
+ * latest version, unless the event was destroyed before the cutoff. */
 static int recreate_ical_resources(const mbentry_t *mbentry,
                                    struct restore_rock *rrock,
                                    struct mailbox *newmailbox,
                                    int log_level)
 {
+    hash_table resources = HASH_TABLE_INITIALIZER;
+    arrayu64_t uids = ARRAYU64_INITIALIZER;
     struct mailbox *mailbox = NULL;
     jmap_req_t *req = rrock->req;
     int r;
 
-    r = mailbox_open_iwl(mbentry->name, &mailbox);
+    r = mailbox_open_irl(mbentry->name, &mailbox);
     if (r) {
         xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
                    lf_intname("mbox.name", mbentry->name), lf_err("error", r));
         return r;
     }
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
+    /* Newest first, so the first record seen of each resource is its
+       latest version */
+    construct_hash_table(&resources, 64, 0);
+
+    struct mailbox_iter *iter =
+        mailbox_iter_init(mailbox, 0, ITER_STEP_BACKWARD|ITER_SKIP_UNLINKED);
     const message_t *msg;
 
     while ((msg = mailbox_iter_step(iter))) {
-        /* XXX  Look for existing resource with same UID */
         const struct index_record *record = msg_record(msg);
-        const message_t *nextmsg;
+        char *resource = rrock->resource_name_cb((message_t *) msg, rrock->rock);
+        const char *reason = NULL;
 
-        if (!(rrock->jrestore->mode & DRY_RUN)) {
-            r = recreate_resource((message_t *) msg, newmailbox,
-                                  req, 0/*is_update*/, log_level);
+        if (!resource) {
+            reason = "no_resource_name";
         }
-        if (!r) rrock->jrestore->num_undone[DESTROYS]++;
+        else if (hash_lookup(resource, &resources)) {
+            reason = "newer_version_found";
+        }
+        else {
+            hash_insert(resource, (void *) 1, &resources);
 
-        if (record->uid < mailbox->i.last_uid &&
-            record->recno % BATCH_SIZE == 0 &&
-            (nextmsg = mailbox_iter_step(iter))) {
-            /* Close and re-open mailbox (to avoid deadlocks) */
-            uint32_t nextuid;
-
-            message_get_uid((message_t *) nextmsg, &nextuid);
-
-            mailbox_iter_done(&iter);
-            mailbox_close(&mailbox);
-            r = mailbox_open_iwl(mbentry->name, &mailbox);
-            if (r) {
-                xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
-                           lf_intname("mbox.name", mbentry->name),
-                           lf_err("error", r));
-                break;
+            if ((record->internal_flags & FLAG_INTERNAL_EXPUNGED) &&
+                record->last_updated.tv_sec <= rrock->jrestore->cutoff) {
+                reason = "destroyed_before_cutoff";
             }
-
-            iter = mailbox_iter_init(mailbox, 0, 0);
-            mailbox_iter_startuid(iter, nextuid);
         }
+
+        if (reason) {
+            xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                       lf_u("msg.imapuid", record->uid),
+                       lf_s("backup.reason", reason));
+        }
+        else {
+            arrayu64_append(&uids, record->uid);
+        }
+
+        free(resource);
     }
     mailbox_iter_done(&iter);
+    free_hash_table(&resources, NULL);
+
+    arrayu64_sort(&uids, NULL/*ascending*/);
+
+    message_t *recreatemsg = message_new();
+    for (size_t i = 0; i < arrayu64_size(&uids); i++) {
+        uint32_t uid = arrayu64_nth(&uids, i);
+
+        if (!(rrock->jrestore->mode & DRY_RUN)) {
+            struct index_record record;
+
+            if (i % BATCH_SIZE == 0) {
+                /* Close and re-open mailbox (to avoid deadlocks).
+                   We also do this on initial entry into the loop
+                   to switch from a read lock to a write lock. */
+                mailbox_close(&mailbox);
+                r = mailbox_open_iwl(mbentry->name, &mailbox);
+                if (r) {
+                    xsyslog_ev(LOG_ERR, "jmap.backup.mailbox.open.failed",
+                               lf_intname("mbox.name", mbentry->name),
+                               lf_err("error", r));
+                    break;
+                }
+            }
+
+            r = mailbox_find_index_record(mailbox, uid, &record);
+            if (r) break;
+
+            message_set_from_record(mailbox, &record, recreatemsg);
+            r = recreate_resource(recreatemsg, newmailbox,
+                                  req, 0/*is_update*/, log_level);
+            if (r) break;
+        }
+
+        rrock->jrestore->num_undone[DESTROYS]++;
+    }
+    message_unref(&recreatemsg);
+    arrayu64_fini(&uids);
 
     mailbox_close(&mailbox);
 
-    return 0;
+    return r;
 }
 
 static int restore_calendar_cb(const mbentry_t *mbentry, void *rock)
