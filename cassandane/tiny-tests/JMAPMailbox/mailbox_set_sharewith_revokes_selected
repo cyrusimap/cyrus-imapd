@@ -11,7 +11,7 @@ sub test_mailbox_set_sharewith_revokes_selected
     $jmap->default_using([
         'urn:ietf:params:jmap:core',
         'urn:ietf:params:jmap:mail',
-        'https://cyrusimap.org/ns/jmap/mail',
+        'urn:ietf:params:jmap:mail:share',
     ]);
 
     xlog $self, "cassandane shares a mailbox with sharee";
@@ -19,7 +19,7 @@ sub test_mailbox_set_sharewith_revokes_selected
         [ 'Mailbox/set' => {
             create => { 1 => {
                 name => 'shared',
-                shareWith => { sharee => { mayRead => JSON::true } },
+                shareWith => { sharee => { mayReadItems => JSON::true } },
             } },
         } ],
     ]);
