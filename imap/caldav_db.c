@@ -283,9 +283,9 @@ static void read_cdata(sqlite3_stmt *stmt,
     if (skip_tombstones && !cdata->dav.alive) return;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
-    cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
+    cdata->dav.creationdate = sqlite3_column_int64(stmt, 1);
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
-    cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
+    cdata->dav.lock_expire = sqlite3_column_int64(stmt, 8);
     cdata->comp_type = sqlite3_column_int(stmt, 9);
     _num_to_comp_flags(&cdata->comp_flags, sqlite3_column_int(stmt, 14));
 

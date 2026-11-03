@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+
+# lock_expire is stored as a 64-bit integer and must be read back as one:
+# a lock that expires after 2038-01-19 must still be seen as active.
+
+sub test_lock_expire_64bit
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set('dav_writelock_max_timeout' => '10000d');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $caldav = $self->{caldav};
+    my $href = "Default/lock-expire-64bit.ics";
+    my $url = $caldav->request_url($href);
+    my $auth = $caldav->auth_header();
+
+    my $ical = <<'EOV';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:lock-expire-64bit
+DTSTAMP:20260101T000000Z
+DTSTART:20260101T100000Z
+DURATION:PT1H
+SUMMARY:lock expire 64bit
+END:VEVENT
+END:VCALENDAR
+EOV
+    $ical =~ s/\n/\r\n/g;
+    $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+
+    # Twenty years from now is past INT32_MAX as a time_t.
+    my $want = 20 * 365 * 86400;
+    $self->assert(time() + $want > 2**31);
+
+    my $res = $caldav->ua->request('LOCK', $url, {
+        headers => {
+            'Authorization' => $auth,
+            'Content-Type' => 'application/xml; charset=utf-8',
+            'Timeout' => "Second-$want",
+        },
+        content => <<'EOX',
+<?xml version="1.0" encoding="utf-8"?>
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+  <D:owner>cassandane</D:owner>
+</D:lockinfo>
+EOX
+    });
+    $self->assert_str_equals('200', $res->{status}, $res->{content});
+    my ($tok) = $res->{content} =~ m{<D:locktoken>\s*<D:href>([^<]+)</D:href>}s;
+    $self->assert(defined $tok, "no token in: $res->{content}");
+
+    # Read back from the DAV database.
+    $res = $caldav->ua->request('PROPFIND', $url, {
+        headers => {
+            'Authorization' => $auth,
+            'Content-Type' => 'application/xml; charset=utf-8',
+            'Depth' => '0',
+        },
+        content => <<'EOX',
+<?xml version="1.0" encoding="utf-8"?>
+<D:propfind xmlns:D="DAV:"><D:prop><D:lockdiscovery/></D:prop></D:propfind>
+EOX
+    });
+    $self->assert_str_equals('207', $res->{status}, $res->{content});
+    my ($secs) = $res->{content} =~ m{<D:timeout>\s*Second-(\d+)\s*</D:timeout>};
+    $self->assert(defined $secs, "lock not active after re-read: $res->{content}");
+    $self->assert($secs <= $want && $secs >= $want - 5,
+                  "expected about $want, got $secs");
+
+    # And an untokened write is still refused.
+    $res = $caldav->ua->request('PUT', $url, {
+        headers => {
+            'Authorization' => $auth,
+            'Content-Type' => 'text/calendar',
+        },
+        content => $ical,
+    });
+    $self->assert_str_equals('423', $res->{status});
+
+    $res = $caldav->ua->request('UNLOCK', $url, {
+        headers => { 'Authorization' => $auth, 'Lock-Token' => "<$tok>" },
+    });
+    $self->assert_str_equals('204', $res->{status});
+}

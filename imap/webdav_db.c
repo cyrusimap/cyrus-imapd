@@ -192,9 +192,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         return 0;
 
     wdata->dav.rowid = sqlite3_column_int(stmt, 0);
-    wdata->dav.creationdate = sqlite3_column_int(stmt, 1);
+    wdata->dav.creationdate = sqlite3_column_int64(stmt, 1);
     wdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
-    wdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
+    wdata->dav.lock_expire = sqlite3_column_int64(stmt, 8);
     wdata->ref_count = sqlite3_column_int(stmt, 13);
 
     if (rrock->cb) {
