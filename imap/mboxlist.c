@@ -6411,7 +6411,7 @@ EXPORTED int mboxlist_upgrade(int *upgraded)
     mboxlist_open(newfname);
 
     /* perform upgrade from backup to new db */
-    construct_hash_table(&ids, 4096, 0);
+    construct_hash_table(&ids, 0, 0);
     r = cyrusdb_foreach(old, "", 0, NULL, _foreach_cb, &urock, NULL);
 
     r2 = cyrusdb_close(old);
