@@ -175,11 +175,13 @@ for my $comment (@all_comments) {
 # above from the comments scan).
 warn "Fetching PR branch names...\n";
 my %pr_branch; # issue_num => head branch name
+my %pr_draft;  # issue_num => true if the PR is a draft
 for my $num (sort { $a <=> $b } keys %issue_by_num) {
     my $issue = $issue_by_num{$num};
     next unless $issue->{pull_request};
     my $pr = gh_fetch_one("/repos/$repo/pulls/$num");
     $pr_branch{$num} = $pr->{head}{ref};
+    $pr_draft{$num}  = $pr->{draft};
 }
 warn "  Done.\n";
 
@@ -258,9 +260,11 @@ sub render_issue ($issue) {
     my $user  = html_escape($issue->{user}{login});
     my $label = issue_label($issue);
     my $state = issue_state($issue);
+    my $draft = $pr_draft{$num} ? q{ draft} : q{};
+    my $tip   = $draft ? q{ title="draft"} : q{};
 
-    return qq{<li class="issue state-$state">}
-         . qq{<span class="label label-\L$label\E">$label</span> }
+    return qq{<li class="issue state-$state$draft">}
+         . qq{<span class="label label-\L$label\E"$tip>$label</span> }
          . qq{<a href="$url" class="num">#$num</a> }
          . qq{<a href="$url" class="title">$title</a> }
          . linear_link($num)
@@ -366,6 +370,12 @@ li.issue:last-child { border-bottom: none; }
 .label-issue { background: #dafbe1; color: #1a7f37; }
 li.state-merged .label-pr  { background: #f3e6ff; color: #6f42c1; }
 li.state-closed .label     { opacity: 0.55; }
+/* Drafts get a dashed, hatched chip; outline-offset keeps it the same size. */
+li.draft .label-pr {
+    background: repeating-linear-gradient(-45deg, #ddf4ff 0 2px, #fff 2px 4px);
+    outline: 1px dashed #0366d6;
+    outline-offset: -1px;
+}
 a { color: #0366d6; text-decoration: none; }
 a:hover { text-decoration: underline; }
 a.num   { color: #586069; flex-shrink: 0; }
