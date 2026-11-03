@@ -8,11 +8,11 @@ sub test_mailbox_set_create_sharewith_requires_admin
     my $jmap = $self->default_user->jmap;
     my $admin = $self->{adminstore}->get_client();
 
-    # shareWith is a Cyrus extension to JMAP Mail, and Mailbox/set only
-    # recognizes the property if the client asked for the extension.  Without
-    # this, the create below is rejected as invalidProperties whether or not
-    # the rights are checked, and the test proves nothing. -- rjbs, 2026-08-20
-    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+    # Mailbox/set only recognizes shareWith if the client asked for JMAP Mail
+    # Sharing.  Without this, the create below is rejected as
+    # invalidProperties whether or not the rights are checked, and the test
+    # proves nothing. -- rjbs, 2026-08-20
+    $jmap->AddUsing('urn:ietf:params:jmap:mail:share');
 
     # sharer is the mailbox owner; cassandane is the would-be attacker.
     $self->{instance}->create_user("sharer");
@@ -42,7 +42,7 @@ sub test_mailbox_set_create_sharewith_requires_admin
 
     xlog $self, "as cassandane, create a top-level mailbox in sharer's account with shareWith";
     my $set = $cassandane_creates->("evilchild",
-        shareWith => { cassandane => { mayAdmin => JSON::true } });
+        shareWith => { cassandane => { mayShare => JSON::true } });
 
     xlog $self, "Mailbox/set must not report success";
     $self->assert_null($set->{created}{1});
