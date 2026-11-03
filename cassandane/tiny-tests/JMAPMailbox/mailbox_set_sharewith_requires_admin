@@ -8,17 +8,17 @@ sub test_mailbox_set_sharewith_requires_admin
     my $jmap = $self->default_user->jmap;
     my $admin = $self->{adminstore}->get_client();
 
-    # shareWith is a Cyrus extension to JMAP Mail, and Mailbox/set only
-    # recognizes the property if the client asked for the extension.  Without
-    # this, every request below is rejected as invalidProperties and the test
-    # passes no matter what the ACL check does. -- rjbs, 2026-08-20
-    $jmap->AddUsing('https://cyrusimap.org/ns/jmap/mail');
+    # Mailbox/set only recognizes shareWith if the client asked for JMAP Mail
+    # Sharing.  Without this, every request below is rejected as
+    # invalidProperties and the test passes no matter what the ACL check
+    # does. -- rjbs, 2026-08-20
+    $jmap->AddUsing('urn:ietf:params:jmap:mail:share');
 
     # sharer is the mailbox owner; cassandane is the would-be attacker.
     my $sharer = $self->{instance}->create_user("sharer");
     my $sharer_inbox = $sharer->mailboxes->inbox;
 
-    $sharer_inbox->share_with(cassandane => [ qw(mayRead) ]);
+    $sharer_inbox->share_with(cassandane => [ qw(mayReadItems) ]);
 
     my %acl_before = $admin->getacl("user.sharer");
 
@@ -29,8 +29,8 @@ sub test_mailbox_set_sharewith_requires_admin
             update => {
                 $sharer_inbox->id => {
                     shareWith => {
-                        third      => { mayAdmin => JSON::true },
-                        cassandane => { mayAdmin => JSON::true },
+                        third      => { mayShare => JSON::true },
+                        cassandane => { mayShare => JSON::true },
                     },
                 },
             },
@@ -55,8 +55,8 @@ sub test_mailbox_set_sharewith_requires_admin
     );
 
     $self->assert(
-      ! $sharing->{cassandane}{mayAdmin},
-      "cassandane hasn't got mayAdmin"
+      ! $sharing->{cassandane}{mayShare},
+      "cassandane hasn't got mayShare"
     );
 
     my %acl_after = $admin->getacl("user.sharer");
