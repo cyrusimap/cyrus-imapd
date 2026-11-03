@@ -4,7 +4,7 @@ use Cassandane::Tiny;
 # RFC 4918, Section 10.7: LOCK honours the Timeout header, capped at
 # dav_writelock_max_timeout (default 5 minutes, the historical lifetime).
 
-sub lock_resource
+my sub lock_resource
     ($self, $timeout, $token = undef)
 {
     my $caldav = $self->{caldav};
@@ -55,7 +55,7 @@ EOX
     return ($secs, $tok);
 }
 
-sub unlock_resource
+my sub unlock_resource
     ($self, $token)
 {
     my $caldav = $self->{caldav};
@@ -71,32 +71,31 @@ sub unlock_resource
 
 # Within a few seconds of what was granted: the response counts down from
 # the moment the lock was written.
-sub assert_about
+my sub assert_about
     ($self, $want, $got)
 {
     $self->assert($got <= $want && $got >= $want - 5, "expected about $want, got $got");
 }
 
 sub test_lock_timeout_default
-    :min_version_3_13
     ($self)
 {
     # Default: five minutes, whatever is asked for -- unchanged behaviour.
-    my ($secs, $tok) = $self->lock_resource('Second-86400');
-    $self->assert_about(300, $secs);
-    $self->unlock_resource($tok);
+    my ($secs, $tok) = lock_resource($self, 'Second-86400');
+    assert_about($self, 300, $secs);
+    unlock_resource($self, $tok);
 
-    ($secs, $tok) = $self->lock_resource('Second-60');
-    $self->assert_about(60, $secs);
-    $self->unlock_resource($tok);
+    ($secs, $tok) = lock_resource($self, 'Second-60');
+    assert_about($self, 60, $secs);
+    unlock_resource($self, $tok);
 
-    ($secs, $tok) = $self->lock_resource(undef);
-    $self->assert_about(300, $secs);
-    $self->unlock_resource($tok);
+    ($secs, $tok) = lock_resource($self, undef);
+    assert_about($self, 300, $secs);
+    unlock_resource($self, $tok);
 }
 
 sub test_lock_timeout_max
-    :min_version_3_13 :NoStartInstances
+    :NoStartInstances
     ($self)
 {
     $self->{instance}->{config}->set('dav_writelock_max_timeout' => '30d');
@@ -105,29 +104,29 @@ sub test_lock_timeout_max
 
     my $max = 30 * 86400;
 
-    my ($secs, $tok) = $self->lock_resource('Second-86400');
-    $self->assert_about(86400, $secs);
+    my ($secs, $tok) = lock_resource($self, 'Second-86400');
+    assert_about($self, 86400, $secs);
 
     # A refresh (If header with the token, no body) takes the new Timeout.
-    ($secs) = $self->lock_resource('Second-172800', $tok);
-    $self->assert_about(172800, $secs);
-    $self->unlock_resource($tok);
+    ($secs) = lock_resource($self, 'Second-172800', $tok);
+    assert_about($self, 172800, $secs);
+    unlock_resource($self, $tok);
 
-    ($secs, $tok) = $self->lock_resource('Infinite');
-    $self->assert_about($max, $secs);
-    $self->unlock_resource($tok);
+    ($secs, $tok) = lock_resource($self, 'Infinite');
+    assert_about($self, $max, $secs);
+    unlock_resource($self, $tok);
 
     # More than the cap: the cap.  First understood TimeType wins.
-    ($secs, $tok) = $self->lock_resource('Second-99999999999');
-    $self->assert_about($max, $secs);
-    $self->unlock_resource($tok);
+    ($secs, $tok) = lock_resource($self, 'Second-99999999999');
+    assert_about($self, $max, $secs);
+    unlock_resource($self, $tok);
 
-    ($secs, $tok) = $self->lock_resource('Bogus, Second-3600, Infinite');
-    $self->assert_about(3600, $secs);
-    $self->unlock_resource($tok);
+    ($secs, $tok) = lock_resource($self, 'Bogus, Second-3600, Infinite');
+    assert_about($self, 3600, $secs);
+    unlock_resource($self, $tok);
 
     # Nothing usable: the historical five minutes.
-    ($secs, $tok) = $self->lock_resource('Second-, Second-0, Second-12x');
-    $self->assert_about(300, $secs);
-    $self->unlock_resource($tok);
+    ($secs, $tok) = lock_resource($self, 'Second-, Second-0, Second-12x');
+    assert_about($self, 300, $secs);
+    unlock_resource($self, $tok);
 }

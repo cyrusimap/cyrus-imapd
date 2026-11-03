@@ -5627,15 +5627,15 @@ static time_t lock_timeout(struct transaction_t *txn)
                 timeout = max;
                 break;
             }
-            if (!strncasecmp(token, "Second-", 7) && token[7]) {
+            if (!strncasecmp(token, "Second-", 7)
+                && isdigit((unsigned char) token[7]))
+            {
                 char *end = NULL;
                 unsigned long secs;
 
                 errno = 0;
                 secs = strtoul(token + 7, &end, 10);
-                if (!errno && end && !*end && secs > 0
-                    && isdigit((unsigned char) token[7]))
-                {
+                if (!errno && end && !*end && secs > 0) {
                     timeout = secs > (unsigned long) max ? max : (time_t) secs;
                     break;
                 }
