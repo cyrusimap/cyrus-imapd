@@ -1,0 +1,27 @@
+Description:
+
+A WebDAV LOCK now honours the client's Timeout header ("Second-N" or
+"Infinite", RFC 4918), up to the new dav_writelock_max_timeout.  Previously
+every lock lasted five minutes whatever the client asked for.
+
+
+Documentation:
+
+lib/imapoptions/dav_writelock_max_timeout
+
+
+Config changes:
+
+New option dav_writelock_max_timeout (duration, default 5m).
+
+
+Upgrade instructions:
+
+None.  With the default, a lock still lasts at most five minutes; a client
+that asks for less now gets what it asked for.  To allow longer locks, raise
+dav_writelock_max_timeout.
+
+
+GitHub issue:
+
+None

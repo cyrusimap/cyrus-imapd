@@ -5599,6 +5599,53 @@ int meth_get_head(struct transaction_t *txn, void *params)
     return ret;
 }
 
+/* RFC 4918, Section 10.7: the lifetime a LOCK request asks for.
+ *
+ * The Timeout header is a comma-separated list of TimeTypes, in order of
+ * preference ("Infinite" or "Second-N"); the first one understood is used,
+ * capped at dav_writelock_max_timeout.  Without a usable one, the lock gets
+ * the historical five minutes, still capped.  The server is free to choose a
+ * shorter lifetime than requested; the lockdiscovery in the response reports
+ * the one actually granted.
+ */
+static time_t lock_timeout(struct transaction_t *txn)
+{
+    time_t max = config_getduration(IMAPOPT_DAV_WRITELOCK_MAX_TIMEOUT);
+    time_t timeout = 300; /* 5 min */
+    const char **hdr = spool_getheader(txn->req_hdrs, "Timeout");
+
+    if (max <= 0) {
+        max = 300;
+    }
+
+    if (hdr) {
+        tok_t tok = TOK_INITIALIZER(hdr[0], ",", TOK_TRIMLEFT | TOK_TRIMRIGHT);
+        const char *token;
+
+        while ((token = tok_next(&tok))) {
+            if (!strcasecmp(token, "Infinite")) {
+                timeout = max;
+                break;
+            }
+            if (!strncasecmp(token, "Second-", 7) && token[7]) {
+                char *end = NULL;
+                unsigned long secs;
+
+                errno = 0;
+                secs = strtoul(token + 7, &end, 10);
+                if (!errno && end && !*end && secs > 0
+                    && isdigit((unsigned char) token[7]))
+                {
+                    timeout = secs > (unsigned long) max ? max : (time_t) secs;
+                    break;
+                }
+            }
+        }
+        tok_fini(&tok);
+    }
+
+    return timeout > max ? max : timeout;
+}
 
 /* Perform a LOCK request
  *
@@ -5623,7 +5670,7 @@ int meth_lock(struct transaction_t *txn, void *params)
     time_t now = time(NULL);
     void *davdb = NULL;
 
-    /* XXX  We ignore Depth and Timeout header fields */
+    /* XXX  We ignore the Depth header field */
 
     /* Response should not be cached */
     txn->flags.cc |= CC_NOCACHE;
@@ -5799,8 +5846,8 @@ int meth_lock(struct transaction_t *txn, void *params)
         ddata->lock_token = buf_cstring(&txn->buf);
     }
 
-    /* Update lock expiration */
-    ddata->lock_expire = now + 300;  /* 5 min */
+    /* Update lock expiration (new lock or refresh) */
+    ddata->lock_expire = now + lock_timeout(txn);
 
     /* Start construction of our prop response */
     if (!(root = init_xml_response("prop", NS_DAV, root, ns))) {

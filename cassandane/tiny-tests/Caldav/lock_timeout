@@ -1,0 +1,133 @@
+#!perl
+use Cassandane::Tiny;
+
+# RFC 4918, Section 10.7: LOCK honours the Timeout header, capped at
+# dav_writelock_max_timeout (default 5 minutes, the historical lifetime).
+
+sub lock_resource
+    ($self, $timeout, $token = undef)
+{
+    my $caldav = $self->{caldav};
+    my $href = "Default/lock-timeout.ics";
+    if (!$self->{lock_resource_put}) {
+        my $ical = <<'EOV';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:lock-timeout
+DTSTAMP:20260101T000000Z
+DTSTART:20260101T100000Z
+DURATION:PT1H
+SUMMARY:lock timeout
+END:VEVENT
+END:VCALENDAR
+EOV
+        $ical =~ s/\n/\r\n/g;
+        $caldav->Request('PUT', $href, $ical, 'Content-Type' => 'text/calendar');
+        $self->{lock_resource_put} = 1;
+    }
+
+    my %headers = (
+        'Authorization' => $caldav->auth_header(),
+        'Content-Type' => 'application/xml; charset=utf-8',
+    );
+    $headers{'Timeout'} = $timeout if defined $timeout;
+    $headers{'If'} = "(<$token>)" if defined $token;
+    my $body = defined $token ? '' : <<'EOX';
+<?xml version="1.0" encoding="utf-8"?>
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+  <D:owner>cassandane</D:owner>
+</D:lockinfo>
+EOX
+    my $res = $caldav->ua->request('LOCK', $caldav->request_url($href), {
+        headers => \%headers,
+        content => $body,
+    });
+    $self->assert_str_equals('200', $res->{status}, $res->{content});
+
+    my ($secs) = $res->{content} =~ m{<D:timeout>\s*Second-(\d+)\s*</D:timeout>};
+    my ($tok) = $res->{content} =~ m{<D:locktoken>\s*<D:href>([^<]+)</D:href>}s;
+    $self->assert(defined $secs, "no timeout in: $res->{content}");
+    $self->assert(defined $tok, "no token in: $res->{content}");
+    return ($secs, $tok);
+}
+
+sub unlock_resource
+    ($self, $token)
+{
+    my $caldav = $self->{caldav};
+    my $res = $caldav->ua->request('UNLOCK',
+        $caldav->request_url("Default/lock-timeout.ics"), {
+            headers => {
+                'Authorization' => $caldav->auth_header(),
+                'Lock-Token' => "<$token>",
+            },
+    });
+    $self->assert_str_equals('204', $res->{status});
+}
+
+# Within a few seconds of what was granted: the response counts down from
+# the moment the lock was written.
+sub assert_about
+    ($self, $want, $got)
+{
+    $self->assert($got <= $want && $got >= $want - 5, "expected about $want, got $got");
+}
+
+sub test_lock_timeout_default
+    :min_version_3_13
+    ($self)
+{
+    # Default: five minutes, whatever is asked for -- unchanged behaviour.
+    my ($secs, $tok) = $self->lock_resource('Second-86400');
+    $self->assert_about(300, $secs);
+    $self->unlock_resource($tok);
+
+    ($secs, $tok) = $self->lock_resource('Second-60');
+    $self->assert_about(60, $secs);
+    $self->unlock_resource($tok);
+
+    ($secs, $tok) = $self->lock_resource(undef);
+    $self->assert_about(300, $secs);
+    $self->unlock_resource($tok);
+}
+
+sub test_lock_timeout_max
+    :min_version_3_13 :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set('dav_writelock_max_timeout' => '30d');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $max = 30 * 86400;
+
+    my ($secs, $tok) = $self->lock_resource('Second-86400');
+    $self->assert_about(86400, $secs);
+
+    # A refresh (If header with the token, no body) takes the new Timeout.
+    ($secs) = $self->lock_resource('Second-172800', $tok);
+    $self->assert_about(172800, $secs);
+    $self->unlock_resource($tok);
+
+    ($secs, $tok) = $self->lock_resource('Infinite');
+    $self->assert_about($max, $secs);
+    $self->unlock_resource($tok);
+
+    # More than the cap: the cap.  First understood TimeType wins.
+    ($secs, $tok) = $self->lock_resource('Second-99999999999');
+    $self->assert_about($max, $secs);
+    $self->unlock_resource($tok);
+
+    ($secs, $tok) = $self->lock_resource('Bogus, Second-3600, Infinite');
+    $self->assert_about(3600, $secs);
+    $self->unlock_resource($tok);
+
+    # Nothing usable: the historical five minutes.
+    ($secs, $tok) = $self->lock_resource('Second-, Second-0, Second-12x');
+    $self->assert_about(300, $secs);
+    $self->unlock_resource($tok);
+}
