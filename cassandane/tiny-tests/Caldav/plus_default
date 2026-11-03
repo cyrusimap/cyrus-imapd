@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+# Logging in as "user+default", in any case, shows only the user's default
+# calendar.
+sub test_plus_default
+    ($self)
+{
+    my $service = $self->{instance}->get_service("http");
+
+    my $otherid = $self->{caldav}->NewCalendar({ name => 'Other' });
+    $self->assert_not_null($otherid);
+
+    my sub assert_plus_lists ($desc, $arg) {
+        my $talk = Net::CalDAVTalk->new(
+            user => "cassandane+$arg->{plus}",
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+
+        my @ids = sort map { $_->{id} } @{ $talk->GetCalendars };
+        $self->assert_cmp_deeply($arg->{expect}, \@ids, $desc);
+    }
+
+    assert_plus_lists("+default shows the default", {
+        plus => 'default', expect => [ 'Default' ],
+    });
+
+    assert_plus_lists("+DEFAULT shows the default", {
+        plus => 'DEFAULT', expect => [ 'Default' ],
+    });
+
+    assert_plus_lists("+<id> picks by name", {
+        plus => $otherid, expect => [ $otherid ],
+    });
+}

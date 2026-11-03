@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+# Logging in as "user+default", in any case, shows only the user's default
+# addressbook; any other "+foo" still picks addressbooks by name.
+sub test_plus_default
+    ($self)
+{
+    my $service = $self->{instance}->get_service("http");
+
+    $self->{carddav}->NewAddressBook('Other');
+
+    my sub assert_plus_lists ($desc, $arg) {
+        my $talk = Net::CardDAVTalk->new(
+            user => "cassandane+$arg->{plus}",
+            password => 'pass',
+            host => $service->host(),
+            port => $service->port(),
+            scheme => 'http',
+            url => '/',
+            expandurl => 1,
+        );
+
+        my @paths = sort map { $_->{path} } @{ $talk->GetAddressBooks };
+        $self->assert_cmp_deeply($arg->{expect}, \@paths, $desc);
+    }
+
+    assert_plus_lists("+default shows the default", {
+        plus => 'default', expect => [ 'Default' ],
+    });
+
+    assert_plus_lists("+DeFaUlT shows the default", {
+        plus => 'DeFaUlT', expect => [ 'Default' ],
+    });
+
+    assert_plus_lists("+other picks by name", {
+        plus => 'other', expect => [ 'Other' ],
+    });
+}
