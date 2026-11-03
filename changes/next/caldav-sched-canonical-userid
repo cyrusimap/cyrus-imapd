@@ -1,0 +1,21 @@
+Description:
+
+Fix local CalDAV scheduling delivery on servers running with virtdomains
+enabled and a defaultdomain configured: invitations to users in the default
+domain were refused with SCHEDULE-STATUS=5.1.
+
+Documentation:
+
+No documentation change: the fix restores the documented behaviour.
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+None.
+
+GitHub issue:
+
+None filed; the failure and its reproduction are described in the pull request.
