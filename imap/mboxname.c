@@ -1672,6 +1672,10 @@ EXPORTED int mboxname_isnonimapmailbox(const char *name, int mbtype)
 
     if (_mbname_prefix_isanyof(mbname, mailbox_prefixes, PREFIX_FLAG_NONIMAP))
         res = 1;
+    /* a murder frontend learns no mbtype from mupdate, only the name */
+    else if (strarray_size(mbname_boxes(mbname)) == 1 &&
+             !strcmp(strarray_nth(mbname_boxes(mbname), 0), CONVSPLITFOLDER))
+        res = 1;
 
     mbname_free(&mbname);
     return res;
