@@ -9,7 +9,7 @@ use Cassandane::Tiny;
 # exercises the mboxlist-level check directly.
 #
 sub test_mailboxid_collision_doesnt_destroy_shared_mailbox
-    :Conversations :OldJMAPIds :IMAPMurder :needs_component_murder
+    :OldJMAPIds :IMAPMurder :needs_component_murder
     ($self)
 {
     my $admintalk = $self->{adminstore}->get_client();
