@@ -23,6 +23,7 @@
 #include "http_caldav_sched.h"
 #include "http_jmap.h"
 #include "json_support.h"
+#include "msgrecord.h"
 #include "times.h"
 #include "user.h"
 #include "vcard_support.h"
@@ -1517,20 +1518,26 @@ done:
 struct mail_rock {
     hash_table *emailids;
     hash_table *msgids;
+    hash_table *memos;
     hash_table *mailboxes;
     struct buf buf;
+    struct buf irtbuf;
 };
 
 struct removed_mail {
     char *mboxname;
     char *guid;
     time_t removed;
+    time_t internaldate;
     uint32_t uid;
     uint32_t size;
 };
 
+/* In msgids, guids holds the GUIDs of the non-draft messages with that
+ * Message-ID.  In memos, ignore means a live memo exists for that parent. */
 struct message_t {
     ptrarray_t deleted;
+    strarray_t guids;
     unsigned ignore : 1;
 };
 
@@ -1549,7 +1556,43 @@ static void message_t_free(void *data)
     }
 
     ptrarray_fini(deleted);
+    strarray_fini(&message->guids);
     free(message);
+}
+
+static struct message_t *message_t_lookup(const char *key, hash_table *table)
+{
+    struct message_t *message = hash_lookup(key, table);
+
+    if (!message) {
+        message = xzmalloc(sizeof(struct message_t));
+        hash_insert(key, message, table);
+    }
+
+    return message;
+}
+
+/* Reduce a raw Message-ID or In-Reply-To value to its first msg-id */
+static const char *first_msgid(struct buf *buf)
+{
+    char *msgid = message_iter_msgid((char *) buf_cstring(buf),
+                                     MESSAGE_ITER_MSGID_FLAG_DEFAULT, NULL);
+
+    if (!msgid) return NULL;
+
+    buf_setcstr(buf, msgid);
+    free(msgid);
+
+    return buf_cstring(buf);
+}
+
+/* The Message-ID of the Email a memo is attached to */
+static const char *memo_parentid(const message_t *msg, struct buf *buf)
+{
+    buf_reset(buf);
+    if (message_get_inreplyto((message_t *) msg, buf)) return NULL;
+
+    return first_msgid(buf);
 }
 
 struct mailbox_plan {
@@ -1632,6 +1675,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
     // message and then from the mailbox itself if not in DRYRUN
     mailbox_user_flag(mailbox, "$restored", &userflag, /*create*/0);
 
+    int memoflag = -1;
+    mailbox_user_flag(mailbox, "$memo", &memoflag, /*create*/0);
+
     struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0, 0);
     while ((msg = mailbox_iter_step(iter))) {
         const struct index_record *record = msg_record(msg);
@@ -1639,6 +1685,9 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         const char *msgid = NULL;
         int isdestroyed_msg = isdestroyed_mbox;
         int ignore_draft = 0;
+        bool is_draft = record->system_flags & FLAG_DRAFT;
+        bool is_memo = !is_draft && memoflag >= 0 &&
+            (record->user_flags[memoflag/32] & (1U<<(memoflag&31)));
 
         xsyslog_ev(log_level, "jmap.backup.record.scan",
                    lf_u("msg.imapuid", record->uid),
@@ -1648,15 +1697,16 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                    lf_time("msg.internaldate", record->internaldate.tv_sec),
                    lf_time("msg.lastupdated", record->last_updated.tv_sec));
 
-        /* Suppress fetching of Message-ID if not restoring drafts */
-        if (rrock->jrestore->mode & UNDO_DRAFTS) {
+        /* Message-IDs match drafts to each other and memos to their parents */
+        if (rrock->jrestore->mode & (UNDO_DRAFTS|UNDO_NONDRAFTS)) {
             /* XXX  conversation ID is faster to lookup than Message-ID
                     so use it to make sure the message has a Message-ID */
             struct conversations_state *cstate = mailbox_get_cstate_full(mailbox, /*allow_deleted*/1);
             // if we still fail to get cstate, then we need to look up the msgid for sure
+            buf_reset(&mrock->buf);
             if ((!cstate || conversations_guid_cid_lookup(cstate, guid, NULL)) &&
                 !message_get_messageid((message_t *) msg, &mrock->buf)) {
-                msgid = buf_cstring(&mrock->buf);
+                msgid = first_msgid(&mrock->buf);
             }
 
             xsyslog_ev(log_level, "jmap.backup.record.msgid",
@@ -1708,8 +1758,16 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
         }
 
         if (isdestroyed_msg) {
-            if (record->system_flags & FLAG_DRAFT) {
+            if (is_draft) {
                 /* Destroyed draft */
+                if (!(rrock->jrestore->mode & UNDO_DRAFTS)) {
+                    xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                               lf_u("msg.imapuid", record->uid),
+                               lf_s("backup.reason", "drafts_not_restored"));
+
+                    continue;
+                }
+
                 if (!msgid) {
                     /* No way to track this message */
                     xsyslog_ev(log_level, "jmap.backup.record.skipped",
@@ -1737,6 +1795,23 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                     continue;
                 }
             }
+            else if (is_memo) {
+                /* Destroyed memo - grouped by its parent's Message-ID */
+                const char *parentid = NULL;
+
+                ignore_draft = 1;
+                message = NULL;
+
+                if (rrock->jrestore->mode & UNDO_NONDRAFTS) {
+                    parentid = memo_parentid(msg, &mrock->irtbuf);
+                    if (parentid)
+                        message = message_t_lookup(parentid, mrock->memos);
+                }
+
+                xsyslog_ev(log_level, "jmap.backup.record.memo",
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("msg.inreplyto", parentid));
+            }
             else {
                 /* Destroyed non-draft */
                 ignore_draft = 1;
@@ -1753,10 +1828,10 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 struct removed_mail *rmail =
                     xmalloc(sizeof(struct removed_mail));
                 rmail->mboxname = xstrdup(mbentry->name);
-                rmail->guid = 
-                    (record->system_flags & FLAG_DRAFT) ? xstrdup(guid) : NULL;
+                rmail->guid = is_draft ? xstrdup(guid) : NULL;
                 rmail->removed =
                     isdestroyed_mbox ? timestamp : record->last_updated.tv_sec;
+                rmail->internaldate = record->internaldate.tv_sec;
                 rmail->uid = record->uid;
                 rmail->size = record->size;
                 ptrarray_append(&message->deleted, rmail);
@@ -1772,18 +1847,31 @@ static int restore_message_list_cb(const mbentry_t *mbentry, void *rock)
                 hash_insert(guid, message, mrock->emailids);
             }
             message->ignore = 1;
+
+            if (is_memo) {
+                /* A live memo: don't restore another one for its parent */
+                const char *parentid = memo_parentid(msg, &mrock->irtbuf);
+
+                if (parentid) {
+                    struct message_t *memos =
+                        message_t_lookup(parentid, mrock->memos);
+
+                    memos->ignore = 1;
+                }
+
+                xsyslog_ev(log_level, "jmap.backup.record.memo",
+                           lf_u("msg.imapuid", record->uid),
+                           lf_s("msg.inreplyto", parentid));
+            }
         }
 
         if (ignore_draft && msgid) {
             /* Mark this Message-ID as undeleted */
-            message = hash_lookup(msgid, mrock->msgids);
-            if (!message) {
-                /* Create message for this Message-ID */
-                message = xzmalloc(sizeof(struct message_t));
-                hash_insert(msgid, message, mrock->msgids);
-            }
-
+            message = message_t_lookup(msgid, mrock->msgids);
             message->ignore = 1;
+
+            /* Remember which messages could be the parent of a memo */
+            if (!is_draft && !is_memo) strarray_add(&message->guids, guid);
         }
     }
 
@@ -2137,6 +2225,201 @@ static void restore_mailbox_cb(const char *mboxname, void *data, void *rock)
     rrock->result = r;
 }
 
+struct live_copies {
+    strarray_t mboxnames;
+    arrayu64_t uids;
+};
+
+static int live_copy_cb(const conv_guidrec_t *rec, void *rock)
+{
+    struct live_copies *copies = (struct live_copies *) rock;
+    const char *mboxname = conv_guidrec_mboxname(rec);
+
+    if (rec->part || !mboxname ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED) ||
+        (rec->system_flags & FLAG_DELETED) ||
+        mboxname_isdeletedmailbox(mboxname, NULL)) {
+        return 0;
+    }
+
+    strarray_append(&copies->mboxnames, mboxname);
+    arrayu64_append(&copies->uids, rec->uid);
+
+    return 0;
+}
+
+/* Find every live copy of the messages with the given GUIDs */
+static void find_live_copies(struct conversations_state *cstate,
+                             const strarray_t *guids,
+                             struct live_copies *copies)
+{
+    for (int i = 0; i < strarray_size(guids); i++) {
+        conversations_guid_foreach(cstate, strarray_nth(guids, i),
+                                   &live_copy_cb, copies);
+    }
+}
+
+static void live_copies_fini(struct live_copies *copies)
+{
+    strarray_fini(&copies->mboxnames);
+    arrayu64_fini(&copies->uids);
+}
+
+static int memo_cmp(const void **a, const void **b)
+{
+    const struct removed_mail *rmail_a = (const struct removed_mail *) *a;
+    const struct removed_mail *rmail_b = (const struct removed_mail *) *b;
+
+    /* Latest removed first, then newest */
+    if (rmail_a->removed != rmail_b->removed)
+        return (rmail_b->removed > rmail_a->removed) ? 1 : -1;
+    if (rmail_a->internaldate != rmail_b->internaldate)
+        return (rmail_b->internaldate > rmail_a->internaldate) ? 1 : -1;
+    return 0;
+}
+
+struct memo_rock {
+    struct restore_rock *rrock;
+    struct mail_rock *mrock;
+    hash_table *mailboxes;
+    strarray_t parents;     // Message-IDs of parents of restored memos
+};
+
+static void restore_choose_memo_cb(const char *parentid, void *data, void *rock)
+{
+    struct memo_rock *memo_rock = (struct memo_rock *) rock;
+    struct message_t *memos = (struct message_t *) data;
+    struct restore_rock *rrock = memo_rock->rrock;
+    int log_level = rrock->jrestore->log_level;
+    const char *reason = NULL;
+
+    if (memos->ignore) {
+        reason = "live_memo_exists";
+    }
+    else if (!ptrarray_size(&memos->deleted)) {
+        return;
+    }
+    else {
+        struct message_t *parent =
+            hash_lookup(parentid, memo_rock->mrock->msgids);
+        struct live_copies copies = { STRARRAY_INITIALIZER,
+                                      ARRAYU64_INITIALIZER };
+
+        if (parent)
+            find_live_copies(rrock->req->cstate, &parent->guids, &copies);
+        if (!strarray_size(&copies.mboxnames)) reason = "no_parent";
+        live_copies_fini(&copies);
+    }
+
+    if (reason) {
+        xsyslog_ev(log_level, "jmap.backup.memo.skipped",
+                   lf_s("msg.inreplyto", parentid),
+                   lf_s("backup.reason", reason));
+        return;
+    }
+
+    /* Restore only the most recently removed memo */
+    ptrarray_sort(&memos->deleted, &memo_cmp);
+    struct removed_mail *rmail = ptrarray_nth(&memos->deleted, 0);
+
+    struct mailbox_plan *plan =
+        hash_lookup(rmail->mboxname, memo_rock->mailboxes);
+    if (!plan) {
+        plan = xzmalloc(sizeof(struct mailbox_plan));
+        hash_insert(rmail->mboxname, plan, memo_rock->mailboxes);
+    }
+    arrayu64_append(&plan->restore, rmail->uid);
+
+    strarray_append(&memo_rock->parents, parentid);
+}
+
+static int set_hasmemo(struct restore_rock *rrock, const strarray_t *guids)
+{
+    int log_level = rrock->jrestore->log_level;
+    struct live_copies copies = { STRARRAY_INITIALIZER, ARRAYU64_INITIALIZER };
+    int r = 0;
+
+    /* Collect first: rewriting records changes the conversations DB */
+    find_live_copies(rrock->req->cstate, guids, &copies);
+
+    for (int i = 0; !r && i < strarray_size(&copies.mboxnames); i++) {
+        const char *mboxname = strarray_nth(&copies.mboxnames, i);
+        uint32_t uid = arrayu64_nth(&copies.uids, i);
+        struct mailbox *mailbox = NULL;
+        msgrecord_t *mr = NULL;
+        uint32_t user_flags[MAX_USER_FLAGS/32];
+        int userflag = -1;
+
+        r = mailbox_open_iwl(mboxname, &mailbox);
+        if (!r) r = mailbox_user_flag(mailbox, "$hasmemo", &userflag, 1);
+        if (!r) {
+            mr = msgrecord_from_uid(mailbox, uid);
+            if (!mr) r = IMAP_NOTFOUND;
+        }
+        if (!r) r = msgrecord_get_userflags(mr, user_flags);
+        if (!r && !(user_flags[userflag/32] & (1U<<(userflag&31)))) {
+            r = msgrecord_set_userflag(mr, userflag, 1);
+            if (!r) r = msgrecord_rewrite(mr);
+            if (!r) r = mailbox_commit(mailbox);
+            if (!r) {
+                xsyslog_ev(log_level, "jmap.backup.flag.added",
+                           lf_intname("mbox.name", mboxname),
+                           lf_u("msg.imapuid", uid),
+                           lf_s("msg.flag", "$hasmemo"));
+            }
+        }
+
+        if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.backup.flag.add.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_u("msg.imapuid", uid),
+                       lf_s("msg.flag", "$hasmemo"),
+                       lf_err("error", r));
+        }
+
+        msgrecord_unref(&mr);
+        mailbox_close(&mailbox);
+    }
+
+    live_copies_fini(&copies);
+
+    return r;
+}
+
+/* Restore the latest destroyed memo of each Email that has a live copy
+ * but no live memo, and mark that Email with $hasmemo.  This runs after
+ * the other mail is restored, so that a restored Email counts as live. */
+static int restore_memos(struct restore_rock *rrock, struct mail_rock *mrock)
+{
+    hash_table mailboxes = HASH_TABLE_INITIALIZER;
+    struct memo_rock memo_rock = {
+        rrock, mrock, construct_hash_table(&mailboxes, 32, 0),
+        STRARRAY_INITIALIZER };
+    int r = 0;
+
+    hash_enumerate(mrock->memos, &restore_choose_memo_cb, &memo_rock);
+
+    if (strarray_size(&memo_rock.parents)) {
+        hash_enumerate(&mailboxes, &restore_mailbox_cb, rrock);
+        r = rrock->result;
+    }
+
+    if (!(r || (rrock->jrestore->mode & DRY_RUN))) {
+        for (int i = 0; !r && i < strarray_size(&memo_rock.parents); i++) {
+            struct message_t *parent =
+                hash_lookup(strarray_nth(&memo_rock.parents, i),
+                            mrock->msgids);
+
+            r = set_hasmemo(rrock, &parent->guids);
+        }
+    }
+
+    free_hash_table(&mailboxes, &mailbox_plan_free);
+    strarray_fini(&memo_rock.parents);
+
+    return r;
+}
+
 static int jmap_backup_restore_mail(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2155,6 +2438,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     hash_table emailids = HASH_TABLE_INITIALIZER;
     hash_table msgids = HASH_TABLE_INITIALIZER;
+    hash_table memos = HASH_TABLE_INITIALIZER;
     char *inbox = mboxname_user_mbox(req->accountid, NULL);
 
     xsyslog_ev(restore.log_level, "jmap.backup.restore.start",
@@ -2165,8 +2449,9 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     struct mail_rock mrock = {
         construct_hash_table(&emailids, 1024, 0),  // every message GUID
         construct_hash_table(&msgids, 1024, 0),    // every Message-ID of non-drafts
+        construct_hash_table(&memos, 32, 0),       // memos by parent Message-ID
         construct_hash_table(&mailboxes, 32, 0),
-        BUF_INITIALIZER };
+        BUF_INITIALIZER, BUF_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                   NULL, NULL, &mrock, NULL, 0, 0,
                                   mboxlist_find_specialuse("\\Scheduled",
@@ -2177,6 +2462,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     r = mboxlist_mboxtree(inbox, restore_message_list_cb, &rrock,
                           MBOXTREE_DELETED);
     buf_free(&mrock.buf);
+    buf_free(&mrock.irtbuf);
 
     if (!r) {
         /* Find the largest of the 5 most recently destroyed copies of each draft
@@ -2191,6 +2477,10 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
         hash_enumerate(&mailboxes, &restore_mailbox_cb, &rrock);
         r = rrock.result;
 
+        if (!r && (restore.mode & UNDO_NONDRAFTS)) {
+            r = restore_memos(&rrock, &mrock);
+        }
+
         if (!(r || (restore.mode & DRY_RUN))) {
             mboxname_setmodseq(inbox, rrock.deletedmodseq,
                                MBTYPE_EMAIL, MBOXMODSEQ_ISDELETE);
@@ -2200,6 +2490,7 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     free_hash_table(&mailboxes, &mailbox_plan_free);
     free_hash_table(&emailids, &message_t_free);
     free_hash_table(&msgids, &message_t_free);
+    free_hash_table(&memos, &message_t_free);
     free(inbox);
 
     /* Build response */

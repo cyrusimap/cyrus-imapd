@@ -1,0 +1,26 @@
+Description:
+
+Backup/restoreMail now restores only the most recently destroyed memo
+(an Email with the $memo keyword) of each Email, and only when that Email
+exists and has no live memo.  It sets $hasmemo on the Email whose memo
+it restores.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

@@ -94,6 +94,7 @@ msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
 msg.imapuid             the message's IMAP uid within its mailbox
+msg.inreplyto           the first msg-id in the message's In-Reply-To
 msg.internaldate        the message's internaldate
 msg.lastupdated         when the record was last updated
 msg.memofor             the blobId a memo names in its X-ME-Memo-For header

@@ -1,0 +1,108 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_restore_mail_memo_skipped ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $email = sub ($name) {
+        return {
+            mailboxIds => { '$inbox' => JSON::true },
+            messageId  => ["$name\@local"],
+            from       => [ { email => 'a@example.com' } ],
+            to         => [ { email => 'cassandane@example.com' } ],
+            subject    => $name,
+            bodyValues => { 1 => { value => $name } },
+            textBody   => [ { partId => '1' } ],
+        };
+    };
+    my $memo = sub ($name, $parent) {
+        return {
+            %{ $email->($name) },
+            inReplyTo => ["$parent\@local"],
+            subject   => $parent,
+            keywords  => { '$memo' => JSON::true },
+        };
+    };
+
+    xlog $self, "create emails A, B and C, each with a memo";
+    my $set = $jmap->request([
+        ['Email/set', {
+            create => {
+                A  => $email->('A'),
+                A1 => $memo->('A1', 'A'),
+                B  => $email->('B'),
+                B1 => $memo->('B1', 'B'),
+                C  => $email->('C'),
+                C1 => $memo->('C1', 'C'),
+            },
+        }],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+    my %id = map {; $_ => "" . $set->created_id($_) } qw(A A1 B B1 C C1);
+
+    xlog $self, "destroy email B for good";
+    $set = $jmap->request([
+        ['Email/set', { destroy => [ $id{B} ] }],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+    $self->assert_cmp_deeply([ $id{B} ], [ $set->destroyed_ids ]);
+
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "replace memo A1 with A2, and destroy memos B1 and C1";
+    $set = $jmap->request([
+        ['Email/set', {
+            create  => { A2 => $memo->('A2', 'A') },
+            destroy => [ $id{A1}, $id{B1}, $id{C1} ],
+        }],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+    $id{A2} = "" . $set->created_id('A2');
+
+    my $period = "PT" . (time() - $mark) . "S";
+
+    xlog $self, "restoring only drafts leaves memos alone";
+    my $res = $jmap->request([
+        ['Backup/restoreMail', {
+            restoreDrafts    => JSON::true,
+            restoreNonDrafts => JSON::false,
+            undoPeriod       => $period,
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ numDraftsRestored => jnum(0),
+                      numNonDraftsRestored => jnum(0) }),
+        $res->single_sentence('Backup/restoreMail')->arguments,
+    );
+
+    xlog $self, "restore mail: only memo C1 comes back";
+    $res = $jmap->request([
+        ['Backup/restoreMail', {
+            restoreDrafts    => JSON::false,
+            restoreNonDrafts => JSON::true,
+            undoPeriod       => $period,
+        }],
+        ['Email/get', {
+            ids        => [ @id{qw(A A1 A2 B B1 C C1)} ],
+            properties => [ 'keywords' ],
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ numDraftsRestored => jnum(0),
+                      numNonDraftsRestored => jnum(1) }),
+        $res->sentence_named('Backup/restoreMail')->arguments,
+    );
+
+    $self->assert_cmp_deeply(superhashof({
+        list => bag(
+            { id => $id{A},  keywords => {} },
+            { id => $id{A2}, keywords => { '$memo' => jtrue() } },
+            { id => $id{C},  keywords => { '$hasmemo' => jtrue() } },
+            {
+                id       => $id{C1},
+                keywords => { '$memo'     => jtrue(),
+                              '$restored' => jtrue() },
+            },
+        ),
+        notFound => bag(@id{qw(A1 B B1)}),
+    }), $res->sentence_named('Email/get')->arguments);
+}
