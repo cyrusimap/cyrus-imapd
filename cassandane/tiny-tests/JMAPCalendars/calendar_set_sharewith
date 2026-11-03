@@ -219,17 +219,17 @@ sub test_calendar_set_sharewith
     $res = $jmap->CallMethods([
             ['Calendar/set', {
                     accountId => 'master',
-                    update => { $CalendarId => {
+                    update => { $CalendarJmapId => {
                         shareWith => {
                             "../v/victim" => {
-                                mayRead => JSON::true
+                                mayReadItems => JSON::true
                             }
                         },
              }}}, "R1"]
     ]);
     $self->assert_cmp_deeply(
         {
-            $CalendarId => {
+            $CalendarJmapId => {
                 type => 'invalidProperties',
                 properties => [
                     "shareWith/..~1v~1victim"

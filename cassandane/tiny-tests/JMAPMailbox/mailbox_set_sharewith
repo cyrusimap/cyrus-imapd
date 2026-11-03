@@ -102,7 +102,7 @@ sub test_mailbox_set_sharewith
                     update => { $inboxId => {
                         shareWith => {
                             "../v/victim" => {
-                                mayRead => JSON::true
+                                mayReadItems => JSON::true
                             }
                         },
              }}}, "R1"]
@@ -124,7 +124,7 @@ sub test_mailbox_set_sharewith
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => { $inboxId => {
-                'shareWith/group:c1234' => { mayRead => JSON::true },
+                'shareWith/group:c1234' => { mayReadItems => JSON::true },
             }},
         }, 'R1'],
     ], $using);
@@ -134,7 +134,7 @@ sub test_mailbox_set_sharewith
     $res = $jmap->CallMethods([
         ['Mailbox/set', {
             update => { $inboxId => {
-                shareWith => { "group:../v/victim" => { mayRead => JSON::true } },
+                shareWith => { "group:../v/victim" => { mayReadItems => JSON::true } },
             }},
         }, 'R1'],
     ], $using);

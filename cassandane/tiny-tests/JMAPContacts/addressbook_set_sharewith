@@ -147,7 +147,7 @@ sub test_addressbook_set_sharewith
     $res = $jmap->CallMethods([
             ['AddressBook/set', {
                     accountId => 'master',
-                    update => { $AddressBookId => {
+                    update => { $AddressBookJmapId => {
                         shareWith => {
                             "../v/victim" => {
                                 mayRead => JSON::true
@@ -157,7 +157,7 @@ sub test_addressbook_set_sharewith
     ]);
     $self->assert_cmp_deeply(
         {
-            $AddressBookId => {
+            $AddressBookJmapId => {
                 type => 'invalidProperties',
                 properties => [
                     "shareWith/..~1v~1victim"
