@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_restore_calendars_uid_unique ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $cal1 = $self->default_user->calendars->create({ name => 'one' });
+    my $cal2 = $self->default_user->calendars->create({ name => 'two' });
+    my $cal3 = $self->default_user->calendars->create({ name => 'three' });
+
+    xlog $self, "create event V in calendar one and W in calendar three";
+    my $v = $cal1->create_event({ uid => 'V', title => 'V' });
+    my $w = $cal3->create_event({ uid => 'W', title => 'W' });
+
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "create and destroy event U in each calendar";
+    $cal1->create_event({ uid => 'U', title => 'U1' })->destroy;
+    $cal2->create_event({ uid => 'U', title => 'U2' })->destroy;
+
+    xlog $self, "move V to calendar two, W to calendar one, delete three";
+    $v->update({ calendarIds => { $cal2->id => JSON::true } });
+    $w->update({ calendarIds => { $cal1->id => JSON::true } });
+    $cal3->destroy;
+
+    my $period = "PT" . (time() - $mark) . "S";
+
+    xlog $self, "restore: U comes back once, and V and W are not duplicated";
+    my $res = $jmap->request([
+        ['Backup/restoreCalendars', { undoPeriod => $period }],
+        ['CalendarEvent/get', { properties => [ 'uid', 'calendarIds' ] }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            numCreatesUndone  => 0,
+            numUpdatesUndone  => 0,
+            numDestroysUndone => 1,
+        }),
+        $res->sentence_named('Backup/restoreCalendars')->arguments,
+    );
+
+    $self->assert_cmp_deeply(
+        bag(
+            superhashof({ uid => 'U' }),
+            superhashof({
+                uid         => 'V',
+                calendarIds => { $cal2->id => JSON::true },
+            }),
+            superhashof({
+                uid         => 'W',
+                calendarIds => { $cal1->id => JSON::true },
+            }),
+        ),
+        $res->sentence_named('CalendarEvent/get')->arguments->{list},
+    );
+}

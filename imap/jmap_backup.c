@@ -244,6 +244,9 @@ struct restore_rock {
     int keep_open;
     int result;
     void *context;
+    /* Optional: true if the version to recreate must be left alone */
+    bool (*skip_cb)(message_t *recreatemsg, message_t *destroymsg,
+                    void *rock, int log_level);
 };
 
 struct restore_info {
@@ -299,25 +302,29 @@ static int restore_resource_cb(const char *resource __attribute__((unused)),
         goto done;
     }
 
+    if (restore->uid_torecreate) {
+        struct index_record record;
+        r = mailbox_find_index_record(mailbox, restore->uid_torecreate, &record);
+        if (r) goto done;
+
+        recreatemsg = message_new_from_record(mailbox, &record);
+    }
+
+    if (restore->uid_todestroy) {
+        struct index_record record;
+        r = mailbox_find_index_record(mailbox, restore->uid_todestroy, &record);
+        if (r) goto done;
+
+        destroymsg = message_new_from_record(mailbox, &record);
+    }
+
+    if (recreatemsg && rrock->skip_cb &&
+        rrock->skip_cb(recreatemsg, destroymsg, rrock->rock, log_level)) {
+        goto done;
+    }
+
     if (!(rrock->jrestore->mode & DRY_RUN)) {
-        if (restore->uid_torecreate) {
-            struct index_record record;
-            r = mailbox_find_index_record(mailbox, restore->uid_torecreate, &record);
-            if (r) goto done;
-
-            recreatemsg = message_new_from_record(mailbox, &record);
-        }
-
-        if (restore->uid_todestroy) {
-            struct index_record record;
-            r = mailbox_find_index_record(mailbox, restore->uid_todestroy, &record);
-            if (r) goto done;
-
-            destroymsg = message_new_from_record(mailbox, &record);
-        }
-
         r = rrock->restore_cb(recreatemsg, destroymsg, req, rrock->rock, log_level);
-
     }
 
     if (!r) {
@@ -895,7 +902,7 @@ static int jmap_backup_restore_contacts(jmap_req_t *req)
         { carddav_open_userid(req->accountid), BUF_INITIALIZER, NULL };
     struct restore_rock rrock = { req, &restore, MBTYPE_ADDRESSBOOK, 0,
                                   &contact_resource_name, &restore_contact,
-                                  &crock, NULL, 0, 0, NULL };
+                                  &crock, NULL, 0, 0, NULL, NULL };
 
     if (restore.mode & DRY_RUN) {
         /* Treat as regular collection since we won't create group vCard */
@@ -933,7 +940,58 @@ struct calendar_rock {
     struct caldav_db *caldavdb;
     char *inboxname;
     char *outboxname;
+    hash_table uids;    /* iCalendar UIDs restored by this request */
 };
+
+/* An account has at most one event per iCalendar UID.  Skip a version
+ * whose UID is live in another resource, or already restored. */
+static bool ical_uid_conflict(message_t *recreatemsg, message_t *destroymsg,
+                              void *rock, int log_level)
+{
+    struct calendar_rock *crock = (struct calendar_rock *) rock;
+    struct mailbox *mailbox = msg_mailbox(recreatemsg);
+    const struct index_record *record = msg_record(recreatemsg);
+    icalcomponent *ical = record_to_ical(mailbox, record, NULL);
+    const char *uid = ical ? icalcomponent_get_uid(ical) : NULL;
+    const char *reason = NULL;
+
+    if (!uid) {
+        /* Nothing to conflict with */
+    }
+    else if (hash_lookup(uid, &crock->uids)) {
+        reason = "uid_already_restored";
+    }
+    else {
+        struct caldav_data *cdata = NULL;
+
+        caldav_lookup_uid(crock->caldavdb, uid, &cdata);
+        if (cdata->dav.imap_uid) {
+            /* Undoing an update replaces the live version in place */
+            const struct index_record *oldrecord =
+                destroymsg ? msg_record(destroymsg) : NULL;
+            const char *mbox = cdata->dav.mailbox_byname ?
+                mailbox_name(mailbox) : mailbox_uniqueid(mailbox);
+
+            if (!oldrecord || oldrecord->uid != cdata->dav.imap_uid ||
+                strcmp(cdata->dav.mailbox, mbox)) {
+                reason = "uid_exists";
+            }
+        }
+
+        if (!reason) hash_insert(uid, (void *) 1, &crock->uids);
+    }
+
+    if (reason) {
+        xsyslog_ev(log_level, "jmap.backup.record.skipped",
+                   lf_u("msg.imapuid", record->uid),
+                   lf_s("cal.uid", uid),
+                   lf_s("backup.reason", reason));
+    }
+
+    if (ical) icalcomponent_free(ical);
+
+    return reason != NULL;
+}
 
 static char *ical_resource_name(message_t *msg, void *rock)
 {
@@ -1311,7 +1369,9 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
                        lf_u("msg.imapuid", record->uid),
                        lf_s("backup.reason", reason));
         }
-        else {
+        else if (!rrock->skip_cb ||
+                 !rrock->skip_cb((message_t *) msg, NULL,
+                                 rrock->rock, log_level)) {
             arrayu64_append(&uids, record->uid);
         }
 
@@ -1438,10 +1498,14 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     struct calendar_rock crock =
         { caldav_open_userid(req->accountid),
           caldav_mboxname(req->accountid, SCHED_INBOX),
-          caldav_mboxname(req->accountid, SCHED_OUTBOX) };
+          caldav_mboxname(req->accountid, SCHED_OUTBOX),
+          HASH_TABLE_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_CALENDAR, 0,
                                   &ical_resource_name, &restore_ical,
-                                  &crock, NULL, 0, 0, NULL };
+                                  &crock, NULL, 0, 0, NULL,
+                                  &ical_uid_conflict };
+
+    construct_hash_table(&crock.uids, 64, 0);
 
     r = mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
@@ -1452,6 +1516,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
     free(calhomeset);
     free(crock.inboxname);
     free(crock.outboxname);
+    free_hash_table(&crock.uids, NULL);
     caldav_close(crock.caldavdb);
 
     /* Build response */
@@ -1532,7 +1597,7 @@ static int jmap_backup_restore_notes(jmap_req_t *req)
         char *notes = mboxname_user_mbox(req->accountid, subfolder);
         struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                       &note_resource_name, &restore_note,
-                                      NULL, NULL, 0, 0, NULL };
+                                      NULL, NULL, 0, 0, NULL, NULL };
 
         r = mboxlist_mboxtree(notes, restore_collection_cb,
                               &rrock, MBOXTREE_SKIP_CHILDREN);
@@ -2500,7 +2565,8 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                   NULL, NULL, &mrock, NULL, 0, 0,
                                   mboxlist_find_specialuse("\\Scheduled",
-                                                           req->accountid) };
+                                                           req->accountid),
+                                  NULL };
 
     /* Find all destroyed messages within our window -
        remove $restored flag from all messages as a side-effect */
