@@ -794,8 +794,8 @@ done:
 struct jmap_mailbox_get_cb_rock {
     jmap_req_t *req;
     struct jmap_get *get;
-    hash_table *roles;
-    hash_table *want;
+    hash_table roles;
+    hash_table want;
     struct shared_mboxes *shared_mboxes;
     strarray_t *sublist;
 };
@@ -845,13 +845,13 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     if (!is_jmap_mailbox(rock->req, mbentry, 0)) return 0;
 
     /* Do we need to process this mailbox? */
-    if (rock->want) {
+    if (hash_constructed(&rock->want)) {
         static char mboxid[JMAP_MAX_MAILBOXID_SIZE];
         jmap_set_mailboxid(rock->req->cstate, mbentry, mboxid);
-        if (hash_lookup(mboxid, rock->want))
+        if (hash_lookup(mboxid, &rock->want))
             id = mboxid;
         else if (USER_COMPACT_EMAILIDS(rock->req->cstate) && // check for legacy id
-                 hash_lookup(mbentry->uniqueid, rock->want))
+                 hash_lookup(mbentry->uniqueid, &rock->want))
             id = mbentry->uniqueid;
         else
             return 0;
@@ -864,7 +864,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         return 0;
 
     /* Convert mbox to JMAP object. */
-    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type, rock->sublist);
+    obj = _mbox_get(req, mbentry, &rock->roles, rock->get->props, share_type, rock->sublist);
     if (!obj) {
         xsyslog_ev(LOG_INFO, "jmap.mailbox.convert.failed",
                    lf_jmapreq(req),
@@ -874,10 +874,10 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     json_array_append_new(list, obj);
 
     /* Move this mailbox of the lookup list */
-    if (rock->want) {
-        hash_del(id, rock->want);
+    if (hash_constructed(&rock->want)) {
+        hash_del(id, &rock->want);
         // are we done looking?
-        if (!hash_count(rock->want))
+        if (!hash_count(&rock->want))
             return IMAP_OK_COMPLETED;
     }
 
@@ -911,19 +911,24 @@ static int jmap_mailbox_get(jmap_req_t *req)
     if (jmap_wantprop(get.props, "isSubscribed")) {
         sublist = mboxlist_sublist(req->userid);
     }
-    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist };
-    rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
-    construct_hash_table(rock.roles, 8, 0);
+    struct jmap_mailbox_get_cb_rock rock = {
+        .req = req,
+        .get = &get,
+        .roles = HASH_TABLE_INITIALIZER,
+        .want = HASH_TABLE_INITIALIZER,
+        .shared_mboxes = shared_mboxes,
+        .sublist = sublist
+    };
+    construct_hash_table(&rock.roles, 8, 0);
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *val;
         /* Make a set of request ids to know when to stop mboxlist*/
-        rock.want = (hash_table *) xmalloc(sizeof(hash_table));
-        construct_hash_table(rock.want, json_array_size(get.ids) + 1, 0);
+        construct_hash_table(&rock.want, json_array_size(get.ids) + 1, 0);
         json_array_foreach(get.ids, i, val) {
-            hash_insert(json_string_value(val), (void*)1, rock.want);
+            hash_insert(json_string_value(val), (void*)1, &rock.want);
         }
     }
 
@@ -939,8 +944,8 @@ static int jmap_mailbox_get(jmap_req_t *req)
                           jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
 
     /* Report if any requested mailbox has not been found */
-    if (rock.want) {
-        hash_enumerate(rock.want, jmap_mailbox_get_notfound, get.not_found);
+    if (hash_constructed(&rock.want)) {
+        hash_enumerate(&rock.want, jmap_mailbox_get_notfound, get.not_found);
     }
 
     /* Build response */
@@ -948,10 +953,8 @@ static int jmap_mailbox_get(jmap_req_t *req)
     jmap_ok(req, jmap_get_reply(&get));
 
     _shared_mboxes_free(shared_mboxes);
-    free_hash_table(rock.want, NULL);
-    free(rock.want);
-    free_hash_table(rock.roles, NULL);
-    free(rock.roles);
+    free_hash_table(&rock.want, NULL);
+    free_hash_table(&rock.roles, NULL);
     strarray_free(rock.sublist);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
@@ -3293,6 +3296,7 @@ struct toposort {
     int is_cyclic;
 };
 
+/* sorts into topo->dst, and returns 1 if the graph is cyclic, 0 if not. */
 static void _toposort_cb(const char *id, void *data, void *rock)
 {
     struct toposort *topo = rock;
@@ -3335,8 +3339,7 @@ static int _toposort(hash_table *parent_id_by_id, strarray_t *dst)
     construct_hash_table(&topo.visited, hash_count(parent_id_by_id) + 1, 0);
     hash_enumerate(topo.parent_id_by_id, _toposort_cb, &topo);
     free_hash_table(&topo.visited, NULL);
-    free_hash_table(&topo.visited, NULL);
-    return topo.is_cyclic ? -1 : 0;
+    return topo.is_cyclic;
 }
 
 struct mboxset_ops {
@@ -3393,9 +3396,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
             hash_insert(args->mbox_id, args, &args_by_id);
         }
         strarray_t tmp = STRARRAY_INITIALIZER;
-        if (_toposort(&parent_id_by_id, &tmp) < 0) {
-            ops->is_cyclic = 1;
-        }
+        ops->is_cyclic = _toposort(&parent_id_by_id, &tmp);
         for (i = 0; i < strarray_size(&tmp); i++) {
             const char *id = strarray_nth(&tmp, i);
             ptrarray_append(ops->put, hash_lookup(id, &args_by_id));
