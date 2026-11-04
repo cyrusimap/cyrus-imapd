@@ -2916,8 +2916,8 @@ sub setup_syslog_replacement
         $self->{_syslogfh}->seek($syslog_start, 0);
         $self->{_syslogfh}->blocking(0);
 
-        if (not scalar $self->getsyslog(qr/\bthe magic word\b/)) {
-            xlog "didn't find the magic word when probing syslog";
+        if (not $self->getsyslog(qr/\bevent=cassandane\.syslog\.probe\b/)) {
+            xlog "didn't find the probe event when probing syslog";
             xlog "tests will not examine syslog output";
 
             $self->{have_syslog_replacement} = 0;
