@@ -65,10 +65,10 @@ sub test_calendarevent_participantreply_plusaddr
 
     xlog $self, "verify invitation sent from organizer to attendees";
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
 
     $self->assert_str_equals("CalendarEvent/set", $payload->{schedulingMechanism});
     $self->assert_str_equals("REQUEST", $payload->{method});
@@ -88,11 +88,11 @@ sub test_calendarevent_participantreply_plusaddr
 
     xlog $self, "verify reply sent from attendee to organizer";
     $data = $self->{instance}->getnotify();
-    my @imips = grep { $_->{METHOD} eq 'imip' } @$data;
+    my @imips = grep { $_->{method} eq 'imip' } @$data;
     $imip = $imips[0];
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
 
     $self->assert_str_equals("CalendarEvent/participantReply",
                              $payload->{schedulingMechanism});
@@ -105,7 +105,7 @@ sub test_calendarevent_participantreply_plusaddr
     $imip = $imips[1];
     $self->assert_not_null($imip);
 
-    $payload = decode_json($imip->{MESSAGE});
+    $payload = $imip->{message};
 
     $self->assert_str_equals("CalendarEvent/participantReply",
                              $payload->{schedulingMechanism});

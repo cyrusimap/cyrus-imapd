@@ -47,7 +47,7 @@ sub test_calendarevent_set_schedulingmessages
     $self->assert_not_null($eventId);
 
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($imip);
 
     # clean notification cache
@@ -66,10 +66,10 @@ sub test_calendarevent_set_schedulingmessages
     $self->assert(exists $res->[0][1]{updated}{$eventId});
 
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
     my $ical = $payload->{ical};
 
     $self->assert_str_equals('attendee1@example.com', $payload->{recipient});

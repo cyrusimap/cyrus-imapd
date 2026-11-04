@@ -1,0 +1,35 @@
+Description:
+
+Notifications sent to a stream notifysocket are now JSON: each is one line
+holding a JSON object, and an EVENT or IMIP notification carries its
+message as a nested JSON object rather than a string.  The dlist stream
+format is gone.  The vnd.cmu.envelope event parameter has been removed.
+
+
+Documentation:
+
+imapd.conf(5), notifysocket and event_extra_params; the "Transport" section
+of the event notifications page.
+
+
+Config changes:
+
+notifysocket accepts a "json:" prefix to select the JSON stream format,
+which replaces the "dlist:" prefix.
+
+event_extra_params no longer accepts vnd.cmu.envelope.
+
+
+Upgrade instructions:
+
+Before upgrading, change a "dlist:" notifysocket to "json:", and update the
+listener on that socket to read and reply with JSON lines.
+
+Remove vnd.cmu.envelope from event_extra_params: a configuration that still
+lists it will fail to parse.  Consumers that used it can fetch the message
+instead, or use vnd.fastmail.jmapEmail.
+
+
+GitHub issue:
+
+None.

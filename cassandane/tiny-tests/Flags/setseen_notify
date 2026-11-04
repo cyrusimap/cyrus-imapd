@@ -29,7 +29,7 @@ sub test_setseen_notify
 
     my $notify2 = $self->{instance}->getnotify();
 
-    my $payload1 = decode_json($notify1->[0]{MESSAGE});
-    my $payload2 = decode_json($notify2->[0]{MESSAGE});
+    my $payload1 = $notify1->[0]{message};
+    my $payload2 = $notify2->[0]{message};
     $self->assert($payload2->{modseq} > $payload1->{modseq}, "modseq has increased: $payload2->{modseq} > $payload1->{modseq}");
 }

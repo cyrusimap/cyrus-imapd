@@ -10,7 +10,6 @@
     "uidnext": 6,
     "uri": "imap://john@example.org@imap.example.org/Calendar;UIDVALIDITY=1424683684/;UID=5",
     "user": "john@example.org",
-    "vnd.cmu.envelope": "(\"Mon, 23 Feb 2015 13:51:28 +0000\" \"BBA47B13E4839F49AB1C8047EE7B4FDB-A4BF5BBB9FEAA271\" ((NIL NIL \"john\" \"example.org\")) ((NIL NIL \"john\" \"example.org\")) ((NIL NIL \"john\" \"example.org\")) ((NIL NIL \"john\" \"example.org\")) NIL NIL NIL NIL)",
     "vnd.cmu.midset": [
         "NIL"
     ],

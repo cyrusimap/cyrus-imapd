@@ -11,9 +11,9 @@ sub get_imip_notification
 {
     my ($self) = @_;
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
-    return decode_json($imip->{MESSAGE});
+    return $imip->{message};
 }
 
 sub test_calendarevent_participantreply_patch ($self)

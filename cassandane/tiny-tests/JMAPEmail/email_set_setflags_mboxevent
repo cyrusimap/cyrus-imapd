@@ -140,7 +140,7 @@ sub test_email_set_setflags_mboxevent
     my %flagsClearEvents;
     my %flagsSetEvents;
     foreach (@$data) {
-        my $event = decode_json($_->{MESSAGE});
+        my $event = $_->{message};
         if ($event->{event} eq "FlagsClear") {
             $flagsClearEvents{$event->{mailboxID}} = $event;
         }

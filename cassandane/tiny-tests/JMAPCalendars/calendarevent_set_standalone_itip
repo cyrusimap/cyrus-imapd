@@ -52,9 +52,9 @@ sub test_calendarevent_set_standalone_itip
 
     xlog "Assert that iTIP notification is sent";
     my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
-    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $notif_payload = $notif->{message};
     my $itip = $notif_payload->{ical};
     my $ical = Data::ICal->new(data => $itip);
 
@@ -114,9 +114,9 @@ sub test_calendarevent_set_standalone_itip
 
     xlog "Assert iTIP notification just gets sent for new instance";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
-    $notif_payload = decode_json($notif->{MESSAGE});
+    $notif_payload = $notif->{message};
     $itip = $notif_payload->{ical};
     $ical = Data::ICal->new(data => $itip);
 
@@ -156,9 +156,9 @@ sub test_calendarevent_set_standalone_itip
 
     xlog "Assert iTIP notification only is sent for updated instance";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
-    $notif_payload = decode_json($notif->{MESSAGE});
+    $notif_payload = $notif->{message};
     $itip = $notif_payload->{ical};
     $ical = Data::ICal->new(data => $itip);
 
@@ -218,6 +218,6 @@ sub test_calendarevent_set_standalone_itip
 
     xlog "Assert no iTIP notification is sent";
     $data = $self->{instance}->getnotify();
-    ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($notif);
 }

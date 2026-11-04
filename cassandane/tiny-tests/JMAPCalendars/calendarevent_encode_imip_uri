@@ -67,8 +67,8 @@ EOF
 
     xlog "Assert the iMIP notification has the decoded recipient";
     my $data = $self->{instance}->getnotify();
-    my ($imipnotif) = grep { $_->{METHOD} eq 'imip' } @$data;
-    my $payload = decode_json($imipnotif->{MESSAGE});
+    my ($imipnotif) = grep { $_->{method} eq 'imip' } @$data;
+    my $payload = $imipnotif->{message};
     $self->assert_str_equals('plus+uri@example.com', $payload->{recipient});
     my $expect_id = $eventId;
     $self->assert_str_equals($expect_id, $payload->{id});

@@ -61,10 +61,10 @@ EOF
     }, "R1"]]);
 
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($imip);
 
-    my $payload = decode_json($imip->{MESSAGE});
+    my $payload = $imip->{message};
     $ical = $payload->{ical};
 
     $self->assert_str_equals("bugs\@example.com", $payload->{recipient});

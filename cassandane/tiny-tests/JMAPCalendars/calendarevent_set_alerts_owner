@@ -93,8 +93,8 @@ sub test_calendarevent_set_alerts_owner
     my $data = $self->{instance}->getnotify();
     my @events;
     foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
+        if ($_->{class} eq 'EVENT') {
+            my $e = $_->{message};
             $self->assert_str_not_equals("CalendarAlarm", $e->{event});
         }
     }
@@ -110,8 +110,8 @@ sub test_calendarevent_set_alerts_owner
     $data = $self->{instance}->getnotify();
     @events = ();
     foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
+        if ($_->{class} eq 'EVENT') {
+            my $e = $_->{message};
             if ($e->{event} eq "CalendarAlarm") {
                 push @events, $e;
             }

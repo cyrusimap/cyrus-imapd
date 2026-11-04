@@ -61,13 +61,13 @@ EOF
         $self->assert_cmp_deeply([ $eventId ], $res->[1][1]{destroyed});
 
         my $data = $self->{instance}->getnotify();
-        my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+        my ($notif) = grep { $_->{method} eq 'imip' } @$data;
         if ($wantNotif) {
             xlog "Assert iTIP notification is sent";
             $self->assert_not_null($notif);
 
             my $expect_id = $eventId;
-            my $notif_payload = decode_json($notif->{MESSAGE});
+            my $notif_payload = $notif->{message};
             $self->assert_str_equals($expect_id, $notif_payload->{id});
             $self->assert_str_equals($wantNotif, $notif_payload->{method});
         } else {

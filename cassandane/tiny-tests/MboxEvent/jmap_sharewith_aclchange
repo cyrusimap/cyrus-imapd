@@ -18,7 +18,7 @@ sub _aclchange_events ($self, $arg) {
     if ($grant) { $collection->share_with($sharee => $grant) }
     else        { $collection->unshare_with($sharee) }
 
-    my @events = map { decode_json($_->{MESSAGE}) }
+    my @events = map { $_->{message} }
                  $self->{instance}->getnotify->@*;
 
     # A compact Calendar or AddressBook id is the mailbox id under its own

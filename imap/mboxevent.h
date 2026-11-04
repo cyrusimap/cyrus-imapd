@@ -98,7 +98,6 @@ enum event_param {
     EVENT_VISIBLE_USERS,
     /* 24 */ EVENT_DAV_FILENAME,
     /* 25 */ EVENT_DAV_UID,
-    /* 26 */ EVENT_ENVELOPE,
     /* 27 */ EVENT_SESSIONID,
     /* 28 */ EVENT_BODYSTRUCTURE,
     /* 29 */ EVENT_CLIENT_ID,

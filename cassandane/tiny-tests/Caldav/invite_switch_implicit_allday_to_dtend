@@ -56,7 +56,7 @@ EOF
 
     xlog $self, "make sure an invite is NOT sent to attendee";
     my $newdata = $self->{instance}->getnotify();
-    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    my @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(0, scalar(@imip));
 
     xlog $self, "update event removing DTEND";
@@ -65,7 +65,7 @@ EOF
 
     xlog $self, "make sure an invite is NOT sent to attendee";
     $newdata = $self->{instance}->getnotify();
-    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(0, scalar(@imip));
 
     xlog $self, "update event to be multiple days";
@@ -74,7 +74,7 @@ EOF
 
     xlog $self, "make sure an invite is sent to attendee";
     $newdata = $self->{instance}->getnotify();
-    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(1, scalar(@imip));
 
     xlog $self, "update event removing DTEND";
@@ -83,6 +83,6 @@ EOF
 
     xlog $self, "make sure an invite is sent to attendee";
     $newdata = $self->{instance}->getnotify();
-    @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
+    @imip = grep { $_->{method} eq 'imip' } @$newdata;
     $self->assert_num_equals(1, scalar(@imip));
 }

@@ -1,6 +1,13 @@
 Name: notifysocket
 Type: STRING
 Default-Value: {configdirectory}/socket/notify
-Last-Modified: 2.3.17
+Last-Modified: UNRELEASED
 
 Unix domain socket that the mail notification daemon listens on.
+
+By default, each notification is sent to it as a datagram, in the format
+:cyrusman:`notifyd(8)` expects.  If the value is ``json:`` followed by a
+path, each notification is instead written to that stream socket as one
+line of JSON, and the listener must reply with one line holding a JSON
+object whose ``status`` is ``OK``.  See
+:ref:`imap-features-event-notifications-transport`.

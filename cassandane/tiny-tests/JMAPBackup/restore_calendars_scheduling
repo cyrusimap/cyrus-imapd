@@ -71,8 +71,8 @@ sub test_restore_calendars_scheduling ($self)
 
     xlog "make sure iMIP REQUEST was sent";
     my $data = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
-    my $payload = decode_json($imip->{MESSAGE});
+    my ($imip) = grep { $_->{method} eq 'imip' } @$data;
+    my $payload = $imip->{message};
     $self->assert_str_equals('REQUEST', $payload->{method});
     $self->assert_str_equals('bugs@example.com', $payload->{recipient});
 
@@ -119,8 +119,8 @@ sub test_restore_calendars_scheduling ($self)
 
     xlog "make sure iMIP REQUEST was sent";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $payload = decode_json($imip->{MESSAGE});
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
+    $payload = $imip->{message};
     $self->assert_str_equals('REQUEST', $payload->{method});
     $self->assert_str_equals('rr@example.com', $payload->{recipient});
 
@@ -139,8 +139,8 @@ sub test_restore_calendars_scheduling ($self)
 
     xlog "make sure iMIP CANCEL was sent";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $payload = decode_json($imip->{MESSAGE});
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
+    $payload = $imip->{message};
     $self->assert_str_equals('CANCEL', $payload->{method});
     $self->assert_str_equals('bugs@example.com', $payload->{recipient});
 
@@ -160,8 +160,8 @@ sub test_restore_calendars_scheduling ($self)
 
     xlog "make sure iMIP REQUEST was re-sent";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
-    $payload = decode_json($imip->{MESSAGE});
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
+    $payload = $imip->{message};
     $self->assert_str_equals('REQUEST', $payload->{method});
     $self->assert_str_equals('bugs@example.com', $payload->{recipient});
 
@@ -181,7 +181,7 @@ sub test_restore_calendars_scheduling ($self)
 
     xlog "make sure iMIP CANCEL was NOT sent";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($imip);
 
     # clean notification cache
@@ -200,6 +200,6 @@ sub test_restore_calendars_scheduling ($self)
 
     xlog "make sure iMIP REQUEST was NOT re-sent";
     $data = $self->{instance}->getnotify();
-    ($imip) = grep { $_->{METHOD} eq 'imip' } @$data;
+    ($imip) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_null($imip);
 }

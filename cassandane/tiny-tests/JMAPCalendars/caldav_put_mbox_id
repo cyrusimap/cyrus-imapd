@@ -46,10 +46,10 @@ sub test_caldav_put_mbox_id
     );
 
     my $data = $self->{instance}->getnotify();
-    my ($notif) = grep { $_->{METHOD} eq 'imip' } @$data;
+    my ($notif) = grep { $_->{method} eq 'imip' } @$data;
     $self->assert_not_null($notif);
 
-    my $notif_payload = decode_json($notif->{MESSAGE});
+    my $notif_payload = $notif->{message};
     my $got_id = $notif_payload->{id};
     $self->assert_not_null($got_id);
 

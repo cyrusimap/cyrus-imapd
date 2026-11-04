@@ -74,9 +74,9 @@ EOF
     $self->assert_cmp_deeply([$eventId], $res->[0][1]{ids});
     $self->assert_cmp_deeply([], $res->[1][1]{ids});
 
-    my @notifs = grep($_->{CLASS} eq 'IMIP', @{$self->{instance}->getnotify()});
+    my @notifs = grep($_->{class} eq 'IMIP', @{$self->{instance}->getnotify()});
     $self->assert_num_equals(1, scalar @notifs);
-    my $message = decode_json($notifs[0]->{MESSAGE});
+    my $message = $notifs[0]->{message};
     my $event = $message->{patch};
     $self->assert_str_equals('2021-03-28T01:00:00', $event->{start});
     $self->assert_str_equals('PT2H', $event->{duration});

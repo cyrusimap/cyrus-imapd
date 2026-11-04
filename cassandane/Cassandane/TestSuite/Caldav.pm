@@ -198,8 +198,8 @@ sub assert_caldav_notifications
     my @expected = @_;
 
     my $newdata = $self->{instance}->getnotify();
-    my @imip = grep { $_->{METHOD} eq 'imip' } @$newdata;
-    my @payloads = map { decode_json($_->{MESSAGE}) } @imip;
+    my @imip = grep { $_->{method} eq 'imip' } @$newdata;
+    my @payloads = map { $_->{message} } @imip;
     foreach my $payload (@payloads) {
         ($payload->{event}) = $self->{caldav}->vcalendarToEvents($payload->{ical});
         $payload->{method} = delete $payload->{event}{method};
