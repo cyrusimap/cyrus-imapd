@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+
+# A frontend proxies an APPEND with a large message to the backend, whether
+# the client sends it as a non-synchronizing literal or a synchronizing one.
+sub test_proxy_append_large
+    :NoAltNamespace
+    ($self)
+{
+    my $frontend = $self->{frontend_store}->get_client();
+    my $backend = $self->{store}->get_client();
+
+    $frontend->create('INBOX.big') or die "create: $@";
+
+    my $body = ("x" x 76 . "\r\n") x 1300;
+    my %sizes;
+
+    for my $literal_plus (1, 0) {
+        # Mail::IMAPTalk sends synchronizing literals if this is unset
+        $frontend->{Cache}{LiteralPlus} = $literal_plus;
+
+        my $msg = $self->{gen}->generate(subject => "plus=$literal_plus",
+                                         body => $body)->as_string;
+        $self->assert(length($msg) > 100_000);
+        $sizes{"plus=$literal_plus"} = length($msg);
+
+        $frontend->append('INBOX.big', $msg);
+        $self->assert_str_equals('ok',
+                                 $frontend->get_last_completion_response());
+    }
+
+    $backend->select('INBOX.big') or die "select: $@";
+    my $res = $backend->fetch('1:*', '(rfc822.size envelope)');
+    my %got = map {; $_->{envelope}{Subject} => $_->{'rfc822.size'} }
+              values %$res;
+    $self->assert_cmp_deeply(\%sizes, \%got);
+}

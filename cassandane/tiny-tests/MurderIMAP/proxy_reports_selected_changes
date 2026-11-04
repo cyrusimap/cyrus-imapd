@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+# A command proxied to one backend reports changes to the selected mailbox,
+# on another backend, before its own tagged response.
+sub test_proxy_reports_selected_changes
+    :NoAltNamespace
+    ($self)
+{
+    my $admin2 = $self->{backend2_adminstore}->get_client();
+    $admin2->create('shared') or die "create: $@";
+    $admin2->setacl('shared', 'cassandane', 'lrswipkxtecda') or die "setacl: $@";
+
+    my $frontend = $self->{frontend_store}->get_client();
+    $frontend->create('INBOX.sel') or die "create: $@";
+    $frontend->select('INBOX.sel') or die "select: $@";
+    $self->{store}->set_folder('INBOX.sel');
+
+    my $msg = $self->{gen}->generate(subject => 'appended')->as_string;
+    my $exists = 0;
+    my %cmds = (
+        status       => sub ($m) { $frontend->status($m, '(messages)') },
+        append       => sub ($m) { $frontend->append($m, $msg) },
+        getquotaroot => sub ($m) { $frontend->getquotaroot($m) },
+        setacl       => sub ($m) { $frontend->setacl($m, 'anyone', 'lr') },
+    );
+
+    for my $name (sort keys %cmds) {
+        $self->make_message("for $name");
+        $exists++;
+
+        $cmds{$name}->('shared');
+        $self->assert_str_equals('ok',
+                                 $frontend->get_last_completion_response());
+        $self->assert_num_equals($exists,
+                                 $frontend->get_response_code('exists'));
+    }
+}
