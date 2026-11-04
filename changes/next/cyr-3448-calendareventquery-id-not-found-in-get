@@ -1,0 +1,37 @@
+Description:
+
+dav_reconstruct can now repair iCalendar UIDs that are spread over several
+CalDAV resources, with the new --repair, --repair-uid-conflicts and --really
+options.
+
+Documentation:
+
+docsrc/reference/manpages/usercommands/dav_reconstruct.rst
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+Nothing is required on upgrade.  A user whose CalendarEvent/query returns the
+same id twice, or whose CalendarEvent/get reports an id as notFound that it
+also returns, has an iCalendar UID in more than one resource.  Run
+`dav_reconstruct --repair-uid-conflicts <userid>` to see what the repair would
+do, and again with --really to do it.
+
+Two limitations are worth knowing before running it:
+
+- A copy that is split off under a new UID keeps its ORGANIZER and ATTENDEE
+  properties.  Editing or destroying that copy afterwards schedules against a
+  UID the recipients have never seen.  Cyrus has no per-resource scheduling
+  suppression to prevent this.  The copy that carries a Schedule-Tag is
+  preferred as the primary, so a copy with real scheduling state is only split
+  off when every copy in the group has one.
+- --repair alone is not a total dry run.  The index record rewrites that
+  rebuilding the database performs -- assigning a fresh createdmodseq,
+  expunging superseded records -- happen whether or not --really is given.
+
+GitHub issue:
+
+None.

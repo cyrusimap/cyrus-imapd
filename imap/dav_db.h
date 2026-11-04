@@ -43,7 +43,10 @@ int dav_close(sqldb_t **dbp);
 /* delete database corresponding to mailbox */
 int dav_delete(struct mailbox *mailbox);
 
-int dav_reconstruct_user(const char *userid, const char *audit_tool);
+/* Rebuild a user's DAV database from their mailboxes.  'flags' is a
+   DAV_REPAIR_* mask selecting the content repairs to report or perform;
+   pass 0 for none.  Returns non-zero if a repair could not be completed. */
+int dav_reconstruct_user(const char *userid, const char *audit_tool, int flags);
 
 int dav_attach_userid(sqldb_t *db, const char *userid);
 int dav_attach_mailbox(sqldb_t *db, struct mailbox *mailbox);
