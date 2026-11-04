@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# A :matches pattern ending in an unpaired backslash, whether written in the
+# script or built at runtime, has nothing for it to escape, so it matches a
+# literal backslash.
+sub test_matches_trailing_backslash ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.matched")
+        or die "Cannot create mailbox INBOX.matched: $@";
+
+    xlog $self, "Install a script with literal and runtime trailing backslashes";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["fileinto", "variables"];
+set "pattern" "b\\";
+if anyof (header :matches "Subject" "a\\",
+          header :matches "Subject" "${pattern}") {
+  fileinto "INBOX.matched";
+}
+EOF
+    );
+
+    my %expect = ('a\\' => 1, 'b\\' => 1, 'a' => 0, 'b' => 0, 'a\\x' => 0);
+    for my $subject (sort keys %expect) {
+        my $msg = $self->{gen}->generate(subject => $subject);
+        $self->{instance}->deliver($msg);
+    }
+
+    $imaptalk->select("INBOX.matched");
+    my $matched = $imaptalk->fetch('1:*', 'envelope');
+    my @subjects = sort map { $_->{envelope}{Subject} } values %$matched;
+    $self->assert_cmp_deeply(
+        [ sort grep { $expect{$_} } keys %expect ], \@subjects);
+}
