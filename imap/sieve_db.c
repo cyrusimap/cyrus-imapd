@@ -191,8 +191,8 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         return 0;
 
     sdata->rowid = sqlite3_column_int(stmt, 0);
-    sdata->creationdate = sqlite3_column_int(stmt, 1);
-    sdata->lastupdated = sqlite3_column_int(stmt, 2);
+    sdata->creationdate = sqlite3_column_int64(stmt, 1);
+    sdata->lastupdated = sqlite3_column_int64(stmt, 2);
     sdata->imap_uid = sqlite3_column_int(stmt, 4);
     sdata->isactive = sqlite3_column_int(stmt, 10);
 

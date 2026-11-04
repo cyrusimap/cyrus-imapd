@@ -191,9 +191,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
         return 0;
 
     cdata->dav.rowid = sqlite3_column_int(stmt, 0);
-    cdata->dav.creationdate = sqlite3_column_int(stmt, 1);
+    cdata->dav.creationdate = sqlite3_column_int64(stmt, 1);
     cdata->dav.imap_uid = sqlite3_column_int(stmt, 4);
-    cdata->dav.lock_expire = sqlite3_column_int(stmt, 8);
+    cdata->dav.lock_expire = sqlite3_column_int64(stmt, 8);
     cdata->kind = sqlite3_column_int(stmt, 11);
     cdata->jmapversion = sqlite3_column_int(stmt, 18);
 
