@@ -1896,30 +1896,15 @@ my $error_severity = qr{^<(?:emerg|alert|crit|err)>};
 
 # Decide whether a captured syslog line represents an unexpected error.
 #
-# logfmt events (which always begin "event=") carry their severity, so we
-# can recognise a problem without knowing anything about the message text.
-# That's the whole point of recording the severity: as logfmt conversion
-# proceeds, messages can be reworded freely without silently switching off
-# this check.
-#
-# Everything else is still matched by text.  We can't simply promote the
-# old messages to severity matching, because plenty of them are logged at
-# LOG_ERR without being the kind of error a test should fail on.  This
-# clause shrinks as logfmt conversion proceeds, and goes away with the last
-# unconverted call site.
+# logfmt events carry their severity, so we can recognize a problem without
+# knowing anything about the message text, and messages can be reworded freely
+# without silently switching off this check.  A line that isn't a logfmt event
+# is for _check_syslog_logfmt to complain about.
 sub _syslog_line_is_error
 {
     my ($line) = @_;
 
-    return scalar $line =~ $error_severity
-        if $line =~ m/\]: event=/;
-
-    # "NO_ERROR" is nghttp2's name for a clean HTTP/2 stream/connection close;
-    # httpd logs it on every close, so don't let its ERROR substring trip the
-    # text match.
-    (my $text = $line) =~ s/\bNO_ERROR\b//g;
-
-    return scalar $text =~ m/ERROR|TRACELOG|Unknown code ____/;
+    return scalar($line =~ m/\]: event=/ && $line =~ $error_severity);
 }
 
 sub _check_syslog
@@ -1940,7 +1925,7 @@ sub _check_syslog
     # skiplist complains of an unreadable skipstamp when ctl_cyrusdb -r has
     # never run, which is how Cassandane starts every instance
     @errors = grep {
-        not m/DBERROR.*skipstamp|\bevent=db\.skiplist\.skipstamp\.unreadable\b/
+        not m/\bevent=db\.skiplist\.skipstamp\.unreadable\b/
     } @errors;
 
     # Cassandane::Config points smtp_host at bogus:0, so that nothing sends
