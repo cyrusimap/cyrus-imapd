@@ -356,7 +356,7 @@ int main(int argc, char **argv)
 
     /* set up reconstruct rock */
     if (fflag) rrock.discovered = strarray_new();
-    construct_hash_table(&rrock.visited, 2047, 1); /* XXX magic numbers */
+    construct_hash_table(&rrock.visited, 0, 0);
 
     /* Normal Operation */
     if (optind == argc) {
