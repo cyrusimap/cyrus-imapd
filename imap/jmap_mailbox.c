@@ -919,7 +919,7 @@ static int jmap_mailbox_get(jmap_req_t *req)
         .shared_mboxes = shared_mboxes,
         .sublist = sublist
     };
-    construct_hash_table(&rock.roles, 8, 0);
+    construct_hash_table(&rock.roles, 0, 0);
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
@@ -4052,16 +4052,16 @@ static int _mboxset_state_validate(jmap_req_t *req,
         .specialuses_by_id = HASH_TABLE_INITIALIZER,
         .has_conflict = 0
     };
-    construct_hash_table(&state.id_by_imapname, 1024, 0);
-    construct_hash_table(&state.entry_by_id, 1024, 0);
-    construct_hash_table(&state.siblingnames_by_parent_id, 1024, 0);
+    construct_hash_table(&state.id_by_imapname, 0, 0);
+    construct_hash_table(&state.entry_by_id, 0, 0);
+    construct_hash_table(&state.siblingnames_by_parent_id, 0, 0);
 
     mboxlist_usermboxtree(req->accountid, NULL, _mboxset_state_mboxlist_cb, &state,
                           MBOXTREE_INTERMEDIATES);
     hash_enumerate(&state.id_by_imapname, _mboxset_state_mkentry_cb, &state);
 
     /* Create specialuse entries */
-    construct_hash_table(&state.specialuses_by_id, 1024, 0);
+    construct_hash_table(&state.specialuses_by_id, 0, 0);
     struct buf pattern = BUF_INITIALIZER;
     buf_initmcstr(&pattern, mboxname_user_mbox(req->accountid, NULL));
     buf_putc(&pattern, '*');
