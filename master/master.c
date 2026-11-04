@@ -667,16 +667,27 @@ static int decode_wait_status(struct centry *c, pid_t pid, int status)
     char *desc = centry_describe(c, pid);
 
     if (WIFEXITED(status)) {
-        if (!WEXITSTATUS(status)) {
+        int ex = WEXITSTATUS(status);
+
+        switch (ex) {
+        case EX_OK:
             syslog(LOG_DEBUG, "%s exited normally", desc);
-        }
-        else if (WEXITSTATUS(status) == EX_TEMPFAIL) {
+            break;
+        case EX_TEMPFAIL:
             syslog(LOG_DEBUG, "%s was killed", desc);
-        }
-        else {
-            syslog(LOG_ERR, "%s exited, status %d",
-                   desc, WEXITSTATUS(status));
+            break;
+        case EX_PROTOCOL:
+            if (c && c->si != SERVICE_NONE && Services[c->si].listen) {
+                /* the client misbehaved, not the service */
+                syslog(LOG_DEBUG, "%s exited after a client protocol error",
+                       desc);
+                break;
+            }
+            GCC_FALLTHROUGH
+        default:
+            syslog(LOG_ERR, "%s exited, status %d", desc, ex);
             failed = 1;
+            break;
         }
     }
 
@@ -1227,6 +1238,8 @@ static void spawn_schedule(struct timeval now)
     }
 }
 
+static int process_msgs(int si);
+
 static void reap_child(void)
 {
     int status;
@@ -1270,6 +1283,14 @@ static void reap_child(void)
                 centry_set_state(c, SERVICE_STATE_UNKNOWN);
             }
             if (s) {
+                if (s->stat[0] >= 0 &&
+                    c->service_state == SERVICE_STATE_READY) {
+                    /* The child may have reported a connection that we haven't
+                     * read yet, before exiting.  Catch up, so that a child that
+                     * was busy isn't taken for one that failed while ready. */
+                    process_msgs(c->si);
+                }
+
                 /* update counters for known services */
                 switch (c->service_state) {
                 case SERVICE_STATE_READY:
@@ -1901,6 +1922,27 @@ static void process_msg(int si, struct notify_message *msg)
     if (verbose)
         syslog(LOG_DEBUG, "service %s/%s now has %d ready workers",
                SERVICEPARAM(s->name), SERVICEPARAM(s->familyname), s->ready_workers);
+}
+
+/* Process the messages waiting on service si's status pipe.
+ * Returns nonzero if reading them failed. */
+static int process_msgs(int si)
+{
+    struct notify_message msg;
+    int r;
+
+    while ((r = read_msg(Services[si].stat[0], &msg)) == 0)
+        process_msg(si, &msg);
+
+    if (r == 2) {
+        syslog(LOG_ERR, "got incorrectly sized response from child: %x", si);
+        return 1;
+    }
+    if (r < 0) {
+        syslog(LOG_ERR, "error while receiving message from child %x: %m", si);
+        return 1;
+    }
+    return 0;
 }
 
 static void add_start(const char *name, struct entry *e,
@@ -2821,7 +2863,6 @@ int main(int argc, char **argv)
     int fd;
     fd_set rfds;
     char *p = NULL;
-    int r = 0;
 
     struct timeval now;
 
@@ -3116,7 +3157,6 @@ int main(int argc, char **argv)
     for (;;) {
         int i, maxfd, ready_fds, total_children = 0;
         struct timeval tv, *tvptr;
-        struct notify_message msg;
 
 #if HAVE_PSELECT
         /* pselect will not reliably/portably deliver pending signals if
@@ -3257,21 +3297,8 @@ int main(int argc, char **argv)
                 int x = Services[i].stat[0];
                 int y = Services[i].socket;
 
-                if ((x >= 0) && FD_ISSET(x, &rfds)) {
-                    while ((r = read_msg(x, &msg)) == 0)
-                        process_msg(i, &msg);
-
-                    if (r == 2) {
-                        syslog(LOG_ERR,
-                            "got incorrectly sized response from child: %x", i);
-                        continue;
-                    }
-                    if (r < 0) {
-                        syslog(LOG_ERR,
-                            "error while receiving message from child %x: %m", i);
-                        continue;
-                    }
-                }
+                if ((x >= 0) && FD_ISSET(x, &rfds) && process_msgs(i))
+                    continue;
 
                 if (!in_shutdown && Services[i].exec &&
                     Services[i].nactive < Services[i].max_workers &&

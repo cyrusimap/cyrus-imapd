@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test that a service whose children keep exiting with EX_PROTOCOL, as they
+# do when a client breaks the protocol, is not disabled for failing
+#
+sub test_service_exit_protocol ($self)
+{
+    my $srv = $self->lemming_service(prefork => 1,
+                                     mode => 'protocol',
+                                     delay => 100);
+    $self->start();
+
+    xlog $self, "preforked lemmings keep exiting and being replaced";
+    my $dead = 0;
+    for (1..30) {
+        $dead = $self->lemming_census()->{A}{dead} // 0;
+        last if $dead >= 10;
+        sleep 0.5;
+    }
+    $self->assert($dead >= 10, "only $dead lemmings exited");
+
+    $self->assert_syslog_does_not_match($self->{instance},
+                                        qr{too many failures});
+}

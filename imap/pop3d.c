@@ -1176,7 +1176,7 @@ static void cmd_stls(int pop3s)
 
     /* if error */
     if (result==-1) {
-        syslog(LOG_NOTICE, "TLS negiation failed: %s", popd_clienthost);
+        syslog(LOG_NOTICE, "TLS negotiation failed: %s", popd_clienthost);
         shut_down(EX_PROTOCOL);
     }
 

@@ -1,0 +1,27 @@
+Description:
+
+master no longer disables a service as having "too many failures" when
+many of its connections fail at once, such as a burst of connections that
+fail the TLS handshake.  Children that exited while busy with a client
+could be counted as failing while ready, and a client's protocol error
+counted as a failure of the service.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+#6610
