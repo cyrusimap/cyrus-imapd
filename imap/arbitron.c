@@ -52,7 +52,8 @@ struct arb_mailbox_data {
 };
 
 static struct mpool *arb_pool;
-static hash_table mailbox_table, mboxname_table;
+static hash_table mailbox_table = HASH_TABLE_INITIALIZER;
+static hash_table mboxname_table = HASH_TABLE_INITIALIZER;
 
 static time_t report_start_time = -1, report_end_time, prune_time = 0;
 static int dosubs = 1;
@@ -182,8 +183,8 @@ int main(int argc, char **argv)
 
     /* Allocate our shared memory pools */
     arb_pool = new_mpool(0);
-    construct_hash_table(&mailbox_table, 2047, 1);
-    construct_hash_table(&mboxname_table, 2047, 1);
+    construct_hash_table(&mailbox_table, 0, 0);
+    construct_hash_table(&mboxname_table, 0, 0);
 
     /* Get the mailbox list */
     fprintf(stderr, "Loading Mailboxes...");
