@@ -43,7 +43,7 @@ sub test_emailsubmission_set_unstorable_not_sent ($self)
     $self->assert_num_equals(1, chmod($mode, $dir));
 
     $self->assert_syslog_matches($self->{instance},
-                                 qr/IOERROR: create failed.*Permission denied/);
+                                 qr/\bevent=util\.copyfile\.failed\b.*\butil\.step=create\b.*Permission denied/);
 
     $self->assert_str_equals('', "$error");
     $self->assert_cmp_deeply(

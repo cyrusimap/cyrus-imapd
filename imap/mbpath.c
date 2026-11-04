@@ -123,8 +123,8 @@ static int do_paths(struct findall_data *data, void *rock)
              && !(data->mbentry->mbtype & MBTYPE_LEGACY_DIRS))
     {
         /* non-legacy mailbox -- can't do anything without uniqueid! */
-        xsyslog(LOG_ERR, "mbentry has no uniqueid, needs reconstruct",
-                         "mboxname=<%s>", data->mbentry->name);
+        xsyslog_ev(LOG_ERR, "mbpath.uniqueid.missing",
+                   lf_intname("mbox.name", data->mbentry->name));
         if (!opts->quiet) {
             const char *extname = data->extname;
             if (!extname) {

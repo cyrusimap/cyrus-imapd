@@ -83,7 +83,7 @@ static int msgrecord_need(msgrecord_t *mr, unsigned int need)
 
     if (is_missing(M_ANNOTATIONS)) {
         if (mr->isappend) {
-            syslog(LOG_ERR, "msgrecord: msgrecord msut be appended");
+            xsyslog_ev(LOG_ERR, "msgrecord.not_appended");
             return IMAP_NOTFOUND;
         }
         r = msgrecord_need(mr, M_MAILBOX|M_UID);
@@ -748,8 +748,9 @@ static int msgrecord_save(msgrecord_t *mr)
     int r = 0;
 
     if (!mailbox_index_islocked(mr->mbox, 1)) {
-        syslog(LOG_ERR, "msgrecord: need mailbox lock to save %s:%d",
-                mailbox_name(mr->mbox), mr->record.uid);
+        xsyslog_ev(LOG_ERR, "msgrecord.save.unlocked",
+                   lf_mailbox(mr->mbox),
+                   lf_u("msg.imapuid", mr->record.uid));
         return IMAP_INTERNAL;
     }
     if (mr->isappend) {
@@ -766,8 +767,9 @@ static int msgrecord_save(msgrecord_t *mr)
 EXPORTED int msgrecord_append(msgrecord_t *mr)
 {
     if (!mr->isappend) {
-        syslog(LOG_ERR, "msgrecord: can't append, record %s:%d already exists",
-                mailbox_name(mr->mbox), mr->record.uid);
+        xsyslog_ev(LOG_ERR, "msgrecord.append.exists",
+                   lf_mailbox(mr->mbox),
+                   lf_u("msg.imapuid", mr->record.uid));
         return IMAP_INTERNAL;
     }
     return msgrecord_save(mr);
@@ -776,7 +778,7 @@ EXPORTED int msgrecord_append(msgrecord_t *mr)
 EXPORTED int msgrecord_rewrite(msgrecord_t *mr)
 {
     if (mr->isappend) {
-        syslog(LOG_ERR, "msgrecord: can't rewrite, record must be appended");
+        xsyslog_ev(LOG_ERR, "msgrecord.not_appended");
         return IMAP_INTERNAL;
     }
     return msgrecord_save(mr);

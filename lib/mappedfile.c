@@ -84,8 +84,9 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
         }
         int dirfd = xopendir(mf->fname, /*create*/1);
         if (dirfd < 0) {
-            xsyslog(LOG_ERR, "IOERROR: open directory failed for mappedfile",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.open.failed",
+                       lf_s("mappedfile.step", "opendir"),
+                       lf_s("sys.path", mf->fname));
             goto err;
         }
         char *copy = xstrdup(mf->fname);
@@ -94,8 +95,9 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
         free(copy);
         if (mf->fd >= 0) {
             if (fsync(dirfd) < 0) {
-                xsyslog(LOG_ERR, "IOERROR: directory sync failed for mappedfile",
-                                 "filename=<%s>", mf->fname);
+                xsyslog_ev(LOG_ERR, "mappedfile.open.failed",
+                           lf_s("mappedfile.step", "fsync_dir"),
+                           lf_s("sys.path", mf->fname));
                 close(dirfd);
                 goto err;
             }
@@ -104,8 +106,9 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
     }
 
     if (mf->fd == -1) {
-        xsyslog(LOG_ERR, "IOERROR: open failed",
-                         "filename=<%s>", mf->fname);
+        xsyslog_ev(LOG_ERR, "mappedfile.open.failed",
+                   lf_s("mappedfile.step", "open"),
+                   lf_s("sys.path", mf->fname));
         r = -errno;
         goto err;
     }
@@ -116,8 +119,9 @@ EXPORTED int mappedfile_open(struct mappedfile **mfp,
 
     r = fstat(mf->fd, &sbuf);
     if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                         "filename=<%s>", mf->fname);
+        xsyslog_ev(LOG_ERR, "mappedfile.open.failed",
+                   lf_s("mappedfile.step", "fstat"),
+                   lf_s("sys.path", mf->fname));
         goto err;
     }
 
@@ -166,21 +170,24 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
 
     for (;;) {
         if (lock_shared(mf->fd, mf->fname) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: lock_shared failed",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.lock.failed",
+                       lf_s("mappedfile.step", "lock_shared"),
+                       lf_s("sys.path", mf->fname));
             return -EIO;
         }
 
         if (fstat(mf->fd, &sbuf) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: fstat failed",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.lock.failed",
+                       lf_s("mappedfile.step", "fstat"),
+                       lf_s("sys.path", mf->fname));
             lock_unlock(mf->fd, mf->fname);
             return -EIO;
         }
 
         if (stat(mf->fname, &sbuffile) == -1) {
-            xsyslog(LOG_ERR, "IOERROR: stat failed",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.lock.failed",
+                       lf_s("mappedfile.step", "stat"),
+                       lf_s("sys.path", mf->fname));
             lock_unlock(mf->fd, mf->fname);
             return -EIO;
         }
@@ -189,8 +196,9 @@ EXPORTED int mappedfile_readlock(struct mappedfile *mf)
 
         newfd = open(mf->fname, O_RDWR, 0644);
         if (newfd == -1) {
-            xsyslog(LOG_ERR, "IOERROR: open failed",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.lock.failed",
+                       lf_s("mappedfile.step", "open"),
+                       lf_s("sys.path", mf->fname));
             lock_unlock(mf->fd, mf->fname);
             return -EIO;
         }
@@ -221,9 +229,10 @@ EXPORTED int mappedfile_writelock(struct mappedfile *mf)
 
     r = lock_reopen_ex(mf->fd, mf->fname, &sbuf, &lockfailaction, &changed);
     if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: lock_reopen_ex failed",
-                            "action=<%s> filename=<%s>",
-                            lockfailaction, mf->fname);
+        xsyslog_ev(LOG_ERR, "mappedfile.lock.failed",
+                   lf_s("mappedfile.step", "lock_reopen"),
+                   lf_s("sys.path", mf->fname),
+                   lf_s("mappedfile.lock.action", lockfailaction));
         return r;
     }
     mf->lock_status = MF_WRITELOCKED;
@@ -252,8 +261,9 @@ EXPORTED int mappedfile_unlock(struct mappedfile *mf)
 
     r = lock_unlock(mf->fd, mf->fname);
     if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: lock_unlock failed",
-                         "filename=<%s>", mf->fname);
+        xsyslog_ev(LOG_ERR, "mappedfile.unlock.failed",
+                   lf_s("mappedfile.step", "lock_unlock"),
+                   lf_s("sys.path", mf->fname));
         return r;
     }
 
@@ -261,8 +271,9 @@ EXPORTED int mappedfile_unlock(struct mappedfile *mf)
     gettimeofday(&endtime, 0);
     timediff = timesub(&mf->starttime, &endtime);
     if (timediff > 1.0) {
-        syslog(LOG_NOTICE, "mappedfile: longlock %s for %0.1f seconds",
-               mf->fname, timediff);
+        xsyslog_ev(LOG_NOTICE, "mappedfile.lock.long",
+                   lf_s("sys.path", mf->fname),
+                   lf_duration("mappedfile.lock.duration", timediff));
     }
 
     return 0;
@@ -279,15 +290,17 @@ EXPORTED int mappedfile_commit(struct mappedfile *mf)
 
     if (mf->was_resized) {
         if (fsync(mf->fd) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: fsync failed",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.commit.failed",
+                       lf_s("mappedfile.step", "fsync"),
+                       lf_s("sys.path", mf->fname));
             return -EIO;
         }
     }
     else {
         if (fdatasync(mf->fd) < 0) {
-            xsyslog(LOG_ERR, "IOERROR: fdatasync failed",
-                             "filename=<%s>", mf->fname);
+            xsyslog_ev(LOG_ERR, "mappedfile.commit.failed",
+                       lf_s("mappedfile.step", "fdatasync"),
+                       lf_s("sys.path", mf->fname));
             return -EIO;
         }
     }
@@ -318,19 +331,21 @@ EXPORTED ssize_t mappedfile_pwrite(struct mappedfile *mf,
     /* locate the file handle */
     pos = lseek(mf->fd, offset, SEEK_SET);
     if (pos < 0) {
-        xsyslog(LOG_ERR, "IOERROR: lseek failed",
-                         "filename=<%s> offset=<" OFF_T_FMT ">",
-                         mf->fname, offset);
+        xsyslog_ev(LOG_ERR, "mappedfile.write.failed",
+                   lf_s("mappedfile.step", "lseek"),
+                   lf_s("sys.path", mf->fname),
+                   lf_lld("mappedfile.offset", (long long) offset));
         return -1;
     }
 
     /* write the buffer */
     written = retry_write(mf->fd, base, len);
     if (written < 0) {
-        xsyslog(LOG_ERR, "IOERROR: retry_write failed",
-                         "filename=<%s> len=<%zu>"
-                            " offset=<" OFF_T_FMT ">",
-                         mf->fname, len, offset);
+        xsyslog_ev(LOG_ERR, "mappedfile.write.failed",
+                   lf_s("mappedfile.step", "write"),
+                   lf_s("sys.path", mf->fname),
+                   lf_zu("mappedfile.length", len),
+                   lf_lld("mappedfile.offset", (long long) offset));
         return -1;
     }
 
@@ -366,9 +381,10 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
     /* locate the file handle */
     pos = lseek(mf->fd, offset, SEEK_SET);
     if (pos < 0) {
-        xsyslog(LOG_ERR, "IOERROR: lseek failed",
-                         "filename=<%s> offset=<" OFF_T_FMT ">",
-                         mf->fname, offset);
+        xsyslog_ev(LOG_ERR, "mappedfile.write.failed",
+                   lf_s("mappedfile.step", "lseek"),
+                   lf_s("sys.path", mf->fname),
+                   lf_lld("mappedfile.offset", (long long) offset));
         return -1;
     }
 
@@ -380,10 +396,11 @@ EXPORTED ssize_t mappedfile_pwritev(struct mappedfile *mf,
         for (i = 0; i < nio; i++) {
             len += iov[i].iov_len;
         }
-        xsyslog(LOG_ERR, "IOERROR: retry_writev failed",
-                         "filename=<%s> len=<%zu>"
-                            " offset=<" OFF_T_FMT ">",
-                         mf->fname, len, offset);
+        xsyslog_ev(LOG_ERR, "mappedfile.write.failed",
+                   lf_s("mappedfile.step", "writev"),
+                   lf_s("sys.path", mf->fname),
+                   lf_zu("mappedfile.length", len),
+                   lf_lld("mappedfile.offset", (long long) offset));
         return -1;
     }
 
@@ -403,8 +420,9 @@ EXPORTED int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 
     r = ftruncate(mf->fd, offset);
     if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: ftruncate failed",
-                         "filename=<%s>", mf->fname);
+        xsyslog_ev(LOG_ERR, "mappedfile.truncate.failed",
+                   lf_s("mappedfile.step", "ftruncate"),
+                   lf_s("sys.path", mf->fname));
         return r;
     }
 
@@ -418,9 +436,9 @@ EXPORTED int mappedfile_rename(struct mappedfile *mf, const char *newname)
 {
     int r = cyrus_rename(mf->fname, newname);
     if (r < 0) {
-        xsyslog(LOG_ERR, "IOERROR: mappedfile_rename failed",
-                         "filename=<%s> newname=<%s>",
-                         mf->fname, newname);
+        xsyslog_ev(LOG_ERR, "mappedfile.rename.failed",
+                   lf_s("old.sys.path", mf->fname),
+                   lf_s("sys.path", newname));
         return r;
     }
 

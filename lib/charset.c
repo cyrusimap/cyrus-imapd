@@ -575,7 +575,7 @@ static int b64_flush(struct convert_rock *rock)
         if (s->index != index_64)
             return -1;
         else
-            xsyslog(LOG_WARNING, "ignoring invalid base64 characters", NULL);
+            xsyslog_ev(LOG_WARNING, "charset.base64.invalid");
     }
     return 0;
 }
@@ -4863,8 +4863,8 @@ static char *domain_to_x(const char *domain,
         UErrorCode uerr = U_ZERO_ERROR;
         global_uidna = uidna_openUTS46(UIDNA_DEFAULT, &uerr);
         if (U_FAILURE(uerr)) {
-            xsyslog(LOG_ERR, "could not initialize ICU IDNA", "err=<%s>",
-                    u_errorName(uerr));
+            xsyslog_ev(LOG_ERR, "charset.idna.init.failed",
+                       lf_s("error", u_errorName(uerr)));
             global_uidna = NULL;
             return NULL;
         }

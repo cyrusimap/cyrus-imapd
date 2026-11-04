@@ -187,8 +187,9 @@ static int should_index(const char *name)
             printf("error looking up %s: %s\n",
                    extname, error_message(r));
         }
-        syslog(LOG_INFO, "error looking up %s: %s",
-               extname, error_message(r));
+        xsyslog_ev(LOG_INFO, "search.squatter.mailbox.lookup.failed",
+                   lf_s("mbox.name", extname),
+                   lf_err("error", r));
 
         free(extname);
         ret = 0;
@@ -358,14 +359,17 @@ again:
         r = mailbox_open_irlnb(name, &mailbox);
 
     if (r == IMAP_MAILBOX_LOCKED) {
-        if (verbose) syslog(LOG_INFO, "mailbox %s locked, retrying", extname);
+        if (verbose) xsyslog_ev(LOG_INFO, "search.squatter.mailbox.locked",
+                                lf_s("mbox.name", extname));
         goto done;
     }
     if (r) {
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
-        syslog(LOG_INFO, "error opening %s: %s", extname, error_message(r));
+        xsyslog_ev(LOG_INFO, "search.squatter.mailbox.open.failed",
+                   lf_s("mbox.name", extname),
+                   lf_err("error", r));
 
         goto done;
     }
@@ -382,7 +386,8 @@ again:
         goto done;
     }
 
-    syslog(LOG_INFO, "indexing mailbox %s... ", extname);
+    xsyslog_ev(LOG_INFO, "search.squatter.indexing",
+               lf_s("mbox.name", extname));
     if (verbose > 0) {
         printf("Indexing mailbox %s... ", extname);
     }
@@ -392,7 +397,9 @@ again:
         struct stat sbuf;
         if (!stat(fname, &sbuf) &&
                 skip_unmodified + mailbox->index_mtime < sbuf.st_mtime) {
-            syslog(LOG_DEBUG, "Squat skipping mailbox %s", extname);
+            xsyslog_ev(LOG_DEBUG, "search.squatter.skipped",
+                       lf_s("mbox.name", extname),
+                       lf_s("search.reason", "unchanged"));
             if (verbose > 0) {
                 printf("Skipping mailbox %s\n", extname);
             }
@@ -613,7 +620,8 @@ out:
     return r;
 
 error:
-    syslog(LOG_ERR, "bad query expression at \"%s\"", p);
+    xsyslog_ev(LOG_ERR, "search.squatter.query.invalid",
+               lf_s("search.expr", p));
     r = IMAP_PROTOCOL_ERROR;
     goto out;
 }
@@ -699,9 +707,10 @@ static int do_compact(const strarray_t *mboxnames, const strarray_t *reindextier
         for (retry = 1; retry <= 3; retry++) {
             int r = compact_mbox(userid, reindextiers, srctiers, desttier, flags);
             if (!r) break;
-            xsyslog(LOG_ERR, "IOERROR: failed to compact",
-                             "userid=<%s> retry=<%d> error=<%s>",
-                             userid, retry, error_message(r));
+            xsyslog_ev(LOG_ERR, "search.squatter.compact.failed",
+                       lf_s("u.username", userid),
+                       lf_d("search.retries", retry),
+                       lf_err("error", r));
         }
 
         free(prev_userid);
@@ -838,15 +847,18 @@ static int do_synclogfile(const char *synclogfile)
         const char *mboxname = strarray_nth(mboxnames, i);
         if (!should_index(mboxname)) continue;
         if (verbose > 1)
-            syslog(LOG_INFO, "do_synclogfile: indexing %s", mboxname);
+            xsyslog_ev(LOG_INFO, "search.squatter.indexing",
+                       lf_intname("mbox.name", mboxname),
+                       lf_s("search.step", "synclog"));
         r = index_one(mboxname, /*blocking*/1);
         if (r == IMAP_MAILBOX_NONEXISTENT)
             r = 0;
         if (r == IMAP_MAILBOX_LOCKED || r == IMAP_AGAIN) {
             nskipped++;
             if (nskipped > 10000) {
-                xsyslog(LOG_ERR, "IOERROR: skipped too many times",
-                                 "mailbox=<%s>", mboxname);
+                xsyslog_ev(LOG_ERR, "search.squatter.index.failed",
+                           lf_intname("mbox.name", mboxname),
+                           lf_s("search.reason", "skipped_too_often"));
                 break;
             }
             r = 0;
@@ -854,9 +866,9 @@ static int do_synclogfile(const char *synclogfile)
             strarray_append(mboxnames, mboxname);
         }
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to index",
-                             "mailbox=<%s> error=<%s>",
-                             mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "search.squatter.index.failed",
+                       lf_intname("mbox.name", mboxname),
+                       lf_err("error", r));
             break;
         }
         if (sleepmicroseconds)
@@ -884,7 +896,7 @@ static void do_rolling(const char *channel)
         int sig = signals_poll();
 
         if (sig == SIGHUP && cyrus_isdaemon) {
-            syslog(LOG_DEBUG, "received SIGHUP, shutting down gracefully");
+            xsyslog_ev(LOG_DEBUG, "search.squatter.sighup");
             sync_log_reader_end(slr);
             shut_down(0);
         }
@@ -916,7 +928,9 @@ static void do_rolling(const char *channel)
                 const char *mboxname = strarray_nth(mboxnames, i);
                 if (!should_index(mboxname)) continue;
                 if (verbose > 1)
-                    syslog(LOG_INFO, "do_rolling: indexing %s", mboxname);
+                    xsyslog_ev(LOG_INFO, "search.squatter.indexing",
+                               lf_intname("mbox.name", mboxname),
+                               lf_s("search.step", "rolling"));
                 r = index_one(mboxname, /*blocking*/0);
                 if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED) {
                     /* XXX: alternative, just append to strarray_t *mboxnames ... */
@@ -926,12 +940,15 @@ static void do_rolling(const char *channel)
                     /* should_index() checked for this, but we lost a race.
                      * not an IOERROR, just annoying!
                      */
-                    syslog(LOG_DEBUG, "skipping nonexistent mailbox: %s", mboxname);
+                    xsyslog_ev(LOG_DEBUG, "search.squatter.skipped",
+                               lf_intname("mbox.name", mboxname),
+                               lf_s("search.reason", "nonexistent"));
                 }
                 else if (r) {
-                    xsyslog(LOG_ERR, "IOERROR: failed to index and forgetting",
-                                     "mailbox=<%s> error=<%s>",
-                                     mboxname, error_message(r));
+                    xsyslog_ev(LOG_ERR, "search.squatter.index.failed",
+                               lf_intname("mbox.name", mboxname),
+                               lf_s("search.reason", "forgotten"),
+                               lf_err("error", r));
                 }
                 if (sleepmicroseconds)
                     usleep(sleepmicroseconds);
@@ -981,7 +998,7 @@ static int do_audit(const strarray_t *mboxnames)
 
     int r = 0;
     if (!rx->audit_mailbox) {
-        syslog(LOG_ERR, "squatter: indexer does not support audits");
+        xsyslog_ev(LOG_ERR, "search.squatter.audit.unsupported");
         r = IMAP_INTERNAL;
         goto done;
     }
@@ -1375,9 +1392,10 @@ int main(int argc, char **argv)
         /* -r requires at least one mailbox */
         if (recursive_flag && optind == argc) usage(argv[0]);
         expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind, user_mode);
-        syslog(LOG_NOTICE, "indexing mailboxes");
+        xsyslog_ev(LOG_NOTICE, "search.squatter.started");
         r = do_indexer(&mboxnames);
-        syslog(LOG_NOTICE, "done indexing mailboxes");
+        xsyslog_ev(LOG_NOTICE, "search.squatter.finished",
+                   r ? lf_err("error", r) : lf_skip());
         break;
     case SEARCH:
         if (recursive_flag && optind == argc) usage(argv[0]);

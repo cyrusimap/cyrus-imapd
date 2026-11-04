@@ -56,17 +56,17 @@ sub test_toggleable_debug_logging
 
         # we can also look for the message logged by cyrus at the
         # time it toggles the value
-        my $statuspat = qr/debug logging turned (on|off)/;
+        my $statuspat = qr/\bevent=config\.debug\.toggled\b.*\bconfig\.debug=([01])\b/;
         @lines = $self->{instance}->getsyslog($statuspat);
         $self->assert_num_equals(1, scalar @lines);
         $self->assert_matches(qr/imap\[$imapd_pid\]:/, $lines[0]);
         $lines[0] =~ $statuspat;
         my $status = $1;
         if ($config_debug) {
-            $self->assert_str_equals('on', $status);
+            $self->assert_str_equals('1', $status);
         }
         else {
-            $self->assert_str_equals('off', $status);
+            $self->assert_str_equals('0', $status);
         }
     }
 }

@@ -43,12 +43,14 @@ char* notify_zephyr(const char *class, const char *priority,
     if (!*user) return xstrdup("NO zephyr recipient not specified");
 
     if ((retval = ZInitialize()) != ZERR_NONE) {
-        syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
+        xsyslog_ev(LOG_ERR, "notify.zephyr.failed",
+                   lf_s("notify.step", "initialize"));
         return xstrdup("NO cannot initialize zephyr");
     }
 
     if (gethostname(myhost,sizeof(myhost)) == -1) {
-        syslog(LOG_ERR, "IOERROR: cannot get hostname: %m");
+        xsyslog_ev(LOG_ERR, "notify.zephyr.failed",
+                   lf_s("notify.step", "hostname"));
         return xstrdup("NO zephyr cannot get hostname");
     }
     myhost[sizeof(myhost)-1] = '\0';
@@ -94,7 +96,8 @@ char* notify_zephyr(const char *class, const char *priority,
     free(mysender);
 
     if (retval != ZERR_NONE) {
-        syslog(LOG_ERR, "IOERROR: cannot send zephyr notice: %m");
+        xsyslog_ev(LOG_ERR, "notify.zephyr.failed",
+                   lf_s("notify.step", "send"));
         return xstrdup("NO cannot send zephyr notice");
     }
 

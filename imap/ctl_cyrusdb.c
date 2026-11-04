@@ -105,13 +105,12 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
                                        MBOXLIST_DELETE_FORCE);
         if (r) {
             /* log the error */
-            syslog(LOG_ERR,
-                   "could not remove reserved mailbox '%s': %s",
-                   mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "ctl_cyrusdb.reserved.remove.failed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
         } else {
-            syslog(LOG_NOTICE,
-                   "removed reserved mailbox '%s'",
-                   mbentry->name);
+            xsyslog_ev(LOG_NOTICE, "ctl_cyrusdb.reserved.removed",
+                       lf_intname("mbox.name", mbentry->name));
         }
         goto done;
     }
@@ -146,8 +145,9 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             /* XXX what does it mean if there's an mbentry, but the mailbox
              * XXX was not openable?
              */
-            syslog(LOG_INFO, "%s: mailbox_open_from_mbe %s returned %s",
-                              __func__, mbentry->name, error_message(r));
+            xsyslog_ev(LOG_INFO, "ctl_cyrusdb.mailbox.open.failed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
             goto skip_uniqueid;
         }
 
@@ -156,9 +156,9 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
         if (!mailbox->h.uniqueid) {
             /* yikes, no uniqueid in header either! */
             mailbox_make_uniqueid(mailbox);
-            xsyslog(LOG_INFO, "mailbox header had no uniqueid, creating one",
-                              "mboxname=<%s> newuniqueid=<%s>",
-                              mbentry->name, mailbox->h.uniqueid);
+            xsyslog_ev(LOG_INFO, "ctl_cyrusdb.uniqueid.created",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_s("mbox.uniqueid", mailbox->h.uniqueid));
         }
 
         if (!mailbox->h.jmapid) {
@@ -197,9 +197,9 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
             buf_putc(&frock->jmapid, JMAP_MAILBOXID_PREFIX);
             MODSEQ_TO_JMAPID(&frock->jmapid, frock->next_mboxnum++);
             mailbox_set_jmapid(mailbox, buf_cstring(&frock->jmapid));
-            xsyslog(LOG_INFO, "mailbox header had no jmapid, creating one",
-                    "mboxname=<%s> newjmapid=<%s>",
-                    mbentry->name, mailbox_jmapid(mailbox));
+            xsyslog_ev(LOG_INFO, "ctl_cyrusdb.mailboxid.created",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_s("mbox.mailboxid", mailbox_jmapid(mailbox)));
             copy->foldermodseq = mailbox_modseq_dirty(mailbox);
 
             if (mbname_isdeleted(mbname)) {
@@ -213,34 +213,34 @@ static int fixmbox(const mbentry_t *mbentry, void *rock)
 
         if (!mbentry->uniqueid) {
             copy->uniqueid = xstrdup(mailbox->h.uniqueid);
-            xsyslog(LOG_INFO, "mbentry had no uniqueid, setting from header",
-                    "mboxname=<%s> newuniqueid=<%s>",
-                    copy->name, copy->uniqueid);
+            xsyslog_ev(LOG_INFO, "ctl_cyrusdb.uniqueid.copied",
+                       lf_intname("mbox.name", copy->name),
+                       lf_s("mbox.uniqueid", copy->uniqueid));
         }
 
         if (!mbentry->jmapid) {
             copy->jmapid = xstrdup(mailbox_jmapid(mailbox));
-            xsyslog(LOG_INFO, "mbentry had no jmapid, setting from header",
-                    "mboxname=<%s> newjmapid=<%s>",
-                    copy->name, copy->jmapid);
+            xsyslog_ev(LOG_INFO, "ctl_cyrusdb.mailboxid.copied",
+                       lf_intname("mbox.name", copy->name),
+                       lf_s("mbox.mailboxid", copy->jmapid));
         }
 
         r = mboxlist_updatelock(copy, /*localonly*/1);
         if (r) {
-            xsyslog(LOG_ERR, "failed to update mboxlist",
-                             "mboxname=<%s> error=<%s>",
-                             mbentry->name, error_message(r));
+            xsyslog_ev(LOG_ERR, "ctl.mboxlist.update.failed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
             r2 = mailbox_abort(mailbox);
             if (r2) {
-                xsyslog(LOG_ERR, "DBERROR: error aborting transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
+                xsyslog_ev(LOG_ERR, "ctl.mboxlist.abort.failed",
+                           lf_s("error", cyrusdb_strerror(r2)));
             }
         }
         else {
             r2 = mailbox_commit(mailbox);
             if (r2) {
-                xsyslog(LOG_ERR, "DBERROR: error committing transaction",
-                                 "error=<%s>", cyrusdb_strerror(r2));
+                xsyslog_ev(LOG_ERR, "ctl.mboxlist.commit.failed",
+                           lf_s("error", cyrusdb_strerror(r2)));
             }
         }
         mailbox_close(&mailbox);
@@ -324,12 +324,16 @@ static void check_convert(struct cyrusdb *db, const char *fname)
     if (!strcmp(backendbuf, detectname)) return;
 
     /* otherwise we need to upgrade! */
-    syslog(LOG_NOTICE, "converting %s from %s to %s",
-           fname, detectname, *db->configptr);
+    xsyslog_ev(LOG_NOTICE, "ctl_cyrusdb.convert.starting",
+               lf_s("sys.path", fname),
+               lf_s("old.db.backend", detectname),
+               lf_s("db.backend", *db->configptr));
 
     r = cyrusdb_convert(fname, fname, detectname, *db->configptr);
     if (r)
-        syslog(LOG_NOTICE, "conversion failed %s", fname);
+        xsyslog_ev(LOG_ERR, "ctl_cyrusdb.convert.failed",
+                   lf_s("sys.path", fname),
+                   lf_d("db.result", r));
 }
 
 int main(int argc, char *argv[])
@@ -340,7 +344,6 @@ int main(int argc, char *argv[])
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
     char *dirname = NULL, *backup1 = NULL, *backup2 = NULL;
     strarray_t files = STRARRAY_INITIALIZER;
-    const char *msg = "";
     int i, rotated = 0;
 
     /* keep this in alphabetical order */
@@ -365,13 +368,11 @@ int main(int argc, char *argv[])
 
         case 'r':
             libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
-            msg = "recovering cyrus databases";
             if (op == NONE) op = RECOVER;
             else usage();
             break;
 
         case 'c':
-            msg = "checkpointing cyrus databases";
             if (op == NONE) op = CHECKPOINT;
             else usage();
             break;
@@ -401,7 +402,8 @@ int main(int argc, char *argv[])
     backup1 = strconcat(dirname, ".backup1", (char *)NULL);
     backup2 = strconcat(dirname, ".backup2", (char *)NULL);
 
-    syslog(LOG_NOTICE, "%s", msg);
+    xsyslog_ev(LOG_NOTICE, "ctl_cyrusdb.starting",
+               lf_s("ctl_cyrusdb.op", op == RECOVER ? "recover" : "checkpoint"));
 
     /* detect backends */
     for (i = 0; dblist[i].name != NULL; i++)
@@ -474,8 +476,9 @@ int main(int argc, char *argv[])
                 r2 = dblist[i].archiver(&files, backup1);
 
             if (r2) {
-                syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,
-                       cyrusdb_strerror(r2));
+                xsyslog_ev(LOG_ERR, "ctl_cyrusdb.archive.failed",
+                           lf_s("sys.path", dirname),
+                           lf_s("error", cyrusdb_strerror(r2)));
                 fprintf(stderr,
                         "ctl_cyrusdb: unable to archive environment\n");
             }
@@ -503,6 +506,8 @@ int main(int argc, char *argv[])
     free(backup2);
     cyrus_done();
 
-    syslog(LOG_NOTICE, "done %s", msg);
+    xsyslog_ev(LOG_NOTICE, "ctl_cyrusdb.done",
+               lf_s("ctl_cyrusdb.op", op == RECOVER ? "recover" : "checkpoint"),
+               lf_d("db.result", r || r2));
     exit(r || r2);
 }

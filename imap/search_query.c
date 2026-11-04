@@ -473,15 +473,17 @@ static int _subquery_run_one_folder(search_query_t *query,
 
     if (e && query->verbose) {
         char *s = search_expr_serialise(e);
-        syslog(LOG_INFO, "Folder %s: applying scan expression: %s",
-                mboxname, s);
+        xsyslog_ev(LOG_INFO, "search.query.scanning",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("search.expr", s));
         free(s);
     }
 
     if (query->sortcrit && query->verbose) {
         char *s = sortcrit_as_string(query->sortcrit);
-        syslog(LOG_INFO, "Folder %s: loading MsgData for sort criteria %s",
-               mboxname, s);
+        xsyslog_ev(LOG_INFO, "search.query.sorting",
+                   lf_intname("mbox.name", mboxname),
+                   lf_s("search.sortcrit", s));
         free(s);
     }
 
@@ -871,7 +873,8 @@ static void subquery_run_indexed(const char *serialised_sub __attribute__((unuse
 
     if (query->verbose) {
         char *s = search_expr_serialise(sub->indexed);
-        syslog(LOG_INFO, "Running indexed subquery: %s", s);
+        xsyslog_ev(LOG_INFO, "search.query.indexed",
+                   lf_s("search.expr", s));
         free(s);
     }
 

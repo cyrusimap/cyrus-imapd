@@ -29,8 +29,7 @@ static inline void auditlog_begin(struct logfmt *lf, const char *action)
 
 static inline void auditlog_finish(struct logfmt *lf)
 {
-    syslog(LOG_NOTICE, "%s", logfmt_cstring(lf));
-    logfmt_fini(lf);
+    logfmt_emit(lf, LOG_NOTICE);
 }
 
 /*

@@ -116,9 +116,9 @@ static int _detect_or_convert(struct db *db, const char *backend,
      * backend and convert if possible */
     const char *realname = cyrusdb_detect(fname);
     if (!realname) {
-        xsyslog(LOG_ERR, "DBERROR: failed to detect DB type",
-                         "fname=<%s> backend=<%s>",
-                         fname, backend);
+        xsyslog_ev(LOG_ERR, "db.detect.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("db.backend", backend));
         r = CYRUSDB_IOERROR;
     }
 
@@ -127,18 +127,23 @@ static int _detect_or_convert(struct db *db, const char *backend,
         if (flags & CYRUSDB_CONVERT || libcyrus_config_getswitch(CYRUSOPT_CYRUSDB_AUTOCONVERT)) {
             r = cyrusdb_convert(fname, fname, realname, backend);
             if (r) {
-                xsyslog(LOG_ERR, "DBERROR: failed to convert",
-                                 "fname=<%s> from=<%s> to=<%s>",
-                                 fname, realname, backend);
+                xsyslog_ev(LOG_ERR, "db.convert.failed",
+                           lf_s("sys.path", fname),
+                           lf_s("old.db.backend", realname),
+                           lf_s("db.backend", backend));
             }
             else {
-                syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
-                       fname, realname, backend);
+                xsyslog_ev(LOG_NOTICE, "db.converted",
+                           lf_s("sys.path", fname),
+                           lf_s("old.db.backend", realname),
+                           lf_s("db.backend", backend));
             }
         }
         else {
-            syslog(LOG_NOTICE, "cyrusdb: opening %s with backend %s (requested %s)",
-                   fname, realname, backend);
+            xsyslog_ev(LOG_NOTICE, "db.backend.mismatch",
+                       lf_s("sys.path", fname),
+                       lf_s("db.backend", realname),
+                       lf_s("db.backend.requested", backend));
             db->backend = cyrusdb_fromname(realname);
         }
     }
@@ -161,11 +166,10 @@ static int _myopen(const char *backend, const char *fname,
     if (flags & CYRUSDB_SHARED) {
         assert(tid && *tid == NULL);
         if (flags & CYRUSDB_CONVERT) {
-            xsyslog(LOG_ERR,
-                    "DBERROR: CONVERT and SHARED are mutually exclusive,"
-                        " won't open db",
-                    "fname=<%s> backend=<%s>",
-                    fname, backend);
+            xsyslog_ev(LOG_ERR, "db.open.refused",
+                       lf_s("sys.path", fname),
+                       lf_s("db.backend", backend),
+                       lf_s("db.reason", "convert_and_shared"));
             r = CYRUSDB_INTERNAL;
             goto done;
         }
@@ -196,7 +200,12 @@ static int _myopen(const char *backend, const char *fname,
     if (r) goto done;
 
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB open(%s, %d) => %d, %llx", fname, flags, r, (long long unsigned)db->engine);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "open"),
+               lf_s("sys.path", fname),
+               lf_d("db.flags", flags),
+               lf_d("db.result", r),
+               lf_llx("db.engine", (long long unsigned)db->engine));
 #endif
 
  done:
@@ -221,7 +230,9 @@ EXPORTED int cyrusdb_lockopen(const char *backend, const char *fname,
 EXPORTED int cyrusdb_close(struct db *db)
 {
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB close(%llx)", (long long unsigned)db->engine);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "close"),
+               lf_llx("db.engine", (long long unsigned)db->engine));
 #endif
 
     int r = db->backend->close(db->engine);
@@ -239,7 +250,10 @@ EXPORTED int cyrusdb_fetch(struct db *db,
     if (!db->backend->fetch)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB fetch(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "fetch"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     return db->backend->fetch(db->engine, key, keylen,
                               data, datalen, mytid);
@@ -253,7 +267,10 @@ EXPORTED int cyrusdb_fetchlock(struct db *db,
     if (!db->backend->fetchlock)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB fetchlock(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "fetchlock"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     return db->backend->fetchlock(db->engine, key, keylen,
                                   data, datalen, mytid);
@@ -268,7 +285,10 @@ EXPORTED int cyrusdb_fetchnext(struct db *db,
     if (!db->backend->fetchnext)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB fetchnext(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "fetchnext"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     return db->backend->fetchnext(db->engine, key, keylen,
                                   found, foundlen,
@@ -284,7 +304,10 @@ EXPORTED int cyrusdb_foreach(struct db *db,
     if (!db->backend->foreach)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB foreach(%llx, %.*s)", (long long unsigned)db->engine, (int)prefixlen, prefix);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "foreach"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)prefixlen, prefix));
 #endif
     return db->backend->foreach(db->engine, prefix, prefixlen,
                                 p, cb, rock, tid);
@@ -299,7 +322,10 @@ EXPORTED int cyrusdb_forone(struct db *db,
     const char *data;
     size_t datalen;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB forone(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "forone"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     int r = cyrusdb_fetch(db, key, keylen, &data, &datalen, tid);
     if (r == CYRUSDB_NOTFOUND) return 0;
@@ -318,7 +344,10 @@ EXPORTED int cyrusdb_create(struct db *db,
     if (!db->backend->create)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB create(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "create"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     return db->backend->create(db->engine, key, keylen, data, datalen, tid);
 }
@@ -331,7 +360,10 @@ EXPORTED int cyrusdb_store(struct db *db,
     if (!db->backend->store)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB store(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "store"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     return db->backend->store(db->engine, key, keylen, data, datalen, tid);
 }
@@ -343,7 +375,10 @@ EXPORTED int cyrusdb_delete(struct db *db,
     if (!db->backend->delete_)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB delete(%llx, %.*s)", (long long unsigned)db->engine, (int)keylen, key);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "delete"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_raw("db.key", "%.*s", (int)keylen, key));
 #endif
     return db->backend->delete_(db->engine, key, keylen, tid, force);
 }
@@ -353,7 +388,10 @@ EXPORTED int cyrusdb_lock(struct db *db, struct txn **tid, int flags)
     if (!db->backend->lock)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB lock(%llx, %d)\n", (long long unsigned)db->engine, flags);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "lock"),
+               lf_llx("db.engine", (long long unsigned)db->engine),
+               lf_d("db.flags", flags));
 #endif
     return db->backend->lock(db->engine, tid, flags);
 
@@ -364,7 +402,9 @@ EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)
     if (!db->backend->commit)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB commit(%llx)", (long long unsigned)db->engine);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "commit"),
+               lf_llx("db.engine", (long long unsigned)db->engine));
 #endif
     return db->backend->commit(db->engine, tid);
 }
@@ -374,7 +414,9 @@ EXPORTED int cyrusdb_abort(struct db *db, struct txn *tid)
     if (!db->backend->abort)
         return CYRUSDB_NOTIMPLEMENTED;
 #ifdef DEBUGDB
-    syslog(LOG_NOTICE, "DEBUGDB abort(%llx)", (long long unsigned)db->engine);
+    xsyslog_ev(LOG_NOTICE, "db.debug",
+               lf_s("db.op", "abort"),
+               lf_llx("db.engine", (long long unsigned)db->engine));
 #endif
     return db->backend->abort(db->engine, tid);
 }
@@ -426,9 +468,9 @@ EXPORTED void cyrusdb_init(void)
     for (i=0; _backends[i]; i++) {
         r = (_backends[i])->init(dbdir, initflags);
         if (r) {
-            xsyslog(LOG_ERR, "DBERROR: backend init failed",
-                             "backend=<%s>",
-                             _backends[i]->name);
+            xsyslog_ev(LOG_ERR, "db.init.failed",
+                       lf_s("db.backend", _backends[i]->name),
+                       lf_s("sys.path", dbdir));
         }
     }
 
@@ -676,15 +718,15 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
              * empty database, with the real data left behind under
              * oldfname.  Log the breadcrumb an operator needs to notice
              * and recover it. */
-            xsyslog(LOG_NOTICE, "moving database aside for shape-changing "
-                                 "convert; if a crash follows before this "
-                                 "completes, recover data from the .OLD path",
-                                 "fname=<%s> oldfname=<%s>",
-                                 fromfname, oldfname);
+            xsyslog_ev(LOG_NOTICE, "db.convert.moving_aside",
+                       lf_s("sys.path", fromfname),
+                       lf_s("db.aside.path", oldfname));
 
             if (rename(fromfname, oldfname)) {
-                xsyslog(LOG_ERR, "DBERROR: failed to move aside",
-                                 "fname=<%s> to=<%s>", fromfname, oldfname);
+                xsyslog_ev(LOG_ERR, "db.convert.failed",
+                           lf_s("sys.path", fromfname),
+                           lf_s("db.aside.path", oldfname),
+                           lf_s("db.step", "move_aside"));
                 r = CYRUSDB_IOERROR;
                 goto err;
             }
@@ -693,9 +735,10 @@ EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
             if (r) {
                 /* put it back rather than leaving nothing under the real name */
                 if (rename(oldfname, fromfname)) {
-                    xsyslog(LOG_ERR, "DBERROR: failed to restore original "
-                                     "after failed rename",
-                                     "fname=<%s> from=<%s>", fromfname, oldfname);
+                    xsyslog_ev(LOG_ERR, "db.convert.failed",
+                               lf_s("sys.path", fromfname),
+                               lf_s("db.aside.path", oldfname),
+                               lf_s("db.step", "restore"));
                 }
                 goto err;
             }
@@ -853,15 +896,19 @@ HIDDEN int cyrusdb_generic_archive(const strarray_t *fnames,
         if (!fname) continue;
         struct stat sbuf;
         if (stat(fname, &sbuf) < 0) {
-            syslog(LOG_DEBUG, "not archiving database file: %s: %m", fname);
+            xsyslog_ev(LOG_DEBUG, "db.archive.skipped",
+                       lf_s("sys.path", fname));
             continue;
         }
-        syslog(LOG_DEBUG, "archiving database file: %s", fname);
+        xsyslog_ev(LOG_DEBUG, "db.archiving",
+                   lf_s("sys.path", fname),
+                   lf_s("db.archive.path", dirname));
         strlcpy(dp, strrchr(fname, '/'), rest);
         r = cyrusdb_copyfile(fname, dstname);
         if (r) {
-            syslog(LOG_ERR,
-                   "DBERROR: error archiving database file: %s", fname);
+            xsyslog_ev(LOG_ERR, "db.archive.failed",
+                       lf_s("sys.path", fname),
+                       lf_s("db.archive.path", dirname));
             return CYRUSDB_IOERROR;
         }
     }

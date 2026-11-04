@@ -183,12 +183,15 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
                  (struct sockaddr *) remote, &remote_len);
 
     if (n < 0) {
-        syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
+        xsyslog_ev(LOG_ERR, "idle.message.read.failed",
+                   lf_s("idle.step", "recvfrom"));
         return NULL;
     }
 
     if (n < SIZEOF_SIZE_T) {
-        syslog(LOG_ERR, "IDLE: invalid message size received: size=%ld", n);
+        xsyslog_ev(LOG_ERR, "idle.message.read.failed",
+                   lf_s("idle.reason", "bad_size"),
+                   lf_ld("idle.size", (long) n));
         return NULL;
     }
 
@@ -201,13 +204,16 @@ EXPORTED json_t *idle_recv(struct sockaddr_un *remote)
                  (struct sockaddr *) remote, &remote_len);
 
     if (n < 0) {
-        syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
+        xsyslog_ev(LOG_ERR, "idle.message.read.failed",
+                   lf_s("idle.step", "recvfrom"));
         return NULL;
     }
 
     /* Make sure we have valid JSON */
     if (!(msg = json_loadb(base + SIZEOF_SIZE_T, size, 0, &jerr))) {
-        syslog(LOG_ERR, "IDLE: invalid message received: size=%ld", n);
+        xsyslog_ev(LOG_ERR, "idle.message.read.failed",
+                   lf_s("idle.reason", "bad_message"),
+                   lf_ld("idle.size", (long) n));
         return NULL;
     }
 

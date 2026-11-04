@@ -69,20 +69,28 @@ static void test_cronevent_add_bad(void)
         const char *cmd;
         const char *spec;
         const char *expect_fatal;
+        const char *expect_log;
     } tests[] = {
-        { NULL,   NULL,  NULL,    "event missing name" },
-        { "",     NULL,  NULL,    "event missing name" },
-        { "name", NULL,  NULL,    "event missing cmd" },
-        { "name", "",    NULL,    "event missing cmd" },
-        { "name", "cmd", NULL,    "unable to parse cron spec" },
-        { "name", "cmd", "",      "unable to parse cron spec" },
-        { "name", "cmd", "bogus", "unable to parse cron spec" },
+        { NULL,   NULL,  NULL,    "event missing name",
+          "master.reason=missing_name" },
+        { "",     NULL,  NULL,    "event missing name",
+          "master.reason=missing_name" },
+        { "name", NULL,  NULL,    "event missing cmd",
+          "master.reason=missing_command" },
+        { "name", "",    NULL,    "event missing cmd",
+          "master.reason=missing_command" },
+        { "name", "cmd", NULL,    "unable to parse cron spec",
+          "master.reason=bad_cron_spec" },
+        { "name", "cmd", "",      "unable to parse cron spec",
+          "master.reason=bad_cron_spec" },
+        { "name", "cmd", "bogus", "unable to parse cron spec",
+          "master.reason=bad_cron_spec" },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     volatile unsigned i;
 
     for (i = 0; i < n_tests; i++) {
-        CU_SYSLOG_MATCH(tests[i].expect_fatal);
+        CU_SYSLOG_MATCH(tests[i].expect_log);
         CU_EXPECT_CYRFATAL_BEGIN
         cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd, false);
         CU_EXPECT_CYRFATAL_END(EX_CONFIG, tests[i].expect_fatal);
@@ -96,15 +104,15 @@ static void test_cronevent_add_bad_nonfatal(void)
         const char *name;
         const char *cmd;
         const char *spec;
-        const char *expect_err;
+        const char *expect_log;
     } tests[] = {
-        { NULL,   NULL,  NULL,    "event missing name" },
-        { "",     NULL,  NULL,    "event missing name" },
-        { "name", NULL,  NULL,    "event missing cmd" },
-        { "name", "",    NULL,    "event missing cmd" },
-        { "name", "cmd", NULL,    "unable to parse cron spec" },
-        { "name", "cmd", "",      "unable to parse cron spec" },
-        { "name", "cmd", "bogus", "unable to parse cron spec" },
+        { NULL,   NULL,  NULL,    "master.reason=missing_name" },
+        { "",     NULL,  NULL,    "master.reason=missing_name" },
+        { "name", NULL,  NULL,    "master.reason=missing_command" },
+        { "name", "",    NULL,    "master.reason=missing_command" },
+        { "name", "cmd", NULL,    "master.reason=bad_cron_spec" },
+        { "name", "cmd", "",      "master.reason=bad_cron_spec" },
+        { "name", "cmd", "bogus", "master.reason=bad_cron_spec" },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     dynarray_t *schedule, *details;
@@ -113,7 +121,7 @@ static void test_cronevent_add_bad_nonfatal(void)
     cronevent_get_schedule(&schedule, &details);
 
     for (i = 0; i < n_tests; i++) {
-        CU_SYSLOG_MATCH(tests[i].expect_err);
+        CU_SYSLOG_MATCH(tests[i].expect_log);
         cronevent_add(tests[i].name, tests[i].spec, tests[i].cmd, true);
         CU_ASSERT_SYSLOG(/*all*/ 0, 1);
 

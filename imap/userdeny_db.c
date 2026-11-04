@@ -96,7 +96,8 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     memset(&tok, 0, sizeof(tok));
 
     /* fetch entry for user */
-    syslog(LOG_DEBUG, "fetching user_deny.db entry for '%s'", user);
+    xsyslog_ev(LOG_DEBUG, "userdeny.fetching",
+               lf_s("u.username", user));
     do {
         r = cyrusdb_fetch(denydb, user, strlen(user), &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
@@ -109,9 +110,9 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     if (r || !data || !datalen) {
         /* ignore non-existent/empty entry, report all other errors */
         if (r != CYRUSDB_NOTFOUND) {
-            syslog(LOG_WARNING,
-                   "DENYDB_ERROR: error reading entry '%s': %s",
-                   user, cyrusdb_strerror(r));
+            xsyslog_ev(LOG_WARNING, "userdeny.read.failed",
+                       lf_s("u.username", user),
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         goto out;
     }
@@ -120,13 +121,15 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
         /* parse the data */
     r = parse_record(&buf, &wild, &msg);
     if (r) {
-        syslog(LOG_WARNING,
-               "DENYDB_ERROR: invalid entry for '%s'", user);
+        xsyslog_ev(LOG_WARNING, "userdeny.entry.invalid",
+                   lf_s("u.username", user));
         goto out;
     }
 
     /* scan wildmat right to left for a match against our service */
-    syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
+    xsyslog_ev(LOG_DEBUG, "userdeny.checking",
+               lf_s("userdeny.patterns", wild),
+               lf_s("userdeny.service", service));
     tok_initm(&tok, wild, ",", 0);
     while ((pat = tok_next(&tok))) {
         /* XXX  trim leading & trailing whitespace? */
@@ -135,7 +138,9 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
         not = (*pat == '!');
         if (not) ++pat;
 
-        syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
+        xsyslog_ev(LOG_DEBUG, "userdeny.pattern",
+                   lf_b("userdeny.negated", not),
+                   lf_s("userdeny.pattern", pat));
 
         /* see if pattern matches our service */
         if (wildmat(service, pat)) {
@@ -204,8 +209,9 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
     } while (r == CYRUSDB_AGAIN);
 
     if (r) {
-        syslog(LOG_ERR, "IOERROR: couldn't store denydb record for %s: %s",
-                        user, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "userdeny.write.failed",
+                   lf_s("u.username", user),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
     }
 
@@ -242,8 +248,9 @@ EXPORTED int denydb_delete(const char *user)
     } while (r == CYRUSDB_AGAIN);
 
     if (r) {
-        syslog(LOG_ERR, "IOERROR: couldn't delete denydb record for %s: %s",
-                        user, cyrusdb_strerror(r));
+        xsyslog_ev(LOG_ERR, "userdeny.delete.failed",
+                   lf_s("u.username", user),
+                   lf_s("error", cyrusdb_strerror(r)));
         r = IMAP_IOERROR;
     }
 
@@ -279,8 +286,8 @@ static int denydb_foreach_cb(void *rock,
     buf_init_ro(&buf, data, datalen);
     r = parse_record(&buf, &wild, &msg);
     if (r) {
-        syslog(LOG_WARNING,
-               "DENYDB_ERROR: invalid entry for '%s'", user.s);
+        xsyslog_ev(LOG_WARNING, "userdeny.entry.invalid",
+                   lf_s("u.username", user.s));
         r = 0;  /* whatever, keep going */
         goto out;
     }
@@ -359,8 +366,9 @@ EXPORTED int denydb_open(int create)
         ret = ENOENT;
     }
     else if (ret != CYRUSDB_OK) {
-        syslog(LOG_WARNING, "DENYDB_ERROR: opening %s: %s", fname,
-               cyrusdb_strerror(ret));
+        xsyslog_ev(LOG_WARNING, "userdeny.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(ret)));
         ret = IMAP_IOERROR;
     }
 
@@ -375,8 +383,8 @@ EXPORTED void denydb_close(void)
     if (denydb) {
         r = cyrusdb_close(denydb);
         if (r) {
-            syslog(LOG_ERR, "DENYDB_ERROR: error closing: %s",
-                   cyrusdb_strerror(r));
+            xsyslog_ev(LOG_ERR, "userdeny.close.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
         }
         denydb = NULL;
     }

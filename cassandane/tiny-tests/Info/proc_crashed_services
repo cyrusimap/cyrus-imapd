@@ -27,6 +27,7 @@ sub test_proc_crashed_services ($self)
 
     my @pids = sort map { (split /\s+/, $_, 2)[0] } @output;
     $self->assert_num_equals(scalar @clients, scalar @pids);
+    my @crashed = @pids;
 
     # crash service processes one at a time, expect proc count to decrease
     while (scalar @pids) {
@@ -51,6 +52,19 @@ sub test_proc_crashed_services ($self)
 
         @output = $self->{instance}->run_cyr_info('proc');
         $self->assert_num_equals(scalar @pids, scalar @output);
+    }
+
+    # master logs each crash as an error.  Under a sanitizer, its SEGV handler
+    # exits the process rather than letting the signal kill it, so the crash
+    # shows up as a nonzero exit instead.
+    if ($self->{instance}->{have_syslog_replacement}) {
+        my %logged = map { /\bsys\.pid=(\d+)\b/ ? ($1 => 1) : () }
+            $self->{instance}->getsyslog(qr{
+                <err>.*\bevent=master\.child\.
+                (?:signaled\b.*\bsys\.signal=11|exited\b.*\bsys\.exitcode=[1-9]\d*)\b
+            }x);
+        $self->assert_cmp_deeply(superhashof({ map { $_ => 1 } @crashed }),
+                                  \%logged);
     }
 
     # prevent a lot of "Connection closed by other end" noise by claiming

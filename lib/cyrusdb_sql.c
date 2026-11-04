@@ -67,7 +67,9 @@ static void *_mysql_open(char *host, char *port, int usessl,
     MYSQL *mysql;
 
     if (!(mysql = mysql_init(NULL))) {
-        xsyslog(LOG_ERR, "DBERROR: SQL backend could not execute mysql_init", NULL);
+        xsyslog_ev(LOG_ERR, "db.sql.connect.failed",
+                   lf_s("db.backend", "mysql"),
+                   lf_s("db.step", "init"));
         return NULL;
     }
 
@@ -95,7 +97,8 @@ static int _mysql_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
     MYSQL_ROW row;
     int len, r = 0;
 
-    syslog(LOG_DEBUG, "executing SQL cmd: %s", cmd);
+    xsyslog_ev(LOG_DEBUG, "db.sql.executing",
+               lf_s("db.sql.command", cmd));
 
     len = strlen(cmd);
     /* mysql_real_query() doesn't want a terminating ';' */
@@ -104,16 +107,18 @@ static int _mysql_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
     /* run the query */
     if ((mysql_real_query(conn, cmd, len) < 0) ||
         *mysql_error(conn)) {
-        xsyslog(LOG_ERR, "DBERROR: SQL query failed",
-                         "mysql_error=<%s>",
-                         mysql_error(conn));
+        xsyslog_ev(LOG_ERR, "db.sql.command.failed",
+                   lf_s("db.backend", "mysql"),
+                   lf_s("db.sql.command", cmd),
+                   lf_s("error", mysql_error(conn)));
         return CYRUSDB_INTERNAL;
     }
 
     /* see if we should expect some results */
     if (!mysql_field_count(conn)) {
         /* no results (BEGIN, COMMIT, ROLLBACK, CREATE, INSERT, UPDATE, DELETE) */
-        syslog(LOG_DEBUG, "no results from SQL cmd");
+        xsyslog_ev(LOG_DEBUG, "db.sql.command.empty",
+                   lf_s("db.sql.command", cmd));
         return 0;
     }
 
@@ -188,9 +193,9 @@ static void *_pgsql_open(char *host, char *port, int usessl,
     buf_free(&conninfo);
 
     if ((PQstatus(conn) != CONNECTION_OK)) {
-        xsyslog(LOG_ERR, "DBERROR: connection failed",
-                         "pgsql_error=<%s>",
-                         PQerrorMessage(conn));
+        xsyslog_ev(LOG_ERR, "db.sql.connect.failed",
+                   lf_s("db.backend", "pgsql"),
+                   lf_s("error", PQerrorMessage(conn)));
         return NULL;
     }
 
@@ -213,7 +218,8 @@ static int _pgsql_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
     int row_count, i, r = 0;
     ExecStatusType status;
 
-    syslog(LOG_DEBUG, "executing SQL cmd: %s", cmd);
+    xsyslog_ev(LOG_DEBUG, "db.sql.executing",
+               lf_s("db.sql.command", cmd));
 
     /* run the query */
     result = PQexec(conn, cmd);
@@ -227,7 +233,9 @@ static int _pgsql_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
     }
     else if (status != PGRES_TUPLES_OK) {
         /* error */
-        syslog(LOG_DEBUG, "SQL backend: %s ", PQresStatus(status));
+        xsyslog_ev(LOG_DEBUG, "db.sql.command.failed",
+                   lf_s("db.sql.command", cmd),
+                   lf_s("error", PQresStatus(status)));
         PQclear(result);
         return CYRUSDB_INTERNAL;
     }
@@ -303,9 +311,9 @@ static void *_sqlite_open(char *host __attribute__((unused)),
     }
 
     if (rc != SQLITE_OK) {
-        xsyslog(LOG_ERR, "DBERROR: SQL backend",
-                         "sqlite3_error=<%s>",
-                         sqlite3_errmsg(db));
+        xsyslog_ev(LOG_ERR, "db.sql.connect.failed",
+                   lf_s("db.backend", "sqlite"),
+                   lf_s("error", sqlite3_errmsg(db)));
         sqlite3_close(db);
         db = NULL;
     }
@@ -352,12 +360,15 @@ static int _sqlite_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
     sqlite3_stmt *stmt = NULL;
     const char *tail;
 
-    syslog(LOG_DEBUG, "executing SQL cmd: %s", cmd);
+    xsyslog_ev(LOG_DEBUG, "db.sql.executing",
+               lf_s("db.sql.command", cmd));
 
     /* compile the SQL cmd */
     rc = sqlite3_prepare(conn, cmd, strlen(cmd), &stmt, &tail);
     if (rc != SQLITE_OK) {
-        syslog(LOG_DEBUG, "SQL backend: %s ", sqlite3_errmsg(conn));
+        xsyslog_ev(LOG_DEBUG, "db.sql.command.failed",
+                   lf_s("db.sql.command", cmd),
+                   lf_s("error", sqlite3_errmsg(conn)));
         return CYRUSDB_INTERNAL;
     }
 
@@ -374,7 +385,9 @@ static int _sqlite_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
     /* cleanup */
     rc = sqlite3_finalize(stmt);
     if (rc != SQLITE_OK) {
-        syslog(LOG_DEBUG, "SQL backend: %s ", sqlite3_errmsg(conn));
+        xsyslog_ev(LOG_DEBUG, "db.sql.command.failed",
+                   lf_s("db.sql.command", cmd),
+                   lf_s("error", sqlite3_errmsg(conn)));
         return CYRUSDB_INTERNAL;
     }
 
@@ -448,8 +461,8 @@ static int init(const char *dbdir __attribute__((unused)),
     }
 
     if (!engine_name) {
-        syslog(LOG_DEBUG, "SQL backend defaulting to engine '%s'",
-               dbengine->name);
+        xsyslog_ev(LOG_DEBUG, "db.sql.engine.defaulted",
+                   lf_s("db.backend", dbengine->name));
     }
 
     dbinit = 1;
@@ -467,9 +480,9 @@ static struct txn *start_txn(struct dbengine *db)
 {
     /* start a transaction */
     if (dbengine->sql_begin_txn(db->conn)) {
-        xsyslog(LOG_ERR, "DBERROR: failed to start transation",
-                         "table=<%s>",
-                         db->table);
+        xsyslog_ev(LOG_ERR, "db.sql.txn.failed",
+                   lf_s("db.sql.table", db->table),
+                   lf_s("db.step", "begin"));
         return NULL;
     }
     return xzmalloc(sizeof(struct txn));
@@ -494,7 +507,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     usessl = libcyrus_config_getswitch(CYRUSOPT_SQL_USESSL);
 
     /* loop around hostnames until we get a connection */
-    syslog(LOG_DEBUG, "SQL backend trying to connect to a host");
+    xsyslog_ev(LOG_DEBUG, "db.sql.connecting");
 
     /* create a working version of the hostnames */
     host_ptr = hostnames ? xstrdup(hostnames) : NULL;
@@ -512,9 +525,10 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
             while (!Uisalnum(host[0])) host++;
         }
 
-        syslog(LOG_DEBUG,
-               "SQL backend trying to open db '%s' on host '%s'%s",
-               database, cur_host, usessl ? " using SSL" : "");
+        xsyslog_ev(LOG_DEBUG, "db.sql.connecting",
+                   lf_s("db.sql.database", database),
+                   lf_s("sys.host", cur_host),
+                   lf_b("db.sql.ssl", usessl));
 
         /* set the optional port */
         if ((cur_port = strchr(cur_host, ':'))) *cur_port++ = '\0';
@@ -523,8 +537,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
                                   user, passwd, database, flags);
         if (conn) break;
 
-        syslog(LOG_WARNING,
-               "DBERROR: SQL backend could not connect to host %s", cur_host);
+        xsyslog_ev(LOG_WARNING, "db.sql.connect.failed",
+                   lf_s("sys.host", cur_host));
 
         cur_host = host;
     }
@@ -532,9 +546,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     if (host_ptr) free(host_ptr);
 
     if (!conn) {
-        xsyslog(LOG_ERR, "DBERROR: could not open SQL database",
-                         "database=<%s>",
-                         database);
+        xsyslog_ev(LOG_ERR, "db.sql.open.failed",
+                   lf_s("db.sql.database", database));
         return CYRUSDB_IOERROR;
     }
 
@@ -558,9 +571,8 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
                      "CREATE TABLE %s (dbkey %s NOT NULL, data %s);",
                      table, dbengine->binary_type, dbengine->binary_type);
             if (dbengine->sql_exec(conn, cmd, NULL, NULL)) {
-                xsyslog(LOG_ERR, "DBERROR: SQL failed",
-                                 "command=<%s>",
-                                 cmd);
+                xsyslog_ev(LOG_ERR, "db.sql.command.failed",
+                           lf_s("db.sql.command", cmd));
                 dbengine->sql_close(conn);
                 free(table);
                 return CYRUSDB_INTERNAL;
@@ -692,9 +704,8 @@ static int fetch(struct dbengine *db,
     r = dbengine->sql_exec(db->conn, cmd, &select_cb, &srock);
 
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: SQL failed",
-                         "command=<%s>",
-                         cmd);
+        xsyslog_ev(LOG_ERR, "db.sql.command.failed",
+                   lf_s("db.sql.command", cmd));
         if (tid) dbengine->sql_rollback_txn(db->conn);
         return CYRUSDB_INTERNAL;
     }
@@ -737,9 +748,8 @@ static int foreach(struct dbengine *db,
     r = dbengine->sql_exec(db->conn, cmd, &select_cb, &srock);
 
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: SQL failed",
-                         "command=<%s>",
-                         cmd);
+        xsyslog_ev(LOG_ERR, "db.sql.command.failed",
+                   lf_s("db.sql.command", cmd));
         if (tid) dbengine->sql_rollback_txn(db->conn);
         return CYRUSDB_INTERNAL;
     }
@@ -835,9 +845,8 @@ static int mystore(struct dbengine *db,
     if (free_esc_key) free(esc_key);
 
     if (r) {
-        xsyslog(LOG_ERR, "DBERROR: SQL failed",
-                         "command=<%s>",
-                         cmd);
+        xsyslog_ev(LOG_ERR, "db.sql.command.failed",
+                   lf_s("db.sql.command", cmd));
         if (tid) dbengine->sql_rollback_txn(db->conn);
         return CYRUSDB_INTERNAL;
     }
@@ -880,14 +889,14 @@ static int finish_txn(struct dbengine *db, struct txn *tid, int commit)
 
         if (rc) {
             if (commit) {
-                xsyslog(LOG_ERR, "DBERROR: failed to commit transaction",
-                                 "table=<%s>",
-                                 db->table);
+                xsyslog_ev(LOG_ERR, "db.sql.txn.failed",
+                           lf_s("db.sql.table", db->table),
+                           lf_s("db.step", "commit"));
             }
             else {
-                xsyslog(LOG_ERR, "DBERROR: failed to abort transaction",
-                                 "table=<%s>",
-                                 db->table);
+                xsyslog_ev(LOG_ERR, "db.sql.txn.failed",
+                           lf_s("db.sql.table", db->table),
+                           lf_s("db.step", "abort"));
             }
             return CYRUSDB_INTERNAL;
         }

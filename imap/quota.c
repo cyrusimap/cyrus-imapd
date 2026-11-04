@@ -159,7 +159,8 @@ int main(int argc,char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&quota_namespace, NAMESPACE_OPTION_ADMIN))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "quota.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 
@@ -209,23 +210,26 @@ static void
 __attribute__((format(printf, 2, 3)))
 errmsg(int err, const char *fmt, ...)
 {
-    char buf[1024];
-    size_t len;
+    struct buf detail = BUF_INITIALIZER;
+    int saved_errno = errno;
     va_list ap;
 
-    /* XXX handling of 'len' here smells bad */
-
     va_start(ap, fmt);
-    len = vsnprintf(buf, sizeof(buf), fmt, ap);
+    buf_vprintf(&detail, fmt, ap);
     va_end(ap);
 
-    if (len < sizeof(buf))
-        len += snprintf(buf+len, sizeof(buf)-len, ": %s", error_message(err));
-    if ((err == IMAP_IOERROR) && (len < sizeof(buf)))
-        len += snprintf(buf+len, sizeof(buf)-len, ": %s", strerror(errno));
+    errno = saved_errno;
+    xsyslog_ev(LOG_ERR, "quota.tool.failed",
+               lf_buf("quota.detail", &detail),
+               lf_err("error", err));
 
-    syslog(LOG_ERR, "%s", buf);
-    fprintf(stderr, "%s\n", buf);
+    if (err == IMAP_IOERROR)
+        fprintf(stderr, "%s: %s: %s\n", buf_cstring(&detail),
+                error_message(err), strerror(saved_errno));
+    else
+        fprintf(stderr, "%s: %s\n", buf_cstring(&detail), error_message(err));
+
+    buf_free(&detail);
 }
 
 /*
@@ -269,7 +273,8 @@ static void test_sync_wait(const char *mboxname)
         return;
     /* aha, we're in test synchronisation mode */
 
-    syslog(LOG_ERR, "quota -Z waiting for signal to do %s", mboxname);
+    xsyslog_ev(LOG_NOTICE, "quota.test_sync.waiting",
+               lf_intname("mbox.name", mboxname));
 
     filename = strconcat(config_dir, "/quota-sync/", mboxname, (char *)NULL);
     start = sclock();
@@ -286,14 +291,17 @@ static void test_sync_wait(const char *mboxname)
     switch (status)
     {
     case 0:
-        syslog(LOG_ERR, "quota -Z did not wait");
+        xsyslog_ev(LOG_NOTICE, "quota.test_sync.resumed",
+                   lf_s("quota.test_sync.wait", "none"));
         break;
     case 1:
-        syslog(LOG_ERR, "quota -Z waited %2.3f sec",
-                         (sclock() - start) / (double) CLOCKS_PER_SEC);
+        xsyslog_ev(LOG_NOTICE, "quota.test_sync.resumed",
+                   lf_s("quota.test_sync.wait", "signaled"),
+                   lf_duration("quota.test_sync.duration", (sclock() - start) / (double) CLOCKS_PER_SEC));
         break;
     case 2:
-        syslog(LOG_ERR, "quota -Z timed out");
+        xsyslog_ev(LOG_NOTICE, "quota.test_sync.resumed",
+                   lf_s("quota.test_sync.wait", "timeout"));
         break;
     }
 
@@ -309,7 +317,8 @@ static void test_sync_done(const char *mboxname)
         return;
     /* aha, we're in test synchronisation mode */
 
-    syslog(LOG_ERR, "quota -Z done with %s", mboxname);
+    xsyslog_ev(LOG_NOTICE, "quota.test_sync.done",
+               lf_intname("mbox.name", mboxname));
 
     filename = strconcat(config_dir, "/quota-sync/", mboxname, (char *)NULL);
     xunlink(filename);

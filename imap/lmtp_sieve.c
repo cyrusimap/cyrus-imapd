@@ -810,9 +810,9 @@ static void add_message_instance(struct buf *msgbuf,
     }
 
     if (why) {
-        xsyslog(LOG_NOTICE, "DKIM2 no Message-Instance added",
-                            "msg.id=<%s> dkim2.declined=<%s>",
-                            msgid ? msgid : "~null~", why);
+        xsyslog_ev(LOG_NOTICE, "sieve.dkim2.skipped",
+                   lf_s_opt("msg.id", msgid),
+                   lf_s("dkim2.declined", why));
     }
 
     buf_free(&mi);

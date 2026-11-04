@@ -130,7 +130,8 @@ int service_init(int argc, char **argv,
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&bcd_namespace, 0))) {
-        syslog(LOG_ERR, "%s", error_message(r));
+        xsyslog_ev(LOG_ERR, "backupcyrusd.namespace.init.failed",
+                   lf_err("error", r));
         fatal(error_message(r), EX_CONFIG);
     }
 

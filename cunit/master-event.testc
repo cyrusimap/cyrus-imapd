@@ -321,7 +321,7 @@ static void test_reschedule_event(void)
         snprintf(name, sizeof(name), "event %u", i);
 
         snprintf(skipped, sizeof(skipped),
-                 "skipped=<%u>",
+                 "master\\.event\\.skipped=%u( |$)",
                  tests[i].expect_skipped);
         CU_SYSLOG_MATCH(skipped);
 

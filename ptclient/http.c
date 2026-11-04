@@ -155,8 +155,8 @@ static void myinit(void)
     state.conn = backend_connect(state.conn, state.service,
                                  &protocol, NULL, NULL, NULL, -1);
     if (!state.conn) {
-        syslog(LOG_NOTICE, "ptloader failed to connect to HTTP service %s",
-               state.service);
+        xsyslog_ev(LOG_NOTICE, "pts.http.connect.failed",
+                   lf_s("sys.host", state.service));
     }
 
     return;
@@ -177,7 +177,9 @@ static struct auth_state *myauthstate(const char *identifier, size_t size,
     int i;
 
     if (canon_id == NULL) {
-       syslog(LOG_ERR, "http_canonifyid failed for %s", identifier);
+       xsyslog_ev(LOG_ERR, "pts.canonify.failed",
+                  lf_s("pts.id", identifier),
+                  lf_s("pts.module", "http"));
        return NULL;
     }
 

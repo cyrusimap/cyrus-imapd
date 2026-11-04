@@ -1505,8 +1505,30 @@ static void ws_push_enable(struct transaction_t *txn, json_t *req)
  *   https://www.chromestatus.com/feature/6251293127475200
  *   (using --enable-experimental-web-platform-features)
  */
+/* Push http.logheader.<name> for a header a JMAP request asked to have
+ * logged, as httpd.c does for the headers the config file names.
+ *
+ * The name comes from the client, so anything outside the key alphabet
+ * becomes an underscore.  The value needs no care of its own: logfmt
+ * escapes and quotes whatever it is handed.
+ */
+static void push_log_header(struct logfmt *lf,
+                            const char *name, const char *value)
+{
+    struct buf key = BUF_INITIALIZER;
+
+    buf_setcstr(&key, "http.logheader.");
+    for (const char *p = name; *p; p++) {
+        int c = tolower((unsigned char) *p);
+        buf_putc(&key, (islower(c) || isdigit(c) || c == '-') ? c : '_');
+    }
+
+    logfmt_push(lf, buf_cstring(&key), value);
+    buf_free(&key);
+}
+
 static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
-                   struct buf *inbuf, struct buf *outbuf, struct buf *logbuf)
+                   struct buf *inbuf, struct buf *outbuf, struct logfmt *lf)
 {
     json_t *req = NULL, *res = NULL;
     int ret;
@@ -1587,11 +1609,11 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
     /* Free request payload */
     buf_free(&txn->req_body.payload);
 
-    if (logbuf) {
+    if (lf) {
         /* Log JMAP methods */
         const char **hdr = spool_getheader(txn->req_hdrs, ":jmap");
 
-        if (hdr) buf_printf(logbuf, "; jmap=%s", hdr[0]);
+        if (hdr) logfmt_push(lf, "jmap.methods", hdr[0]);
 
         /* Add logheaders */
         if (strarray_size(httpd_log_headers)) {
@@ -1604,28 +1626,7 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
 
                 if (val &&
                     strarray_contains_case(httpd_log_headers, hdrname)) {
-                    /* Escape control characters and quote/backslash so a
-                     * client-supplied value can't inject forged log lines
-                     * or break out of the surrounding quoting.
-                     * -- claude, 2026-05-06 */
-                    struct buf vbuf = BUF_INITIALIZER;
-                    const char *p;
-                    for (p = val; *p; p++) {
-                        unsigned char c = (unsigned char) *p;
-                        if (c < 0x20 || c == 0x7f) {
-                            buf_printf(&vbuf, "\\x%02x", c);
-                        }
-                        else if (c == '"' || c == '\\') {
-                            buf_putc(&vbuf, '\\');
-                            buf_putc(&vbuf, c);
-                        }
-                        else {
-                            buf_putc(&vbuf, c);
-                        }
-                    }
-                    buf_printf(logbuf, "; %s=\"%s\"",
-                               hdrname, buf_cstring(&vbuf));
-                    buf_free(&vbuf);
+                    push_log_header(lf, hdrname, val);
                 }
             }
         }

@@ -116,7 +116,8 @@ static void cmdloop(void)
     int ret = FALSE;
 
     if (chdir("/tmp/")) {
-        syslog(LOG_ERR, "Failed to chdir to /tmp/");
+        xsyslog_ev(LOG_ERR, "timsieve.chdir.failed",
+                   lf_s("sys.path", "/tmp/"));
         ret = TRUE; /* exit immediately */
     }
 

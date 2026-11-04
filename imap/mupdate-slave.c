@@ -42,7 +42,8 @@ static int open_kick_socket(void)
 
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {
-        syslog(LOG_ERR, "socket: %m");
+        xsyslog_ev(LOG_ERR, "mupdate.slave.kicksock.failed",
+                   lf_s("mupdate.step", "socket"));
         fatal("socket failed", EX_OSERR);
     }
 
@@ -58,12 +59,15 @@ static int open_kick_socket(void)
     r = bind(s, (struct sockaddr *)&srvaddr, len);
     umask(oldumask); /* for Linux */
     if (r == -1) {
-        syslog(LOG_ERR, "bind: %s: %m", fnamebuf);
+        xsyslog_ev(LOG_ERR, "mupdate.slave.kicksock.failed",
+                   lf_s("mupdate.step", "bind"),
+                   lf_s("sys.path", fnamebuf));
         fatal("bind failed", EX_OSERR);
     }
     r = listen(s, 10);
     if (r == -1) {
-        syslog(LOG_ERR, "listen: %m");
+        xsyslog_ev(LOG_ERR, "mupdate.slave.kicksock.failed",
+                   lf_s("mupdate.step", "listen"));
         fatal("listen failed", EX_OSERR);
     }
 
@@ -97,7 +101,8 @@ static int get_kick_fds(int kicksock,
 
         if (gotdata == -1) {
           /* Select Error! */
-          syslog(LOG_ERR, "kicksock select failed");
+          xsyslog_ev(LOG_ERR, "mupdate.slave.kicksock.failed",
+                     lf_s("mupdate.step", "select"));
           return -1;
         } else if (gotdata != 0 && FD_ISSET(kicksock, &rset)) {
           struct sockaddr_un clientaddr;
@@ -106,7 +111,9 @@ static int get_kick_fds(int kicksock,
           fd_list[*num_fds] = accept(kicksock,
                 (struct sockaddr *)&clientaddr, (socklen_t *)&len);
           if (fd_list[*num_fds] == -1) {
-            syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
+            xsyslog_ev(LOG_WARNING, "mupdate.slave.kicksock.failed",
+                       lf_s("mupdate.step", "accept"),
+                       lf_d("mupdate.fd", kicksock));
             return -1;
           }
         } else {
@@ -180,7 +187,8 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
         if (gotdata == -1) {
             /* Oops? */
-            syslog(LOG_ERR, "select failed");
+            xsyslog_ev(LOG_ERR, "mupdate.slave.listen.failed",
+                       lf_s("mupdate.step", "select"));
             break;
         } else if (gotdata != 0) {
             if (FD_ISSET(handle->conn->sock, &rset)) {
@@ -188,7 +196,9 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
                 response = MUPDATE_NONE;
                 if ((r = mupdate_scarf(handle, cmd_change, NULL,
                                   waiting_for_noop, &response)) != 0) {
-                    syslog(LOG_ERR, "mupdate_scarf: %d", r);
+                    xsyslog_ev(LOG_ERR, "mupdate.slave.listen.failed",
+                               lf_s("mupdate.step", "scarf"),
+                               lf_d("error.code", r));
                     break;
                 }
 
@@ -196,15 +206,16 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
                  * If we have been kicked, tell them we're done now */
                 if (waiting_for_noop) {
                     if (response != MUPDATE_OK) {
-                        syslog(LOG_ERR, "update/noop sync error %d", response);
+                        xsyslog_ev(LOG_ERR, "mupdate.slave.listen.failed",
+                                   lf_s("mupdate.step", "noop"),
+                                   lf_d("mupdate.response", response));
                         break;
                     }
                     waiting_for_noop = 0;
 
                     for (; num_kick_fds; num_kick_fds--) {
                         if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
-                            syslog(LOG_WARNING,
-                                   "can't write to IPC socket (ignoring)");
+                            xsyslog_ev(LOG_WARNING, "mupdate.slave.kick.reply.failed");
                         }
                         (void)close(kick_fds[num_kick_fds-1]);
                     }
@@ -221,7 +232,8 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
                 prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
                 if (prot_flush(handle->conn->out) == EOF) {
-                    syslog(LOG_ERR, "connection to master failed.");
+                    xsyslog_ev(LOG_ERR, "mupdate.slave.listen.failed",
+                               lf_s("mupdate.step", "send"));
                     break;
                 }
                 waiting_for_noop = 1;
@@ -231,13 +243,15 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
             if (!waiting_for_noop) {
                 prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
                 if (prot_flush(handle->conn->out) == EOF) {
-                    syslog(LOG_ERR, "connection to master failed.");
+                    xsyslog_ev(LOG_ERR, "mupdate.slave.listen.failed",
+                               lf_s("mupdate.step", "send"));
                     break;
                 }
                 waiting_for_noop = 1;
             } else {
                 /* We were already waiting on a noop! */
-                syslog(LOG_ERR, "connection to master timed out.");
+                xsyslog_ev(LOG_ERR, "mupdate.slave.listen.failed",
+                           lf_s("mupdate.step", "timeout"));
                 break;
             }
         }
@@ -271,12 +285,13 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
     while(1) {
         ret = mupdate_connect(config_mupdate_server, NULL, &h, NULL);
         if(ret) {
-            syslog(LOG_ERR,"couldn't connect to mupdate server");
+            xsyslog_ev(LOG_ERR, "mupdate.slave.connect.failed",
+                       lf_s("sys.host", config_mupdate_server));
             goto retry;
         }
 
-        syslog(LOG_ERR, "successful mupdate connection to %s",
-               config_mupdate_server);
+        xsyslog_ev(LOG_NOTICE, "mupdate.slave.connected",
+                   lf_s("sys.host", config_mupdate_server));
 
         mupdate_listen(h, retry_delay);
 
@@ -286,9 +301,9 @@ void *mupdate_client_start(void *rock __attribute__((unused)))
 
         real_delay = retry_delay + (rand() % (retry_delay / 2));
 
-        syslog(LOG_ERR,
-               "retrying connection to mupdate server in %d seconds",
-               real_delay);
+        xsyslog_ev(LOG_NOTICE, "mupdate.slave.retrying",
+                   lf_s("sys.host", config_mupdate_server),
+                   lf_d("mupdate.retry.delay", real_delay));
 
         /* Wait before retrying */
         sleep(real_delay);
@@ -314,11 +329,12 @@ void *mupdate_placebo_kick_start(void *rock __attribute__((unused)))
             accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
 
         if (kickconn == -1) {
-          syslog(LOG_WARNING, "accept(): %m");
+          xsyslog_ev(LOG_WARNING, "mupdate.slave.kicksock.failed",
+                     lf_s("mupdate.step", "accept"));
           break;
         } else {
           if (write(kickconn, "ok", 2) < 0) {
-            syslog(LOG_WARNING, "can't write to IPC socket?");
+            xsyslog_ev(LOG_WARNING, "mupdate.slave.kick.reply.failed");
           }
           close(kickconn);
           kickconn = -1;

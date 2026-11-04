@@ -185,7 +185,8 @@ static json_t *vacation_read(jmap_req_t *req, struct mailbox *mailbox,
     struct buf content = BUF_INITIALIZER;
     json_t *vacation = NULL;
 
-    if (mailbox && sdata) sieve_script_fetch(mailbox, sdata, &content);
+    if (mailbox && sdata && sdata->imap_uid)
+        sieve_script_fetch(mailbox, sdata, &content);
 
     /* Parse JMAP from vacation script */
     if (buf_len(&content)) {

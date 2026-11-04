@@ -1937,7 +1937,19 @@ sub _check_syslog
         _syslog_line_is_error($_) || ($pattern && m/$pattern/)
     } @lines;
 
-    @errors = grep { not m/DBERROR.*skipstamp/ } @errors;
+    # skiplist complains of an unreadable skipstamp when ctl_cyrusdb -r has
+    # never run, which is how Cassandane starts every instance
+    @errors = grep {
+        not m/DBERROR.*skipstamp|\bevent=db\.skiplist\.skipstamp\.unreadable\b/
+    } @errors;
+
+    # Cassandane::Config points smtp_host at bogus:0, so that nothing sends
+    # mail unless a test asks for an SMTP server.  Every JMAP session probes
+    # the relay for its extensions, and fails to connect to that one; a
+    # failure that matters to a test is logged again by its caller.
+    @errors = grep {
+        not m/\bevent=smtpclient\.connect\.failed\b.*\bsys\.host=bogus:0\b/
+    } @errors;
 
     $self->xlog("syslog error: $_") for @errors;
 

@@ -31,16 +31,14 @@ sub test_splitbrain_mailbox
     $self->assert_matches(qr/exited with code 1/, "$@");
 
     my $master_pattern = qr{
-        \bMAILBOX\sreceived\sNO\sresponse:\sIMAP_SYNC_WRONG_MAILBOX\b
+        \bevent=sync\.command\.rejected\b
+        .*\bsync\.command=MAILBOX\serror="IMAP_SYNC_WRONG_MAILBOX\b
     }x;
     $self->assert_syslog_matches($self->{instance}, $master_pattern);
 
     my $replica_pattern = qr{
-        (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
-            \suser\.cassandane\.dest-name\b
-            | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
-            \smailbox=<user\.cassandane\.dest-name>
-        )
+        \bevent=sync\.mailbox\.uniqueid\.in_use\b
+        .*\bmbox\.name=user\.cassandane\.dest-name\b
     }x;
     $self->assert_syslog_matches($self->{replica}, $replica_pattern);
 
@@ -66,15 +64,13 @@ sub test_splitbrain_mailbox
         my @replicasyslog = $self->{replica}->getsyslog();
 
         my $master_pattern = qr{
-            \bdo_folders\(\):\supdate\sfailed:\suser\.cassandane\.foo\b
+            \bevent=sync\.mailbox\.update\.failed\b
+            .*\bmbox\.name=user\.cassandane\.foo\b
         }x;
 
         my $replica_pattern1 = qr{
-            (?: \bSYNCNOTICE:\sfailed\sto\screate\smailbox
-                \suser\.cassandane\.foo\b
-              | \bSYNCNOTICE:\smailbox\suniqueid\salready\sin\suse:
-                \smailbox=<user\.cassandane\.foo>
-            )
+            \bevent=sync\.mailbox\.uniqueid\.in_use\b
+            .*\bmbox\.name=user\.cassandane\.foo\b
         }x;
 
         # match within the rename lines only, so a name from an unrelated

@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include "lib/xunlink.h"
+#include "lib/util.h"
 
 EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
                         const char *pathname)
@@ -27,15 +28,15 @@ EXPORTED int xunlink_fn(const char *sfile, int sline, const char *sfunc,
             r = 1;
         }
         else {
-            /* n.b. not simply using xsyslog, because we want to log our
-             * caller's location, but xsyslog would log ours
+            /* n.b. not simply using xsyslog_ev, because we want to log our
+             * caller's location, but xsyslog_ev would log ours
              */
             saved_errno = errno;
-            syslog(LOG_ERR, "IOERROR: unlink failed:"
-                            " pathname=<%s> syserror=<%s>"
-                            " file=<%s> line=<%d> func=<%s>",
-                            pathname, strerror(saved_errno),
-                            sfile, sline, sfunc);
+            if (logfmt_want(LOG_ERR)) {
+                _xsyslog_ev(saved_errno, LOG_ERR, "xunlink.failed",
+                            sfile, sline, sfunc,
+                            XSYSLOG_EV_ARG_LIST(lf_s("sys.path", pathname)));
+            }
 
             /* if you want to abort() on unlink failure, patch that in here */
         }
@@ -61,15 +62,18 @@ EXPORTED int xunlinkat_fn(const char *sfile, int sline, const char *sfunc,
             r = 1;
         }
         else {
-            /* n.b. not simply using xsyslog, because we want to log our
-             * caller's location, but xsyslog would log ours
+            /* n.b. not simply using xsyslog_ev, because we want to log our
+             * caller's location, but xsyslog_ev would log ours
              */
             saved_errno = errno;
-            syslog(LOG_ERR, "IOERROR: unlinkat failed:"
-                            " dirfd=<%d> pathname=<%s> flags=<%d> syserror=<%s>"
-                            " file=<%s> line=<%d> func=<%s>",
-                            dirfd, pathname, flags, strerror(saved_errno),
-                            sfile, sline, sfunc);
+            if (logfmt_want(LOG_ERR)) {
+                _xsyslog_ev(saved_errno, LOG_ERR, "xunlink.failed",
+                            sfile, sline, sfunc,
+                            XSYSLOG_EV_ARG_LIST(
+                                lf_s("sys.path", pathname),
+                                lf_d("sys.dirfd", dirfd),
+                                lf_d("xunlink.flags", flags)));
+            }
 
             /* if you want to abort() on unlinkat failure, patch that in here */
         }

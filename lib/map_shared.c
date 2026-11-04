@@ -13,6 +13,7 @@
 #include "map.h"
 #include "slowio.h"
 #include "xmalloc.h"
+#include "util.h"
 
 #define SLOP (8*1024)
 
@@ -30,8 +31,10 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
 
     if (newlen == MAP_UNKNOWN_LEN) {
         if (fstat(fd, &sbuf) == -1) {
-            syslog(LOG_ERR, "IOERROR: fstating %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            xsyslog_ev(LOG_ERR, "map.failed",
+                       lf_s("map.step", "fstat"),
+                       lf_s("map.file", name),
+                       lf_s_opt("map.owner", mboxname));
             snprintf(buf, sizeof(buf), "failed to fstat %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -44,8 +47,10 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
     if (*len) {
         int r = munmap((char *)*base, *len);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: unmapping %s file%s%s: %m", name,
-                   mboxname ? " for " : "", mboxname ? mboxname : "");
+            xsyslog_ev(LOG_ERR, "map.failed",
+                       lf_s("map.step", "munmap"),
+                       lf_s("map.file", name),
+                       lf_s_opt("map.owner", mboxname));
             snprintf(buf, sizeof(buf), "failed to munmap %s file", name);
             fatal(buf, EX_IOERR);
         }
@@ -64,8 +69,10 @@ EXPORTED void map_refresh(int fd, int onceonly, const char **base,
 #endif
                          , fd, 0L);
     if (*base == (char *)-1) {
-        syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
-               mboxname ? " for " : "", mboxname ? mboxname : "");
+        xsyslog_ev(LOG_ERR, "map.failed",
+                   lf_s("map.step", "mmap"),
+                   lf_s("map.file", name),
+                   lf_s_opt("map.owner", mboxname));
         snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
         fatal(buf, EX_IOERR);
     }
@@ -82,7 +89,8 @@ EXPORTED void map_free(const char **base, size_t *len)
     if (*len) {
         int r = munmap((char *)*base, *len);
         if (r) {
-            syslog(LOG_ERR, "IOERROR: map_free");
+            xsyslog_ev(LOG_ERR, "map.failed",
+                       lf_s("map.step", "munmap"));
             fatal("Failed to map_free", EX_IOERR);
         }
     }

@@ -46,6 +46,7 @@ mbox.changes_epoch      the start of the mailbox's recorded history
 mbox.crcs.annot         annotation sync CRC
 mbox.crcs.basic         basic sync CRC
 mbox.crcs.header        the CRC of the cyrus.header file as read
+mbox.createdmodseq      the modseq the mailbox was created at
 mbox.deletedmodseq      highest modseq of a deletion in this mailbox
 mbox.destroyed          when a mailbox was destroyed
 mbox.expunged           how many messages an expunge removed
@@ -53,6 +54,7 @@ mbox.field              which field or annotation reconstruct corrected
 mbox.foldermodseq       the mailbox's folder modseq
 mbox.generation         the generation the mailbox index expects of its cache
 mbox.highestmodseq      the mailbox's highest modseq
+mbox.last_uid           the highest uid the mailbox has assigned
 mbox.limit              which exists limit was hit: addressbook, calendar or mailbox
 mbox.lock.duration      how long a mailbox index lock was held, in seconds
 mbox.mailboxid          the mailbox's JMAP id
@@ -76,6 +78,7 @@ mbox.uniqueid           the mailbox's uniqueid
 mbox.userflag           the user flag slot number within the mailbox header
 mbox.value              the value of the field named by mbox.field, after the change
 mbox.version            the mailbox index format version
+mbox.xconvmodseq        the mailbox's highest conversation modseq
 
 ### msg. - a message
 
@@ -86,6 +89,7 @@ msg.draft               1 if the record is a draft
 msg.emailid             the message's JMAP id
 msg.expunged            1 if the record is expunged
 msg.flag                a single message flag name
+msg.flags               all of a message's flags, system and user, space-separated
 msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
@@ -115,10 +119,12 @@ part.type               the part's MIME type
 ### login. - authentication
 
 login.anonymous         1 if the login was anonymous
+login.authid            the authentication identity, when it differs from the user
 login.magic             the magic-plus suffix supplied with the username
 login.mech              the SASL mechanism used
 login.nopassword        1 if the login was accepted without a password
 login.password          the password given for a refused anonymous login
+login.reason            why a login was refused, as told to the client
 login.scheme            the HTTP auth scheme used
 login.tls               1 if the connection was under TLS
 
@@ -136,7 +142,9 @@ send.time               when the message was actually sent
 ### per-subsystem
 
 acl.needed              the ACL rights an operation needed but didn't have
+acl.right               a single ACL right character
 acl.rights              a set of ACL rights, in its stored string form
+acl.string              an ACL rights string as given
 alarm.age               how late an alarm was when it came up, in seconds
 alarm.duplicates        how many duplicate alarms were suppressed for one record
 alarm.index             which VALARM within the component, counting from 1
@@ -157,16 +165,26 @@ annot.context           the text a definition-file parse error happened near
 annot.db                the annotations database a operation used
 annot.entries           a set of annotations and values, serialised
 annot.entry             an annotation entry name
+annot.errors            how many errors the annotation definition file had
 annot.key               a raw annotations database key
 annot.lineno            the line of the annotation definition file
 annot.scope             the annotation scope: server, mailbox or message
 annot.since_modseq      the modseq an annotation search started from
-annot.txn.op            what was being done to a transaction: abort or commit
 annot.value             an annotation's value
 append.callout          the annotation callout program or socket
 append.stage.dir        the staging directory a message is spooled through
 append.stage.file       the staged copy of a message
 append.stage.source     the file a staged message was copied from
+assert.expr             the expression of a failed assertion
+assert.file             the source file of a failed assertion
+assert.line             the source line of a failed assertion
+autocreate.created      how many folders autocreation created
+autocreate.identifier   the identifier an autocreated folder's ACL entry is for
+autocreate.reason       why autocreation skipped or changed course
+autocreate.specialuse   the special-use flag autocreation gives a folder
+autocreate.step         which step of autocreation is being logged
+autocreate.subscribed   how many folders autocreation subscribed the user to
+autocreate.value        an autocreate_* setting's value, as configured
 backend.banner          the greeting banner a backend sent
 backup.cutoff           the point in time a restore is undoing back to
 backup.reason           why a record or collection was skipped or selected
@@ -201,8 +219,14 @@ cal.valuetype           an iCalendar value type, such as DATE-TIME
 cmd.duration            how long a command took, in seconds
 cmd.nettime             how long a command spent on the network, in seconds
 cmd.total               cmd.duration and cmd.nettime added together
+command.program         the program run_command ran
 compress.algorithm      the compression algorithm a connection negotiated
+config.debug            1 if debug logging is now on
 config.option           the name of an imapd.conf option
+config.partitions       the partitions that share a disk path, comma separated
+config.replacement      the option or value that replaces a deprecated one
+config.since            the version an option or value was deprecated in
+config.value            the value given for an imapd.conf option
 conn.host               open connections from this client host
 conn.host.max           how many are allowed from one host
 conn.user               open connections for this user
@@ -210,6 +234,24 @@ conn.user.max           how many are allowed for one user
 conv.guid.exists        how many non-expunged records share this guid
 conv.guid.folderexists  how many of those are in this folder
 conv.guid.numrecords    how many records of any kind share this guid
+conversations.basecid   the conversation id a thread was split from
+conversations.emails    how many emails a conversations record counts
+conversations.estimate  how many records a conversations search expected to visit
+conversations.flags     how many flags the conversations db counts
+conversations.key       a key in the conversations db
+conversations.mode      how a conversations search walks the db: scan, indexed or index_fallback
+conversations.records   how many records a conversations operation handled
+conversations.step      which step of a conversations db operation is being logged
+conversations.storage   how many bytes a conversations record counts
+conversations.threads   how many threads a conversations record counts
+conversations.value     a value in the conversations db, as stored
+conversations.version   a conversations db's format version
+conversations.version.max  the newest conversations db format version this code reads
+cron.tm_mday            the day of the month a cron calculation produced
+cron.tm_mon             the month a cron calculation produced, counting from zero
+ctl_cyrusdb.op          which ctl_cyrusdb operation ran: recover or checkpoint
+ctl_mboxlist.action     which repair ctl_mboxlist made or would make
+ctl_mboxlist.dryrun     1 if ctl_mboxlist only reported what it would do
 dav.brief               the Brief preference a request asked for
 dav.collection          the DAV collection a request named
 dav.depth               the Depth a request asked to recurse to
@@ -229,7 +271,59 @@ dav.synctoken.basemodseq  the base modseq a sync-token names
 dav.synctoken.fields    how many components of a sync-token parsed
 dav.synctoken.modseq    the modseq a sync-token names
 dav.synctoken.uidvalidity  the uidvalidity a sync-token names
+db.archive.path         where a database file is being archived to
+db.aside.path           where a database is moved aside to during a convert
+db.backend              a cyrusdb backend name, e.g. twom
+db.backend.requested    the cyrusdb backend the caller asked for
+db.bytes                a size within a database, in bytes
+db.checkpoint.path      the file a checkpoint writes before renaming it into place
+db.compacted            1 if a database repack was a full compaction
+db.duration             how long a database operation took, in seconds
+db.engine               the address of a database handle, in debug traces
+db.fd                   a database's file descriptor
+db.fixed                how many offsets a database recovery corrected
+db.flags                the flags a database operation was called with
+db.inode                a database file's inode number
+db.key                  a database record's key
+db.level                a skiplist node's level
+db.lock.action          the step at which taking a database file lock failed
+db.lock.duration        how long a database lock was held, in seconds
+db.logstart             the offset where a skiplist's log begins
+db.maxlevel             the highest skiplist level allowed
+db.offset               an offset within a database file
+db.op                   which cyrusdb call a debug trace is for
+db.prev.key             the key of the record before the one in db.key
+db.prev.offset          the offset of the record before the one in db.offset
+db.reason               why a database operation failed, skipped or refused something
+db.records              how many records a database holds or an operation handled
+db.records.expected     how many records a database's header claims
+db.refcount             how many open handles share a database
+db.repack_size          a database's size after its last repack, in bytes
+db.result               a cyrusdb call's return code, in debug traces
+db.size                 a database file's size, in bytes
+db.sql.command          an SQL statement a database backend ran
+db.sql.database         the name of an SQL database
+db.sql.ssl              1 if an SQL connection uses SSL
+db.sql.table            the SQL table a cyrusdb database is stored in
+db.sqldb.owner          who holds an sqldb handle open
+db.sqldb.scope          the scope an sqldb handle was opened with
+db.step                 which step of a database operation is being logged
+db.target               the offset a database pointer refers to
+db.version              a database's format version
+db.version.wanted       the database format version the code expects
 dkim2.declined          why no DKIM2 Message-Instance was added to a message
+duplicate.action        what delivery did about a duplicate message
+duplicate.count         how many duplicate delivery records a prune examined
+duplicate.deleted       how many duplicate delivery records a prune removed
+duplicate.mark          when a duplicate delivery record was marked
+duplicate.prune.age     how old a duplicate delivery record must be to be pruned, in seconds
+expire.archive_seconds  how old a message must be for cyr_expire to archive it
+expire.databases        how many conversations databases cyr_expire examined
+expire.expired          how many records cyr_expire expired
+expire.mailboxes        how many mailboxes cyr_expire examined
+expire.removed          how many mailboxes or tombstones cyr_expire removed
+expire.seen             how many records cyr_expire examined
+expire.userflags        how many unused user flags cyr_expire removed
 http.auth.param         the name of a parameter in an HTTP auth credential
 http.auth.reset.reason  why the connection's authentication state was reset
 http.auth.response      1 if the credentials carried a client response
@@ -297,6 +391,9 @@ idle.keys               the filter keys a client idles with, serialised
 idle.mboxevent          the mailbox event being forwarded, e.g. MessageNew
 idle.message            which message to idled: notify, init or done
 idle.poll.interval      seconds between polls when idled can't be reached
+idle.reason             why an idled message was rejected
+idle.size               the size of an idled message, in bytes
+idle.step               which step of idled messaging is being logged
 imap.behavior           prefix for the keys below; never logged on its own
 # imap.behavior.* -- one per entry in imapd.c's client_behavior_registry,
 # pushed by key name, so the lint can't see them.  Value is always 1:
@@ -382,6 +479,16 @@ jmap.seen.source        where $seen comes from for a mailbox: flags or seendb
 jmap.sharee             1 if the request is from a sharee rather than the owner
 jmap.submissionid       a JMAP EmailSubmission id
 jmap.uid.attempts       how many candidate vCard UIDs were tried
+jwt.claim               the name of a claim in a JSON Web Token
+jwt.claim.length        the length of a claim's value, in bytes
+jwt.claim.maxlength     the longest value that claim could have had, in bytes
+jwt.claim.value         a claim's value, as the token spelled it
+jwt.lineno              the line of the JWT key file an event is about
+jwt.maxage              the configured maximum age of a token, in seconds
+jwt.reason              why a token, or one of its claims, was rejected
+jwt.step                which step of checking a signature an event reports
+jwt.token.byte          a byte a token may not contain, in hex
+jwt.token.offset        a byte offset into a token
 limit.name              which configured limit an operation broke
 limit.value             that limit's configured value
 lmtp.action             what delivery did with the message: implicit, keep, fileinto, ...
@@ -391,13 +498,154 @@ lmtp.rcpt.index         which recipient of the transaction, counting from zero
 lmtp.rcpt.state         a recipient's delivery state in the proxy state machine
 lmtp.smtputf8           1 if lmtpd offers SMTPUTF8
 lmtp.target             how the destination mailbox was chosen: default, plus-addr, ...
+lock.duration           how long taking a file lock took, in seconds
+map.file                which kind of file was being mapped, e.g. index
+map.owner               what the mapped file belongs to: often an internal mailbox name, sometimes a path
+map.step                which step of mapping a file is being logged
+mappedfile.length       how many bytes a mappedfile write tried to write
+mappedfile.lock.action  the step at which reopening a mappedfile under lock failed
+mappedfile.lock.duration  how long a mappedfile lock was held, in seconds
+mappedfile.offset       the offset a mappedfile write was at
+mappedfile.step         which step of a mappedfile operation is being logged
+master.child            placeholder for "no known child process"; value is always ~null~
+master.child.age        how long ago master spawned a child process, in seconds
+master.child.state      master's record of a child's state: READY, BUSY, DEAD or UNKNOWN
+master.child.type       what master spawned a child as: START, SERVICE, DAEMON or EVENT
+master.children         how many child processes master found
+master.config.key       a cyrus.conf setting name
+master.config.value     a cyrus.conf setting value, as written
+master.disabled.seconds how long master disables a failing service for
+master.disabled.until   what re-enables a service master disabled: sighup
+master.event            the name of a cyrus.conf EVENTS entry
+master.event.at         an EVENTS entry's at= time, as hhmm
+master.event.cron       an EVENTS entry's cron= spec
+master.event.period     an EVENTS entry's period, in seconds
+master.event.skipped    how many runs of a periodic event were skipped
+master.failures         how many times in a row a service has failed
+master.fcntl.flag       the file descriptor flag master tried to change
+master.fds.cur          the file descriptor limit a process gets
+master.fds.max          the most file descriptors a process may have
+master.fds.requested    the file descriptor limit cyrus.conf asked for
+master.interruptions    how many signals in a row interrupted master's select
+master.message          a message a child sent master about its state
+master.prometheus.frequency  how often master writes its prometheus report, in seconds
+master.ready_workers    how many of a service's children are waiting for work
+master.reason           why master disabled, ignored or refused something
+master.reconfig         1 if a cyrus.conf entry replaces one master already had
+master.respawn          1 if master is restarting a waitdaemon rather than starting it
+master.service          the name of a cyrus.conf SERVICES or DAEMON entry
+master.service.cmd      a cyrus.conf entry's command line
+master.service.family   the address family a service listens on: ipv4, ipv6, unix or daemon
+master.service.listen   a service's listen= address
+master.service.pipe.read  the read end of a service's status pipe
+master.service.pipe.write  the write end of a service's status pipe
+master.service.proto    a service's proto= setting
+master.service.socket   a service's listening socket descriptor
+master.services         how many service structures are in use
+master.services.allocated  how many service structures are allocated
+master.services.max     the most service structures master will allocate
+master.sighup.age       how long ago master asked a child to restart, in seconds
+master.sockopt          the socket option master tried to set
+master.step             which step of a master operation is being logged
+master.wait.status      a raw wait() status master couldn't decode
+master.waitdaemons      how many waitdaemon structures are in use
+master.waitdaemons.allocated  how many waitdaemon structures are allocated
+master.workers.desired  how many waiting children a service should have
+master.workers.max      the most children a service may have
+mbdump.reason           why a mailbox dump skipped something
+mbdump.response         the response read where a sync continuation was expected
+mbdump.step             which step of a mailbox dump or undump is being logged
+mboxevent.event         the name of a mailbox event notification
+mboxevent.field         which field of a message an event notification couldn't get
+mboxevent.params        the parameters an event notification was missing
 mboxlist.key            a raw mailboxes.db key
 mboxlist.rewritten      how many mailboxes.db entries were rewritten
 mboxlist.subs.version   the version of a user's subscriptions db
+mboxname.step           which step of a mailbox name operation is being logged
+mboxname.suffix         the metadata file suffix a user path was built for
+message.bodysize        the size a parsed message's headers and body add up to, in bytes
+message.cacheitem       a message cache item, as stored
+message.reason          why message parsing failed or stopped
+message.step            which step of message parsing or copying is being logged
+mupdate.command         an mupdate protocol command
+mupdate.errors          how many mailboxes an mupdate resync couldn't reconcile
+mupdate.fd              the file descriptor of an mupdate connection
+mupdate.location        a mailbox location as mupdate gives it, server!partition
+mupdate.reason          why an mupdate operation failed or was refused
+mupdate.response        an mupdate response code
+mupdate.retry.delay     how long until the next mupdate connection attempt, in seconds
+mupdate.step            which step of an mupdate operation is being logged
+mupdate.workers         how many mupdate worker threads are running
+mupdate.workers.idle    how many mupdate worker threads are waiting for work
+notify.class            the class of a notifyd notification
+notify.message          the text of a notifyd notification
+notify.method           the notifyd method a notification asked for
+notify.options          the options of a notifyd notification, as a list
+notify.priority         the priority of a notifyd notification
+notify.reason           why sending a notification failed
+notify.response         notifyd's response to a notification
+notify.step             which step of sending a notification is being logged
+partlist.reason         why a partition was left out of selection
+pop.command             a POP3 command
+pop.count.dele          how many DELE commands a POP3 session ran
+pop.count.retr          how many RETR commands a POP3 session ran
+pop.count.top           how many TOP commands a POP3 session ran
 pop.subfolder           the subfolder a POP session was restricted to
+prometheus.bytes        how many bytes a prometheus stats operation handled
+prometheus.bytes.wanted how many bytes a prometheus stats operation expected
+prometheus.duration     how long collating a prometheus report took, in seconds
+prometheus.frequency    how often a prometheus report is written, in seconds
+prometheus.ident        a service's name, as a prometheus label
+prometheus.reason       why a prometheus stats operation skipped or failed
+prometheus.report       which prometheus report is being logged
+prometheus.services     how many services a prometheus report covers
+prometheus.slow_count   how many times in a row a report took too long to collate
+prometheus.step         which step of a prometheus stats operation is being logged
+prot.buffer.size        the size of a protstream compression buffer, in bytes
+prot.direction          which direction of a protstream: read or write
+prot.zlib.result        a zlib return code
 proxy.server            the backend server a request was proxied to
+pts.canonical           the canonical form of an identity, as the PTS module gave it
+pts.domain              a domain the PTS module looked an identity up in
+pts.domain.parent       the domain an alias domain resolves to
+pts.expire.age          how old a PTS cache entry must be for ptexpire to remove it, in seconds
+pts.fd                  the socket the PTS client is using
+pts.found               1 if a PTS cache entry was there to remove
+pts.id                  an identity as given to the PTS module, before canonicalisation
+pts.ldap.attribute      an LDAP attribute the PTS module reads
+pts.ldap.base           the base DN of an LDAP search
+pts.ldap.dn             an LDAP distinguished name
+pts.ldap.entries        how many entries an LDAP search returned
+pts.ldap.filter         an LDAP search filter
+pts.ldap.option         an LDAP library option the PTS module tried to set
+pts.ldap.uri            the LDAP server URI
+pts.ldap.value          the value the PTS module tried to give an LDAP option
+pts.ldap.version        the LDAP protocol version
+pts.limit               the oldest a PTS cache record may be and still be used
+pts.lookup              which kind of PTS lookup is being logged: groups for group membership
+pts.mark                when a PTS cache record was written
+pts.module              which PTS module logged: ldap, http or afskrb
+pts.read                1 if the PTS client is waiting to read
+pts.reason              why a PTS operation failed or was refused
+pts.result              a PTS client call's return code
+pts.size                the size of a PTS request, in bytes
+pts.step                which step of a PTS operation is being logged
+pts.time                the current time, as the PTS code compared it
+pts.timeout             how long the PTS client will wait, in seconds
+pts.waited              1 if the PTS client had to wait to connect
+pts.write               1 if the PTS client is waiting to write
+quota.detail            what the quota tool was doing when it failed
+quota.diff.message      the change in message count a quota update carried
+quota.diff.storage      the change in storage a quota update carried, in bytes
+quota.resource          a quota resource name, e.g. STORAGE
 quota.root              the quota root a quota applies to
+quota.step              which step of a quota operation is being logged
+quota.test_sync.duration  how long quota -Z waited for its signal, in seconds
+quota.test_sync.wait    how quota -Z's wait ended: none, signaled or timeout
+quota.value             a quota record as stored
 reconstruct.dryrun      1 if reconstruct was run with -n and changed nothing
+reconstruct.source      where reconstruct took a corrected value from
+sasl.prop               which SASL property couldn't be set
 sasl.result             a SASL result code
 sasl.text               a message logged by the SASL library
 sched.addresses         the scheduling addresses considered, one per indexed subkey
@@ -409,36 +657,181 @@ sched.sender            the scheduling address a message was sent from
 sched.transport         how a scheduling message travels: caldav, imip or ischedule
 sched.userid            the userid whose scheduling addresses were used
 scope                   the scope a duplicate-delivery check applied to
+search.attachextract.socket  the socket an attachment extractor connection uses
+search.attachextract.timeout  when an idle attachment extractor connection will be closed
+search.attribute        a search attribute, e.g. language
 search.batch_highest_createdmodseq  highest createdmodseq indexed in this batch
 search.batch_lowest_createdmodseq   lowest createdmodseq indexed in this batch
+search.bytes            how many bytes a search index operation handled
+search.cached           1 if attachment text came from the extractor cache
+search.cacheonly        1 if attachment extraction may only read its cache
 search.committed        how many documents a Xapian commit wrote
 search.createdmodseq    highest createdmodseq the search index covers
+search.cyrusid          a Xapian document's cyrusid term
+search.document         a search index document's id or name
 search.duration         how long a search index operation took, in seconds
 search.expr             a search expression, serialised
+search.filter           a Xapian index filter, from its metadata
 search.generation       the search index generation
+search.index.bytes      the size of a search index, in bytes
 search.index_version    the format version of the search index
+search.indexed.key      a key in a search tier's indexed.db
+search.indexed.value    a value in a search tier's indexed.db
+search.language         an ISO 639 language code
+search.lock             the name lock a search index operation needs
+search.messages         how many messages a search index operation handled
 search.min_index_version  the lowest search index version an operation needs
+search.nodes            how many nodes a search expression has
 search.op               a search operator, e.g. OR
+search.part             which part of a message a search term or index entry is for
+search.query            a Xapian query, as Xapian describes it
+search.reason           why a search operation skipped, refused or rejected something
 search.restarts         how many times indexing restarted from the first message
 search.results          how many messages a search or sort returned
+search.retries          how many times a search operation retried
 search.sortcrit         the sort criteria, serialised
+search.source.index_version  the index version of the search tier being read from
+search.step             which step of a search operation is being logged
+search.tier             a Xapian search tier name
+search.tier.key         a key that names a Xapian search tier
+search.tmp.path         a temporary file a search operation writes before renaming it
+search.uids             a sequence of message uids, as a search index records them
 search.uncommitted      how many documents were pending when a commit failed
 search.updates          how many update passes indexed nothing
+search.value            a search term's value, as given
 seen.op                 which seen database operation is being logged
 seen.uids               a seen state's uid sequence, as stored
+shutdown_file.text      the contents of the shutdown file
+sieve.bytecode.length   the length of a compiled Sieve script, in bytes
+sieve.duration          how long a Sieve operation took, in seconds
 sieve.lineno            the line of a Sieve script an error was found on
+sieve.regex             a regular expression a Sieve script matches with
 sieve.result            a SIEVE_* result code
 sieve.script            the name of a Sieve script
 sieve.srs.domain        the domain SRS rewrites a return path into
+sieve.step              which step of a Sieve storage operation is being logged
 sieve.target            the target of a Sieve action: a folder, address or url
 sieve.text              text a Sieve script logged with the log action
+signals.nfds            the highest file descriptor passed to select, plus one
+signals.sender          the process that sent a shutdown signal
+smmap.step              which step of an smmapd lookup is being logged
+smtp.code               an SMTP reply code
+smtp.command            the SMTP command a reply or failure was for
+smtp.param              an ESMTP parameter's keyword or value
+smtp.text               an SMTP reply's text
+smtpclient.backend      the smtp_backend setting
+smtpclient.rcpt.index   the position of a recipient in an envelope, from 0
+smtpclient.reason       why the SMTP client refused or failed something
+smtpclient.step         which step of the SMTP client's work is being logged
 statuscache.hit         1 if the status cache had the answer
 statuscache.items       the STATUS items a lookup asked for, as a hex mask
+sync.archive            1 if replication is staging a message on an archive partition
+sync.cached             the mailboxes a replication lookup took from the sync cache
+sync.capabilities       the capability list a replication server advertised
+sync.capability         a single replication protocol capability
 sync.channel            a replication channel name
+sync.command            a replication protocol command
+sync.count              how many items a replication batch holds
+sync.enable             the capabilities a replication ENABLE asked for, as a hex bitmask
+sync.field              which mailbox field a replication comparison is about
+sync.file.guid          the guid of a message file, where it disagrees with msg.guid
+sync.file.size          the size of a message file, where it disagrees with msg.size
+sync.forced             1 if replication is running in force mode
+sync.from.modseq        the modseq a partial replication starts after
+sync.from.uid           the uid a partial replication starts after
+sync.log.entry          a line of a sync log file, as written or read
+sync.mailboxes          the mailboxes a replication lookup asked the replica about
+sync.promoted_to        the broader replication command a failed one was promoted to
+sync.reason             why replication skipped, refused or rejected something
+sync.renames            how many renames a replication pass performed
+sync.response           a replication server's response, or the part of it at fault
+sync.retry              1 if replication will retry after this event
+sync.stage.path         a message file in the replication staging area
+sync.step               which step of a replication operation is being logged
+sync.to.modseq          the modseq a partial replication stops at
+sync.to.uid             the uid a partial replication stops at
+sync.tries              how many times replication tried before giving up
+telemetry.cpu.sys       system CPU time a session used, in seconds
+telemetry.cpu.user      user CPU time a session used, in seconds
+tls.alert.desc          a TLS alert's description
+tls.alert.type          a TLS alert's level: warning or fatal
+tls.alpn                the application protocol ALPN selected
+tls.alpn.client         the application protocols a TLS client offered
+tls.alpn.server         the application protocols the server would accept
+tls.authid              the identity a client certificate authenticated
+tls.cert.subject        the subject of a certificate being loaded, one-line form
+tls.cipher              the negotiated TLS cipher suite
+tls.cipher.algbits      the key length of the cipher's algorithm, in bits
+tls.cipher.bits         the cipher's effective key length, in bits
+tls.ciphers             a configured TLS cipher list
+tls.client_ca_dir       the tls_client_ca_dir setting
+tls.client_ca_file      the tls_client_ca_file setting
+tls.client_cert.requested  1 if the server asks clients for a certificate
+tls.client_cert.required  1 if the server refuses clients without a certificate
+tls.direction           read or write: which way a TLS alert went
+tls.dump                one line of a TLS hex dump
+tls.early_data          1 if the server accepted TLS 1.3 early data
+tls.engine              which TLS engine logged: server or client
+tls.group               a TLS key exchange group, or a colon-separated list of them
+tls.key.path            the private key file paired with the certificate in sys.path
+tls.peer.fingerprint    the MD5 fingerprint of the peer's certificate
+tls.peer.issuer         the issuer of the peer's certificate, one-line form
+tls.peer.issuer_cn      the common name of the peer certificate's issuer
+tls.peer.subject        the subject of the peer's certificate, one-line form
+tls.peer.subject_cn     the common name of the peer certificate's subject
+tls.protocol            the negotiated TLS protocol version
+tls.reason              why a TLS operation failed or was skipped
+tls.result              the outcome of a TLS session cache operation
+tls.reused              1 if a TLS session was resumed rather than new
+tls.server_ca_dir       the tls_server_ca_dir setting
+tls.server_ca_file      the tls_server_ca_file setting
+tls.server_cert         the tls_server_cert setting
+tls.server_key          the tls_server_key setting
+tls.session.expire      when a cached TLS session expires
+tls.session.id          a TLS session id, in hex
+tls.sessions            how many sessions the TLS session cache holds
+tls.sessions.purged     how many expired sessions were removed from the TLS session cache
+tls.sni                 the server name a TLS client asked for
+tls.state               OpenSSL's description of the handshake state
+tls.step                which step of a TLS operation is being logged
+tls.verify.depth        the depth in the chain of the certificate being verified
+unexpunge.count         how many messages unexpunge restored
+user.reason             why an operation on a user's files took another course
+userdeny.negated        1 if a user_deny.db pattern is negated
+userdeny.pattern        one service pattern from a user_deny.db entry
+userdeny.patterns       a user_deny.db entry's service patterns, as stored
+userdeny.service        the service a user_deny.db entry is checked against
+util.gid                the group id become_cyrus tried to set
+util.group              the group name become_cyrus looked up
+util.sockopt            the socket option that couldn't be set
+util.step               which step of a library utility is being logged
 vacation.from           the From address of a vacation response
 vacation.to             the To address of a vacation response
+virusscan.step          which step of a ClamAV operation is being logged
+virusscan.substitution  a substitution the notification template lacks
+ws.close.reason         the reason text of a WebSocket close frame
+ws.eof                  1 if the WebSocket input stream is at end of file
+ws.fin                  1 if a frame is the last one of its message
+ws.goaway               1 if the WebSocket channel is shutting down
+ws.length               the length of a WebSocket frame or message, in bytes
+ws.maxsize              the largest message the server will inflate, in bytes
+ws.opcode               the opcode of a WebSocket frame or message
+ws.payload.length       the length of a message before or after compression
+ws.pmce                 the per-message compression extension used, if any
+ws.prot.error           what the protstream said went wrong
+ws.protocol             the WebSocket subprotocol the channel speaks
+ws.read.got             how many bytes a read of the WebSocket stream returned
+ws.read.wanted          how many bytes that read asked for
+ws.rsv                  the reserved bits of a WebSocket frame, as a hex mask
+ws.sent                 1 if the frame reached the client
+ws.status               the status code of a WebSocket close frame
+ws.step                 which step of closing a WebSocket an event reports
+ws.want.read            1 if wslay wants to read next
+ws.want.write           1 if wslay wants to write next
+ws.zlib.code            a zlib return code
 xfer.capability         a capability the transfer destination advertises
 xfer.step               which step of a mailbox transfer is being logged
+xunlink.flags           the flags unlinkat was called with
 
 ### out. - the outbound half of an event that has two halves
 
@@ -447,16 +840,50 @@ out.http.transfer_encoding  the Transfer-Encoding we applied to the response
 out.http.upgrade        the protocols we agreed to upgrade to
 out.http.version        the HTTP version we answered in
 out.msg.id              Message-ID we sent, where msg.id is the one we got
+out.ws.length           the length of the message we sent, in bytes
+out.ws.opcode           the opcode of the message we sent
+out.ws.payload.length   the length of that message before we compressed it
+out.ws.pmce             the compression extension we applied to it
+out.ws.rsv              the reserved bits we set on it, as a hex mask
+out.ws.status           the status code of the close frame we sent
 
-### other. - the second mailbox in an event about two of them
+### other. - the second mailbox or message in an event about two of them
 
 other.mbox.mailboxid    the JMAP id of the other mailbox involved
 other.mbox.name         the name of the other mailbox involved, in the admin namespace
 other.mbox.part         the partition of the other mailbox involved
 other.mbox.uniqueid     the uniqueid of the other mailbox involved
+other.msg.guid          the guid of the other message involved
+other.msg.imapuid       the IMAP uid of the other message involved
+other.sys.path          the second path involved
 
+### replica. - the replica's copy of a value, paired with the unprefixed key for the master's
+
+replica.mbox.crcs.annot the replica's annotation sync CRC
+replica.mbox.crcs.basic the replica's basic sync CRC
+replica.mbox.createdmodseq  the replica's createdmodseq for the mailbox
+replica.mbox.highestmodseq  the replica's highest modseq for the mailbox
+replica.mbox.last_uid   the highest uid the replica has assigned in the mailbox
+replica.mbox.type       the replica's mailbox type, as a string
+replica.mbox.uidvalidity  the replica's uidvalidity for the mailbox
+replica.mbox.uniqueid   the replica's uniqueid for the mailbox
+replica.mbox.xconvmodseq  the replica's highest conversation modseq for the mailbox
+replica.msg.cid         the replica's conversation id for the message
+replica.msg.flags       the replica's flags for the message, as msg.flags
+replica.msg.guid        the guid of the replica's message at this uid
+replica.msg.imapuid     the uid of the replica's message
+replica.msg.internaldate  the replica's internaldate for the message
+replica.msg.lastupdated when the replica's record was last updated
+replica.msg.modseq      the replica's modseq for the message
 ### old. - the value before a change, paired with the unprefixed key
 
+old.db.backend          the cyrusdb backend a database was in before a convert
+old.db.logstart         a skiplist's log offset before recovery corrected it
+old.db.size             a database file's size before a repack, in bytes
+old.db.sqldb.owner      who first opened an sqldb handle
+old.db.sqldb.scope      the scope an sqldb handle was first opened with
+old.master.child.state  a child's state before a message changed it
+old.master.service      the service master thought a child belonged to
 old.mbox.acl            the mailbox ACL before the change
 old.mbox.cache.crc      the CRC of a cache record before it was rebuilt
 old.mbox.cache.offset   the offset of a cache record before it was rebuilt
@@ -471,8 +898,12 @@ old.mbox.uniqueid       the uniqueid of the mailbox a message moved out of
 old.mbox.value          the value of the field named by mbox.field, before the change
 old.mboxlist.key        a mailboxes.db key before it was rewritten
 old.mboxlist.subs.version  the subscriptions db version before an upgrade
+old.msg.cid             a message's conversation id before it was reassigned
 old.msg.imapuid         the message's IMAP uid before a move
 old.msg.sysflags        the message's system flags before the change
+old.prometheus.frequency  how often a prometheus report was written before a change, in seconds
+old.prot.buffer.size    the protstream compression buffer size before it grew
+old.search.cacheonly    the attachment extractor's cache-only flag before a change
 old.search.createdmodseq  the createdmodseq the client last saw
 old.search.generation   the search index generation the client last saw
 old.sys.path            the path a file was copied or moved from
@@ -491,13 +922,18 @@ error.column            the column a parse error was found at
 error.description       the human-readable detail paired with error.type
 error.line              the line a parse error was found at
 error.type              a machine-readable error type, e.g. a JMAP SetError type
+sys.coredump            1 if a process dumped core
+sys.dirfd               the directory file descriptor a path was relative to
 sys.error               strerror() of errno at the point of logging
 sys.exitcode            the exit code a process is dying with
+sys.fd                  a file descriptor
 sys.filename            a file name within a directory
 sys.host                a host name or address
 sys.path                a filesystem path
 sys.pid                 a process id
 sys.signal              a signal number
+sys.signal.name         the name of the signal in sys.signal
+sys.version             a program's version
 
 ### caller. - where in the C source the event was logged
 

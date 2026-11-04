@@ -134,7 +134,7 @@ sub test_squatter_attachextract_interrupted_msg_removed
         $talk->expunge() || die;
         $self->run_delayed_expunge();
     }, expect_reindexed => ["attachmsg"],
-       expect_syslog => qr/index record is gone/);
+       expect_syslog => qr/\bevent=search\.index\.record\.skipped\b.*\bsearch\.reason=record_gone\b/);
 }
 
 sub test_squatter_attachextract_interrupted_mbox_recreated

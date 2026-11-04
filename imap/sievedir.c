@@ -46,8 +46,8 @@ EXPORTED int sievedir_foreach(const char *sievedir, unsigned flags,
     if ((dp = opendir(sievedir)) == NULL) {
         if (errno == ENOENT) return SIEVEDIR_OK;
 
-        xsyslog(LOG_ERR, "IOERROR: can not open sieve directory",
-                "path=<%s>", sievedir);
+        xsyslog_ev(LOG_ERR, "sieve.dir.open.failed",
+                   lf_s("sys.path", sievedir));
         return SIEVEDIR_IOERROR;
     }
 
@@ -164,8 +164,8 @@ EXPORTED const char *sievedir_get_active(const char *sievedir)
         return target;
     }
     else if (tgt_len == -1 && errno != ENOENT) {
-        xsyslog(LOG_ERR, "IOERROR: failed to read active script link",
-                "link=<%s>", link);
+        xsyslog_ev(LOG_ERR, "sieve.active.read.failed",
+                   lf_s("sys.path", link));
     }
 
     return NULL;
@@ -199,14 +199,18 @@ EXPORTED int sievedir_activate_script(const char *sievedir, const char *name)
      * so activation of a nonexistent script will report success.
      */
     if (symlink(target, tmp) < 0) {
-        xsyslog(LOG_ERR, "IOERROR: failed to create temp active script link",
-                "target=<%s> link=<%s>", target, tmp);
+        xsyslog_ev(LOG_ERR, "sieve.active.write.failed",
+                   lf_s("sieve.step", "symlink"),
+                   lf_s("sieve.target", target),
+                   lf_s("sys.path", tmp));
         return SIEVEDIR_IOERROR;
     }
 
     if (cyrus_rename(tmp, active) < 0) {
-        xsyslog(LOG_ERR, "IOERROR: failed to rename active script link",
-                "oldpath=<%s> newpath=<%s>", tmp, active);
+        xsyslog_ev(LOG_ERR, "sieve.active.write.failed",
+                   lf_s("sieve.step", "rename"),
+                   lf_s("old.sys.path", tmp),
+                   lf_s("sys.path", active));
         xunlink(tmp);
         return SIEVEDIR_IOERROR;
     }
@@ -222,8 +226,8 @@ EXPORTED int sievedir_deactivate_script(const char *sievedir)
 
     snprintf(active, sizeof(active), "%s/defaultbc", sievedir);
     if (xunlink(active) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: failed to delete active script link",
-                "link=<%s>", active);
+        xsyslog_ev(LOG_ERR, "sieve.active.delete.failed",
+                   lf_s("sys.path", active));
         return SIEVEDIR_IOERROR;
     }
 
@@ -239,8 +243,8 @@ EXPORTED int sievedir_delete_script(const char *sievedir, const char *name)
     /* delete bytecode */
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
     if (xunlink(path) == -1) {
-        xsyslog(LOG_ERR, "IOERROR: failed to delete bytecode file",
-                "path=<%s>", path);
+        xsyslog_ev(LOG_ERR, "sieve.bytecode.delete.failed",
+                   lf_s("sys.path", path));
         return SIEVEDIR_IOERROR;
     }
 
@@ -262,8 +266,10 @@ EXPORTED int sievedir_rename_script(const char *sievedir,
              "%s/%s%s", sievedir, newname, BYTECODE_SUFFIX);
     r = cyrus_rename(oldpath, newpath);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
-                "oldpath=<%s> newpath=<%s>", oldpath, newpath);
+        xsyslog_ev(LOG_ERR, "sieve.bytecode.write.failed",
+                   lf_s("sieve.step", "rename"),
+                   lf_s("old.sys.path", oldpath),
+                   lf_s("sys.path", newpath));
         return SIEVEDIR_IOERROR;
     }
 
@@ -303,8 +309,9 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
 
     r = cyrus_mkdir(new_bcpath, 0755);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: failed to create directory for bytecode file",
-                "path=<%s>", new_bcpath);
+        xsyslog_ev(LOG_ERR, "sieve.bytecode.write.failed",
+                   lf_s("sieve.step", "mkdir"),
+                   lf_s("sys.path", new_bcpath));
         r = SIEVEDIR_IOERROR;
         goto done;
     }
@@ -315,8 +322,9 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     /* open the new bytecode file */
     fd = open(new_bcpath, O_CREAT | O_TRUNC | O_WRONLY, 0600);
     if (fd < 0) {
-        xsyslog(LOG_ERR, "IOERROR: failed to open new bytecode file",
-                "newpath=<%s>", new_bcpath);
+        xsyslog_ev(LOG_ERR, "sieve.bytecode.write.failed",
+                   lf_s("sieve.step", "open"),
+                   lf_s("sys.path", new_bcpath));
         r = SIEVEDIR_IOERROR;
         goto done;
     }
@@ -328,8 +336,9 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     }
 
     if (fsync(fd) < 0) {
-        xsyslog(LOG_ERR, "IOERROR: failed to fsync new bytecode file",
-                "newpath=<%s>", new_bcpath);
+        xsyslog_ev(LOG_ERR, "sieve.bytecode.write.failed",
+                   lf_s("sieve.step", "fsync"),
+                   lf_s("sys.path", new_bcpath));
         r = SIEVEDIR_IOERROR;
         goto done;
     }
@@ -339,8 +348,10 @@ EXPORTED int sievedir_put_script(const char *sievedir, const char *name,
     snprintf(path, sizeof(path), "%s/%s%s", sievedir, name, BYTECODE_SUFFIX);
     r = cyrus_rename(new_bcpath, path);
     if (r) {
-        xsyslog(LOG_ERR, "IOERROR: failed to rename bytecode file",
-                "oldpath=<%s> newpath=<%s>", new_bcpath, path);
+        xsyslog_ev(LOG_ERR, "sieve.bytecode.write.failed",
+                   lf_s("sieve.step", "rename"),
+                   lf_s("old.sys.path", new_bcpath),
+                   lf_s("sys.path", path));
         r = SIEVEDIR_IOERROR;
     }
 
