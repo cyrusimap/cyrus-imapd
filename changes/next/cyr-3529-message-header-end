@@ -1,0 +1,29 @@
+Description:
+
+When parsing a message, Cyrus now handles header fields with empty values
+safely.  Previously, an empty address header or a Received header with
+nothing after its last semicolon could make Cyrus read, and in some cases
+write, memory beyond the end of the header value while delivering or
+parsing a message.  Reported by interpolwantme.  This is CYR-3529 and
+CYR-3587.
+
+Reported by "interpolwantme".
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
