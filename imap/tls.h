@@ -77,6 +77,24 @@ int tls_set_cert_stuff(SSL_CTX *ctx, const char *cert_file,
  */
 bool tls_set_session_db(SSL_CTX *ctx, const char *ident);
 
+/**
+ * Configure how a server context verifies client certificates, from
+ * tls_client_certs, tls_client_ca_dir, tls_client_ca_file and
+ * tls_crl_file.  tls_init_serverengine() does this for its own context.
+ *
+ * @param ctx          a server context
+ * @param engine       names the context in log messages
+ * @param verifydepth  the deepest certificate chain to accept
+ * @param askcert      log an error if tls_client_certs is "require" but
+ *                     the client CA can't be loaded, which leaves
+ *                     client certificates unverified
+ * @return             0 on success, -1 if tls_client_certs is "require"
+ *                     but neither tls_client_ca_dir nor
+ *                     tls_client_ca_file is set
+ */
+int tls_set_client_verify(SSL_CTX *ctx, const char *engine,
+                          int verifydepth, bool askcert);
+
 /* How much early data a TCP client may send: one TLS record */
 #define TLS_MAX_EARLY_DATA (16384)
 

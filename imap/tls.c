@@ -904,6 +904,125 @@ EXPORTED SSL_CTX *tls_new_serverctx(const char *tag)
     return ctx;
 }
 
+EXPORTED int tls_set_client_verify(SSL_CTX *ctx, const char *engine,
+                                   int verifydepth, bool askcert)
+{
+    int verify_flags = SSL_VERIFY_NONE;
+    const char *client_ca_dir = NULL;
+    const char *client_ca_file = NULL;
+    const char *crl_file_path;
+    enum enum_value tls_client_certs;
+
+    /* Whether or not to use any client certificate CA context to
+     * verify client SSL certificates with.
+     *
+     * This is initially switched off by a value of "off" for the
+     * tls_client_certs setting, or should no client_ca_dir nor
+     * client_ca_file be specified. */
+    int use_client_certs = 1;
+
+    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
+
+    if (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) {
+        // The use of client certificates for authentication is
+        // optional or required.
+        client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
+        client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
+
+        if (config_debug) {
+            xsyslog_ev(LOG_DEBUG, "tls.engine.config",
+                       lf_s("tls.engine", engine),
+                       lf_s("tls.client_ca_dir", client_ca_dir),
+                       lf_s("tls.client_ca_file", client_ca_file));
+        }
+
+        if (client_ca_dir || client_ca_file) {
+            // Attempt to load client_ca_dir and/or client_ca_file
+            if ((!SSL_CTX_load_verify_locations(ctx, client_ca_file, client_ca_dir)) ||
+                (!SSL_CTX_set_default_verify_paths(ctx))) {
+
+                // Just a warning since this is only necessary for client auth.
+                xsyslog_ev(LOG_WARNING, "tls.engine.client_ca.failed",
+                           lf_s("tls.client_ca_dir", client_ca_dir),
+                           lf_s("tls.client_ca_file", client_ca_file));
+
+                use_client_certs = 0;
+            }
+        } else { // (client_ca_dir || client_ca_file)
+            // We have no CA to verify client certificates against.
+            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.missing");
+
+            // This is fatal should client certificates be required.
+            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) {
+                return (-1);
+            }
+
+            use_client_certs = 0;
+        }
+
+    } else { // (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF)
+        // The use of client certificates is turned off.
+        use_client_certs = 0;
+    }
+
+    verify_depth = verifydepth;
+
+    if (!use_client_certs) {
+        if ((tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) && askcert)
+            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.missing",
+                       lf_s("tls.reason", "required"));
+
+    } else {
+        STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
+
+        if (!CAnames || sk_X509_NAME_num(CAnames) < 1) {
+            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.empty",
+                       lf_s("tls.client_ca_file", client_ca_file));
+
+        } else {
+            if (askcert || tls_client_certs)
+                verify_flags = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+
+            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE)
+                verify_flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+
+            SSL_CTX_set_client_CA_list(ctx, CAnames);
+
+            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.set",
+                       lf_b("tls.client_cert.requested", !!(verify_flags & SSL_VERIFY_PEER)),
+                       lf_b("tls.client_cert.required", !!(verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT)));
+        }
+    }
+
+    /* Set CRL */
+    crl_file_path = config_getstring(IMAPOPT_TLS_CRL_FILE);
+    if (crl_file_path != NULL) {
+        X509_STORE *store = SSL_CTX_get_cert_store(ctx);
+        X509_CRL *crl;
+        BIO *crl_file = BIO_new_file(crl_file_path, "r");
+
+        if (crl_file) {
+            while ((crl = PEM_read_bio_X509_CRL(crl_file, NULL, NULL, NULL))) {
+                X509_STORE_add_crl(store, crl);
+                X509_CRL_free(crl);
+            }
+
+            X509_STORE_set_flags(store,
+                                 X509_V_FLAG_CRL_CHECK |
+                                 X509_V_FLAG_CRL_CHECK_ALL);
+        } else {
+            xsyslog_ev(LOG_ERR, "tls.engine.crl.failed",
+                       lf_s("sys.path", crl_file_path));
+        }
+
+        BIO_free(crl_file);
+    } /* crl_file_path */
+
+    SSL_CTX_set_verify(ctx, verify_flags, verify_callback);
+
+    return 0;
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -919,26 +1038,13 @@ EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
                                    int askcert, SSL_CTX **ret)
 {
     int     off = 0;
-    int     verify_flags = SSL_VERIFY_NONE;
     const char   *cipher_list;
-    const char   *client_ca_dir;
-    const char   *client_ca_file;
     const char   *server_ca_file;
     const char   *server_cert_file;
     const char   *server_key_file;
-    const char   *crl_file_path;
-    enum enum_value tls_client_certs;
     int server_cipher_order;
 
     if (ret) *ret = s_ctx;
-
-    /* Whether or not to use any client certificate CA context to
-     * verify client SSL certificates with.
-     *
-     * This is initially switched off by a value of "off" for the
-     * tls_client_certs setting, or should no client_ca_dir nor
-     * client_ca_file be specified. */
-    int use_client_certs = 1;
 
     if (tls_serverengine)
         return (0);                             /* already running */
@@ -991,50 +1097,6 @@ EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
                    lf_s("tls.ciphers", cipher_list));
 
         return (-1);
-    }
-
-    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
-
-    if (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) {
-        // The use of client certificates for authentication is
-        // optional or required.
-        client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
-        client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
-
-            if (config_debug) {
-                    xsyslog_ev(LOG_DEBUG, "tls.engine.config",
-                               lf_s("tls.engine", "server"),
-                               lf_s("tls.client_ca_dir", client_ca_dir),
-                               lf_s("tls.client_ca_file", client_ca_file));
-            }
-
-        if (client_ca_dir || client_ca_file) {
-            // Attempt to load client_ca_dir and/or client_ca_file
-            if ((!SSL_CTX_load_verify_locations(s_ctx, client_ca_file, client_ca_dir)) ||
-                (!SSL_CTX_set_default_verify_paths(s_ctx))) {
-
-                // Just a warning since this is only necessary for client auth.
-                xsyslog_ev(LOG_WARNING, "tls.engine.client_ca.failed",
-                           lf_s("tls.client_ca_dir", client_ca_dir),
-                           lf_s("tls.client_ca_file", client_ca_file));
-
-                use_client_certs = 0;
-            }
-        } else { // (client_ca_dir || client_ca_file)
-            // We have no CA to verify client certificates against.
-            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.missing");
-
-            // This is fatal should client certificates be required.
-            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) {
-                return (-1);
-            }
-
-            use_client_certs = 0;
-        }
-
-    } else { // (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF)
-        // The use of client certificates is turned off.
-        use_client_certs = 0;
     }
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
@@ -1097,60 +1159,8 @@ EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
 
     SSL_CTX_set_dh_auto(s_ctx, 1);
 
-    verify_depth = verifydepth;
-
-    if (!use_client_certs) {
-        if ((tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) && askcert)
-            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.missing",
-                       lf_s("tls.reason", "required"));
-
-    } else {
-        STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
-
-        if (!CAnames || sk_X509_NAME_num(CAnames) < 1) {
-            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.empty",
-                       lf_s("tls.client_ca_file", client_ca_file));
-
-        } else {
-            if (askcert || tls_client_certs)
-                verify_flags = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
-
-            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE)
-                verify_flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-
-            SSL_CTX_set_client_CA_list(s_ctx, CAnames);
-
-            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.set",
-                       lf_b("tls.client_cert.requested", !!(verify_flags & SSL_VERIFY_PEER)),
-                       lf_b("tls.client_cert.required", !!(verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT)));
-        }
-    }
-
-    /* Set CRL */
-    crl_file_path = config_getstring(IMAPOPT_TLS_CRL_FILE);
-    if (crl_file_path != NULL) {
-        X509_STORE *store = SSL_CTX_get_cert_store(s_ctx);
-        X509_CRL *crl;
-        BIO *crl_file = BIO_new_file(crl_file_path, "r");
-
-        if (crl_file) {
-            while ((crl = PEM_read_bio_X509_CRL(crl_file, NULL, NULL, NULL))) {
-                X509_STORE_add_crl(store, crl);
-                X509_CRL_free(crl);
-            }
-
-            X509_STORE_set_flags(store,
-                                 X509_V_FLAG_CRL_CHECK |
-                                 X509_V_FLAG_CRL_CHECK_ALL);
-        } else {
-            xsyslog_ev(LOG_ERR, "tls.engine.crl.failed",
-                       lf_s("sys.path", crl_file_path));
-        }
-
-        BIO_free(crl_file);
-    } /* crl_file_path */
-
-    SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
+    if (tls_set_client_verify(s_ctx, "server", verifydepth, askcert))
+        return -1;
 
     /* A client that just closes the connection, as browsers often do,
      * isn't an error: OpenSSL would otherwise take the missing
