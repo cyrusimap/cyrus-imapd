@@ -546,15 +546,37 @@ static void sanitize_icalobj(icalcomponent *ical)
     while (ptrarray_size(&comps)) {
         icalcomponent *comp = ptrarray_pop(&comps);
 
-        // Remove all properties with no value.
+        // Remove properties with no value, but keep empty free text.
+        // libical parses an empty value as a value of kind ICAL_NO_VALUE,
+        // whereas a property that never got a value has none at all.
         icalpropiter pi =
             icalcomponent_begin_property(comp, ICAL_ANY_PROPERTY);
         icalproperty *prop = icalpropiter_deref(&pi);
         while (prop) {
             icalproperty *next = icalpropiter_next(&pi);
-            if (icalvalue_isa(icalproperty_get_value(prop)) == ICAL_NO_VALUE) {
-                icalcomponent_remove_property(comp, prop);
-                icalproperty_free(prop);
+            icalvalue *val = icalproperty_get_value(prop);
+            if (icalvalue_isa(val) == ICAL_NO_VALUE) {
+                bool is_text = false;
+                if (val) {
+                    switch (icalproperty_isa(prop)) {
+                    case ICAL_SUMMARY_PROPERTY:
+                    case ICAL_DESCRIPTION_PROPERTY:
+                    case ICAL_LOCATION_PROPERTY:
+                    case ICAL_NAME_PROPERTY:
+                        is_text = true;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+
+                if (is_text) {
+                    icalproperty_set_value(prop, icalvalue_new_text(""));
+                }
+                else {
+                    icalcomponent_remove_property(comp, prop);
+                    icalproperty_free(prop);
+                }
             }
             prop = next;
         }
