@@ -5491,8 +5491,8 @@ static int emailquery_uidsearch(jmap_req_t *req,
 
     rrock->seen_emails = hashset_new(MESSAGE_GUID_SIZE);
     if (q->want_partids) {
-        construct_hashu64_table(&rrock->partid_bynum, 1024, 0);
-        construct_hash_table(&rrock->partnum_byid, 1024, 0);
+        construct_hashu64_table(&rrock->partid_bynum, 0, 0);
+        construct_hash_table(&rrock->partnum_byid, 0, 0);
         rrock->want_partids = 1;
     }
 
@@ -6460,11 +6460,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
 
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
-    memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
 
     hashu64_table touched_cids = HASHU64_TABLE_INITIALIZER;
-    memset(&touched_cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&touched_cids, mdcount + 1, 0);
 
     /* touched_ids contains values for each email_id:
@@ -6767,7 +6765,6 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
 
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
-    memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
 
     /* touched_ids contains values for each email_id:
@@ -7017,7 +7014,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
     size_t prev_modseq_mark[3] = {0};
     int i;
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
-    memset(&seen_ids, 0, sizeof(hash_table));
     construct_hash_table(&seen_ids, msgdata->count + 1, 0);
 
     for (i = 0 ; i < msgdata->count; i++) {
