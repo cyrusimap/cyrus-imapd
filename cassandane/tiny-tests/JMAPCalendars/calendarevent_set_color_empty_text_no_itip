@@ -1,0 +1,40 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_color_empty_text_no_itip ($self)
+{
+    my $user = $self->default_user;
+
+    my $get_imips = sub {
+        my $data = $self->{instance}->getnotify();
+        return [ grep { $_->{METHOD} eq 'imip' } @$data ];
+    };
+
+    $self->{instance}->getnotify();
+
+    xlog $self, "create scheduled event with empty title and description";
+    my $event = $user->calendarevents->create({
+        title => '',
+        description => '',
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants => {
+            org => {
+                calendarAddress => 'mailto:cassandane@example.com',
+                roles => { owner => JSON::true },
+                participationStatus => 'accepted',
+            },
+            att => {
+                calendarAddress => 'mailto:invitee@example.com',
+                roles => { attendee => JSON::true },
+                expectReply => JSON::true,
+            },
+        },
+    });
+    $self->assert_num_equals(1, scalar $get_imips->()->@*);
+
+    xlog $self, "updating the color must not send iTIP";
+    $event->color('red');
+    $self->assert_cmp_deeply([], $get_imips->());
+    $self->assert_str_equals('', $event->title);
+    $self->assert_str_equals('', $event->description);
+}
