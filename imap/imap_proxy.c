@@ -1156,7 +1156,7 @@ int proxy_copy(const char *tag, char *sequence, char *name, int myrights,
     int res;
     int ret = PROXY_NO;
 
-    construct_hashu64_table(&crock.msg_byuid, 1024, 0);
+    construct_hashu64_table(&crock.msg_byuid, 0, 0);
 
     if (!usinguid) {
         /* need to create a seqset of UIDs to avoid a race between FETCHes */

@@ -5921,7 +5921,7 @@ EXPORTED int mboxlist_usersubs_effective(const char *userid,
 {
     struct effsubs_rock erock = { userid, auth_state, HASH_TABLE_INITIALIZER,
                                   proc, rock, flags };
-    construct_hash_table(&erock.seen, 1024, 0);
+    construct_hash_table(&erock.seen, 0, 0);
 
     int r = mboxlist_usersubs(userid, effsubs_subs_cb, &erock, flags);
     if (!r) r = mboxlist_usermboxtree(userid, auth_state, effsubs_acl_cb,

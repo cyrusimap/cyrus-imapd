@@ -3730,8 +3730,7 @@ static const mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req,
     mbentry_t *mbentry = NULL;
 
     if (!req->mbentry_byid) {
-        req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(req->mbentry_byid, 1024, 0);
+        req->mbentry_byid = malloc_hash_table(0);
     }
     else mbentry = hash_lookup(id, req->mbentry_byid);
 
@@ -3779,8 +3778,7 @@ EXPORTED const mbentry_t *jmap_mbentry_by_mboxid(jmap_req_t *req,
     mbentry_t *mbentry = NULL;
 
     if (!req->mbentry_byid) {
-        req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(req->mbentry_byid, 1024, 0);
+        req->mbentry_byid = malloc_hash_table(0);
     }
     else mbentry = hash_lookup(key, req->mbentry_byid);
 
@@ -3912,8 +3910,7 @@ static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
     int r;
 
     if (!req->mboxid_byrole) {
-        req->mboxid_byrole = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(req->mboxid_byrole, 1024, 0);
+        req->mboxid_byrole = malloc_hash_table(0);
     }
     else {
         mboxid = freeme = xstrdupnull(hash_lookup(use, req->mboxid_byrole));

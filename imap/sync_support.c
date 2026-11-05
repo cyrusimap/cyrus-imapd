@@ -2868,7 +2868,7 @@ static int reserve_via_conversations(const char *userid, const char *partition,
     r = conversations_open_user(userid, 1 /*shared*/, &cstate);
     if (r) return r;   /* caller falls back to a folder scan */
 
-    construct_hash_table(&buckets, 1024, 0);
+    construct_hash_table(&buckets, 0, 0);
 
     /* Phase A: collect candidate locations, looking GUIDs up in sorted order
      * so reads into the G<guid>-keyed conversations DB stay forward-only. */
@@ -9034,7 +9034,7 @@ int sync_do_reader(struct sync_client_state *sync_cs, sync_log_reader_t *slr)
     struct sync_action *action;
     int r = 0;
 
-    construct_hash_table(&user_mailboxes, 1024 /* XXX */, 0);
+    construct_hash_table(&user_mailboxes, 0, 0);
 
     while (sync_log_reader_getitem(slr, args) != EOF) {
         if (!strcmp(args[0], "USER"))
