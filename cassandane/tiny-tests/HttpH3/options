@@ -1,0 +1,15 @@
+#!perl
+use Cassandane::Tiny;
+
+# The smallest exchange: a bodiless request answered over HTTP/3, with the
+# same DAV capabilities httpd advertises over HTTP/1.1
+sub test_options
+    ($self)
+{
+    $self->{caldav}->GetCalendars();
+    my $res = $self->http3_request(method => 'OPTIONS',
+                                   path => '/dav/calendars/user/cassandane/');
+
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert_matches(qr/\bcalendar-access\b/, $res->{headers}{dav});
+}

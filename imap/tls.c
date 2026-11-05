@@ -107,11 +107,6 @@ static int tls_serverengine = 0; /* server engine initialized? */
 static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;         /* actively dumping protocol? */
 
-static int early_data_enabled = 0; /* accept TLS 1.3 early data? */
-
-/* How much early data a resumed client may send (one record) */
-#define TLS_MAX_EARLY_DATA (16384)
-
 
 EXPORTED int tls_enabled(void)
 {
@@ -380,8 +375,8 @@ static void set_groups(SSL_CTX *ctx, const char *list)
   * This function is taken from OpenSSL apps/s_cb.c
   */
 
-static int set_cert_stuff(SSL_CTX * ctx,
-                          const char *cert_file, const char *key_file)
+EXPORTED int tls_set_cert_stuff(SSL_CTX * ctx,
+                                const char *cert_file, const char *key_file)
 {
     if (!cert_file) return 1;
 
@@ -469,6 +464,36 @@ static int set_cert_stuff(SSL_CTX * ctx,
     free(cf1);
     free(kf1);
     return res;
+}
+
+/* Open the session database shared by every process, if not already open */
+static void open_sessdb(void)
+{
+    const char *fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
+    char *tofree = NULL;
+    int r;
+
+    if (sess_dbopen) return;
+
+    if (!fname) {
+        tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
+        fname = tofree;
+    }
+
+    /* A cache: losing writes costs clients only a full handshake, so
+     * new sessions needn't each wait for a sync (with a backend that
+     * honours NOSYNC).  After an OS crash, a session taken for 0-RTT
+     * just before it could be resumed once more. */
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_NOSYNC, &sessdb);
+    if (r != 0) {
+        xsyslog_ev(LOG_ERR, "tls.session.db.open.failed",
+                   lf_s("sys.path", fname),
+                   lf_s("error", cyrusdb_strerror(r)));
+    }
+    else
+        sess_dbopen = 1;
+
+    free(tofree);
 }
 
 /*
@@ -714,20 +739,50 @@ static SSL_SESSION *take_session_cb(SSL *ssl __attribute__((unused)),
     return sess;
 }
 
-EXPORTED bool tls_enable_early_data(void)
+EXPORTED bool tls_set_session_db(SSL_CTX *ctx, const char *ident)
 {
-    assert(tls_serverengine);
+    long timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT);
 
+    /* Don't use an internal session cache */
+    SSL_CTX_sess_set_cache_size(ctx, 1);  /* 0 is unlimited, so use 1 */
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER |
+                                   SSL_SESS_CACHE_NO_AUTO_CLEAR |
+                                   SSL_SESS_CACHE_NO_INTERNAL);
+
+    /* No stateless tickets: they're encrypted with keys each process
+     * makes up for itself, so only the issuing process could resume
+     * them.  A TLS 1.3 ticket then just names a session in the session
+     * database, and TLS 1.2 clients resume by session ID. */
+    SSL_CTX_set_options(ctx, SSL_OP_NO_TICKET);
+
+    if (timeout <= 0) {
+        SSL_CTX_set_num_tickets(ctx, 0);
+        return false;
+    }
+    if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
+
+    SSL_CTX_set_session_id_context(ctx, (const unsigned char *) ident,
+                                   strlen(ident));
+    SSL_CTX_set_timeout(ctx, timeout);
+    SSL_CTX_sess_set_new_cb(ctx, new_session_cb);
+    SSL_CTX_sess_set_remove_cb(ctx, remove_session_cb);
+    SSL_CTX_sess_set_get_cb(ctx, get_session_cb);
+    open_sessdb();
+
+    return true;
+}
+
+EXPORTED bool tls_enable_early_data(SSL_CTX *ctx, uint32_t max)
+{
     /* Without the session database there's nothing to resume */
-    if (!sess_dbopen) return false;
+    if (!sess_dbopen || !SSL_CTX_sess_get_get_cb(ctx)) return false;
 
     /* Taking a session uses up its ticket, which is what stops replays;
      * OpenSSL's own check needs its in-process cache */
-    SSL_CTX_sess_set_get_cb(s_ctx, take_session_cb);
-    SSL_CTX_set_options(s_ctx, SSL_OP_NO_ANTI_REPLAY);
-    SSL_CTX_set_max_early_data(s_ctx, TLS_MAX_EARLY_DATA);
-    SSL_CTX_set_recv_max_early_data(s_ctx, TLS_MAX_EARLY_DATA);
-    early_data_enabled = 1;
+    SSL_CTX_sess_set_get_cb(ctx, take_session_cb);
+    SSL_CTX_set_options(ctx, SSL_OP_NO_ANTI_REPLAY);
+    SSL_CTX_set_max_early_data(ctx, max);
+    SSL_CTX_set_recv_max_early_data(ctx, max);
 
     return true;
 }
@@ -815,6 +870,159 @@ done:
     return r;
 }
 
+/* Install (or, if alpn_map is empty/NULL, clear) the server-side ALPN
+ * selection callback on ctx. */
+EXPORTED void tls_set_alpn_map(SSL_CTX *ctx, const struct tls_alpn_t *alpn_map)
+{
+    if (alpn_map && alpn_map->id[0])
+        SSL_CTX_set_alpn_select_cb(ctx, alpn_select_cb, (void *) alpn_map);
+    else
+        SSL_CTX_set_alpn_select_cb(ctx, NULL, NULL);
+}
+
+EXPORTED SSL_CTX *tls_new_serverctx(const char *tag)
+{
+    SSL_CTX *ctx;
+
+    SSL_library_init();
+    SSL_load_error_strings();
+    if (tls_rand_init() == -1) {
+        xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
+                   lf_s("tls.engine", tag),
+                   lf_s("tls.step", "seed_prng"));
+        return NULL;
+    }
+
+    ctx = SSL_CTX_new(TLS_server_method());
+    if (!ctx) return NULL;
+
+    SSL_CTX_set_info_callback(ctx, apps_ssl_info_callback);
+    SSL_CTX_set_tlsext_servername_callback(ctx, servername_callback);
+
+    set_groups(ctx, config_getstring(IMAPOPT_TLS_ECCURVE));
+
+    return ctx;
+}
+
+EXPORTED int tls_set_client_verify(SSL_CTX *ctx, const char *engine,
+                                   int verifydepth, bool askcert)
+{
+    int verify_flags = SSL_VERIFY_NONE;
+    const char *client_ca_dir = NULL;
+    const char *client_ca_file = NULL;
+    const char *crl_file_path;
+    enum enum_value tls_client_certs;
+
+    /* Whether or not to use any client certificate CA context to
+     * verify client SSL certificates with.
+     *
+     * This is initially switched off by a value of "off" for the
+     * tls_client_certs setting, or should no client_ca_dir nor
+     * client_ca_file be specified. */
+    int use_client_certs = 1;
+
+    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
+
+    if (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) {
+        // The use of client certificates for authentication is
+        // optional or required.
+        client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
+        client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
+
+        if (config_debug) {
+            xsyslog_ev(LOG_DEBUG, "tls.engine.config",
+                       lf_s("tls.engine", engine),
+                       lf_s("tls.client_ca_dir", client_ca_dir),
+                       lf_s("tls.client_ca_file", client_ca_file));
+        }
+
+        if (client_ca_dir || client_ca_file) {
+            // Attempt to load client_ca_dir and/or client_ca_file
+            if ((!SSL_CTX_load_verify_locations(ctx, client_ca_file, client_ca_dir)) ||
+                (!SSL_CTX_set_default_verify_paths(ctx))) {
+
+                // Just a warning since this is only necessary for client auth.
+                xsyslog_ev(LOG_WARNING, "tls.engine.client_ca.failed",
+                           lf_s("tls.client_ca_dir", client_ca_dir),
+                           lf_s("tls.client_ca_file", client_ca_file));
+
+                use_client_certs = 0;
+            }
+        } else { // (client_ca_dir || client_ca_file)
+            // We have no CA to verify client certificates against.
+            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.missing");
+
+            // This is fatal should client certificates be required.
+            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) {
+                return (-1);
+            }
+
+            use_client_certs = 0;
+        }
+
+    } else { // (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF)
+        // The use of client certificates is turned off.
+        use_client_certs = 0;
+    }
+
+    verify_depth = verifydepth;
+
+    if (!use_client_certs) {
+        if ((tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) && askcert)
+            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.missing",
+                       lf_s("tls.reason", "required"));
+
+    } else {
+        STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
+
+        if (!CAnames || sk_X509_NAME_num(CAnames) < 1) {
+            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.empty",
+                       lf_s("tls.client_ca_file", client_ca_file));
+
+        } else {
+            if (askcert || tls_client_certs)
+                verify_flags = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+
+            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE)
+                verify_flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+
+            SSL_CTX_set_client_CA_list(ctx, CAnames);
+
+            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.set",
+                       lf_b("tls.client_cert.requested", !!(verify_flags & SSL_VERIFY_PEER)),
+                       lf_b("tls.client_cert.required", !!(verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT)));
+        }
+    }
+
+    /* Set CRL */
+    crl_file_path = config_getstring(IMAPOPT_TLS_CRL_FILE);
+    if (crl_file_path != NULL) {
+        X509_STORE *store = SSL_CTX_get_cert_store(ctx);
+        X509_CRL *crl;
+        BIO *crl_file = BIO_new_file(crl_file_path, "r");
+
+        if (crl_file) {
+            while ((crl = PEM_read_bio_X509_CRL(crl_file, NULL, NULL, NULL))) {
+                X509_STORE_add_crl(store, crl);
+                X509_CRL_free(crl);
+            }
+
+            X509_STORE_set_flags(store,
+                                 X509_V_FLAG_CRL_CHECK |
+                                 X509_V_FLAG_CRL_CHECK_ALL);
+        } else {
+            xsyslog_ev(LOG_ERR, "tls.engine.crl.failed",
+                       lf_s("sys.path", crl_file_path));
+        }
+
+        BIO_free(crl_file);
+    } /* crl_file_path */
+
+    SSL_CTX_set_verify(ctx, verify_flags, verify_callback);
+
+    return 0;
+}
+
  /*
   * This is the setup routine for the SSL server. As smtpd might be called
   * more than once, we only want to do the initialization one time.
@@ -826,33 +1034,17 @@ done:
 
 /* must be called after cyrus_init */
 // I am the server
-EXPORTED int     tls_init_serverengine(const char *ident,
-                              int verifydepth,
-                              int askcert,
-                              SSL_CTX **ret)
+EXPORTED int tls_init_serverengine(const char *ident, int verifydepth,
+                                   int askcert, SSL_CTX **ret)
 {
     int     off = 0;
-    int     verify_flags = SSL_VERIFY_NONE;
     const char   *cipher_list;
-    const char   *client_ca_dir;
-    const char   *client_ca_file;
     const char   *server_ca_file;
     const char   *server_cert_file;
     const char   *server_key_file;
-    const char   *crl_file_path;
-    enum enum_value tls_client_certs;
     int server_cipher_order;
-    int timeout;
 
     if (ret) *ret = s_ctx;
-
-    /* Whether or not to use any client certificate CA context to
-     * verify client SSL certificates with.
-     *
-     * This is initially switched off by a value of "off" for the
-     * tls_client_certs setting, or should no client_ca_dir nor
-     * client_ca_file be specified. */
-    int use_client_certs = 1;
 
     if (tls_serverengine)
         return (0);                             /* already running */
@@ -861,20 +1053,8 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         xsyslog_ev(LOG_DEBUG, "tls.engine.starting",
                    lf_s("tls.engine", "server"));
 
-    SSL_library_init();
-    SSL_load_error_strings();
-    if (tls_rand_init() == -1) {
-        xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
-                   lf_s("tls.engine", "server"),
-                   lf_s("tls.step", "seed_prng"));
-        return -1;
-    }
-
-    s_ctx = SSL_CTX_new(TLS_server_method());
-
-    if (s_ctx == NULL) {
-        return (-1);
-    };
+    s_ctx = tls_new_serverctx("server");
+    if (!s_ctx) return -1;
 
     off |= SSL_OP_ALL;            /* Work around all known bugs */
     off |= SSL_OP_NO_SSLv2;       /* Disable insecure SSLv2 */
@@ -908,7 +1088,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         off |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 
     SSL_CTX_set_options(s_ctx, off);
-    SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHERS);
     if (!SSL_CTX_set_cipher_list(s_ctx, cipher_list)) {
@@ -918,50 +1097,6 @@ EXPORTED int     tls_init_serverengine(const char *ident,
                    lf_s("tls.ciphers", cipher_list));
 
         return (-1);
-    }
-
-    tls_client_certs = config_getenum(IMAPOPT_TLS_CLIENT_CERTS);
-
-    if (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF) {
-        // The use of client certificates for authentication is
-        // optional or required.
-        client_ca_dir  = config_getstring(IMAPOPT_TLS_CLIENT_CA_DIR);
-        client_ca_file = config_getstring(IMAPOPT_TLS_CLIENT_CA_FILE);
-
-            if (config_debug) {
-                    xsyslog_ev(LOG_DEBUG, "tls.engine.config",
-                               lf_s("tls.engine", "server"),
-                               lf_s("tls.client_ca_dir", client_ca_dir),
-                               lf_s("tls.client_ca_file", client_ca_file));
-            }
-
-        if (client_ca_dir || client_ca_file) {
-            // Attempt to load client_ca_dir and/or client_ca_file
-            if ((!SSL_CTX_load_verify_locations(s_ctx, client_ca_file, client_ca_dir)) ||
-                (!SSL_CTX_set_default_verify_paths(s_ctx))) {
-
-                // Just a warning since this is only necessary for client auth.
-                xsyslog_ev(LOG_WARNING, "tls.engine.client_ca.failed",
-                           lf_s("tls.client_ca_dir", client_ca_dir),
-                           lf_s("tls.client_ca_file", client_ca_file));
-
-                use_client_certs = 0;
-            }
-        } else { // (client_ca_dir || client_ca_file)
-            // We have no CA to verify client certificates against.
-            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.missing");
-
-            // This is fatal should client certificates be required.
-            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) {
-                return (-1);
-            }
-
-            use_client_certs = 0;
-        }
-
-    } else { // (tls_client_certs != IMAP_ENUM_TLS_CLIENT_CERTS_OFF)
-        // The use of client certificates is turned off.
-        use_client_certs = 0;
     }
 
     server_ca_file = config_getstring(IMAPOPT_TLS_SERVER_CA_FILE);
@@ -1015,7 +1150,7 @@ EXPORTED int     tls_init_serverengine(const char *ident,
         }
     }
 
-    if (!set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
+    if (!tls_set_cert_stuff(s_ctx, server_cert_file, server_key_file)) {
         xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
                    lf_s("tls.engine", "server"),
                    lf_s("tls.step", "cert_key"));
@@ -1024,132 +1159,19 @@ EXPORTED int     tls_init_serverengine(const char *ident,
 
     SSL_CTX_set_dh_auto(s_ctx, 1);
 
-    set_groups(s_ctx, config_getstring(IMAPOPT_TLS_ECCURVE));
+    if (tls_set_client_verify(s_ctx, "server", verifydepth, askcert))
+        return -1;
 
-    verify_depth = verifydepth;
-
-    if (!use_client_certs) {
-        if ((tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE) && askcert)
-            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.missing",
-                       lf_s("tls.reason", "required"));
-
-    } else {
-        STACK_OF(X509_NAME) *CAnames = SSL_load_client_CA_file(client_ca_file);
-
-        if (!CAnames || sk_X509_NAME_num(CAnames) < 1) {
-            xsyslog_ev(LOG_ERR, "tls.engine.client_ca.empty",
-                       lf_s("tls.client_ca_file", client_ca_file));
-
-        } else {
-            if (askcert || tls_client_certs)
-                verify_flags = SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
-
-            if (tls_client_certs == IMAP_ENUM_TLS_CLIENT_CERTS_REQUIRE)
-                verify_flags |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
-
-            SSL_CTX_set_client_CA_list(s_ctx, CAnames);
-
-            xsyslog_ev(LOG_DEBUG, "tls.engine.client_ca.set",
-                       lf_b("tls.client_cert.requested", !!(verify_flags & SSL_VERIFY_PEER)),
-                       lf_b("tls.client_cert.required", !!(verify_flags & SSL_VERIFY_FAIL_IF_NO_PEER_CERT)));
-        }
-    }
-
-    /* Set CRL */
-    crl_file_path = config_getstring(IMAPOPT_TLS_CRL_FILE);
-    if (crl_file_path != NULL) {
-        X509_STORE *store = SSL_CTX_get_cert_store(s_ctx);
-        X509_CRL *crl;
-        BIO *crl_file = BIO_new_file(crl_file_path, "r");
-
-        if (crl_file) {
-            while ((crl = PEM_read_bio_X509_CRL(crl_file, NULL, NULL, NULL))) {
-                X509_STORE_add_crl(store, crl);
-                X509_CRL_free(crl);
-            }
-
-            X509_STORE_set_flags(store,
-                                 X509_V_FLAG_CRL_CHECK |
-                                 X509_V_FLAG_CRL_CHECK_ALL);
-        } else {
-            xsyslog_ev(LOG_ERR, "tls.engine.crl.failed",
-                       lf_s("sys.path", crl_file_path));
-        }
-
-        BIO_free(crl_file);
-    } /* crl_file_path */
-
-    SSL_CTX_set_verify(s_ctx, verify_flags, verify_callback);
-
-    SSL_CTX_set_tlsext_servername_callback(s_ctx, servername_callback);
-
-    /* Don't use an internal session cache */
-    SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
-    SSL_CTX_set_session_cache_mode(s_ctx, SSL_SESS_CACHE_SERVER |
-                                   SSL_SESS_CACHE_NO_AUTO_CLEAR |
-                                   SSL_SESS_CACHE_NO_INTERNAL);
-
-    /* Get the session timeout from the config file */
-    timeout = config_getduration(IMAPOPT_TLS_SESSION_TIMEOUT);
-    if (timeout < 0) timeout = 0;
-    if (timeout > 24 * 60 * 60) timeout = 24 * 60 * 60; /* 24 hours max */
-
-    /* No stateless tickets: they're encrypted with keys each process
-     * makes up for itself, so only the issuing process could resume
-     * them.  A TLS 1.3 ticket then just names a session in the session
-     * database, and TLS 1.2 clients resume by session ID.
-     *
-     * A client that just closes the connection, as browsers often do,
+    /* A client that just closes the connection, as browsers often do,
      * isn't an error: OpenSSL would otherwise take the missing
      * close_notify for one, and drop the session from the database.  Our
      * protocols frame their own messages, so truncation can't go unseen. */
-    SSL_CTX_set_options(s_ctx,
-                        SSL_OP_NO_TICKET | SSL_OP_IGNORE_UNEXPECTED_EOF);
+    SSL_CTX_set_options(s_ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
 
-    /* A timeout of zero disables session caching */
-    if (!timeout) SSL_CTX_set_num_tickets(s_ctx, 0);
-    else {
-        const char *fname = NULL;
-        char *tofree = NULL;
-        int r;
-
+    if (tls_set_session_db(s_ctx, ident)) {
         /* A stored session can be resumed repeatedly, so one ticket
          * is enough, and each one costs a database write */
         SSL_CTX_set_num_tickets(s_ctx, 1);
-
-        /* Set the context for session reuse -- use the service ident */
-        SSL_CTX_set_session_id_context(s_ctx, (void*) ident, strlen(ident));
-
-        /* Set the timeout for the internal/external cache */
-        SSL_CTX_set_timeout(s_ctx, timeout);
-
-        /* Set the callback functions for the external session cache */
-        SSL_CTX_sess_set_new_cb(s_ctx, new_session_cb);
-        SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
-        SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
-
-        fname = config_getstring(IMAPOPT_TLS_SESSIONS_DB_PATH);
-
-        /* create the name of the db file */
-        if (!fname) {
-            tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
-            fname = tofree;
-        }
-
-        /* A cache: losing writes costs clients only a full handshake, so
-         * new sessions needn't each wait for a sync (with a backend that
-         * honours NOSYNC).  After an OS crash, a session taken for 0-RTT
-         * just before it could be resumed once more. */
-        r = cyrusdb_open(DB, fname, CYRUSDB_CREATE | CYRUSDB_NOSYNC, &sessdb);
-        if (r != 0) {
-            xsyslog_ev(LOG_ERR, "tls.session.db.open.failed",
-                       lf_s("sys.path", fname),
-                       lf_s("error", cyrusdb_strerror(r)));
-        }
-        else
-            sess_dbopen = 1;
-
-        free(tofree);
     }
 
     tls_serverengine = 1;
@@ -1290,10 +1312,7 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
     saslprops_reset(saslprops);
 
-    if (alpn_map && alpn_map->id[0])
-        SSL_CTX_set_alpn_select_cb(s_ctx, alpn_select_cb, (void *) alpn_map);
-    else
-        SSL_CTX_set_alpn_select_cb(s_ctx, NULL, NULL);
+    tls_set_alpn_map(s_ctx, alpn_map);
 
     tls_conn = (SSL *) SSL_new(s_ctx);
     if (tls_conn == NULL) {
@@ -1330,7 +1349,7 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
     nonblock(readfd, 1);
 
-    if (early_data_enabled && early_in) {
+    if (early_in && SSL_get_max_early_data(tls_conn)) {
         early = read_early_data(tls_conn, early_in, timeout);
         if (early < 0) {
             r = -1;
@@ -1612,16 +1631,15 @@ EXPORTED int tls_shutdown_serverengine(void)
 {
     int r;
 
-    if (tls_serverengine) {
-        if (sess_dbopen) {
-            r = cyrusdb_close(sessdb);
-            if (r) {
-                xsyslog_ev(LOG_ERR, "tls.session.db.close.failed",
-                           lf_s("error", cyrusdb_strerror(r)));
-            }
-            sessdb = NULL;
-            sess_dbopen = 0;
+    /* Not just when tls_serverengine: a QUIC-only process opens it too */
+    if (sess_dbopen) {
+        r = cyrusdb_close(sessdb);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "tls.session.db.close.failed",
+                       lf_s("error", cyrusdb_strerror(r)));
         }
+        sessdb = NULL;
+        sess_dbopen = 0;
     }
 
     return 0;
@@ -1842,7 +1860,7 @@ HIDDEN int tls_init_clientengine(int verifydepth,
         client_key = var_server_key;
 
     if (client_cert || client_key) {
-        if (!set_cert_stuff(c_ctx, client_cert, client_key)) {
+        if (!tls_set_cert_stuff(c_ctx, client_cert, client_key)) {
             xsyslog_ev(LOG_ERR, "tls.engine.init.failed",
                        lf_s("tls.engine", "client"),
                        lf_s("tls.step", "cert_key"));

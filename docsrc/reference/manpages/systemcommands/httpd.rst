@@ -26,6 +26,10 @@ and responds on its standard output. It MUST be invoked by
 :cyrusman:`master(8)` with those descriptors attached to a remote client
 connection.
 
+If **httpd** is configured to run over the QUIC transport protocol
+(see :cyrusman:`cyrus.conf(5)`), then it will speak HTTP/3.
+Otherwise, it will speak HTTP/1.x or HTTP/2 as negotiated by the client.
+
 **httpd** |default-conf-text|
 
 If the directory ``<configdirectory>/log/``\ *user* exists, then
@@ -91,6 +95,8 @@ Examples
         sieve       cmd="timsieved" listen="sieve" prefork=0
         notify      cmd="notifyd" listen="/var/run/cyrus/socket/notify" proto="udp" prefork=1
         **httpd       cmd="httpd" listen=8080 prefork=1 maxchild=20**
+        **https       cmd="httpd -s" listen="https"**
+        **http3       cmd="httpd" listen="https" proto="quic"**
     }
 
 History
