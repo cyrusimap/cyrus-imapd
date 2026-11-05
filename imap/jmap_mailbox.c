@@ -2559,8 +2559,7 @@ static json_t *_mbox_update_check_readonly(jmap_req_t *req,
     json_t *err = jmap_set_check_readonly(args->readonly, cur);
 
     json_decref(cur);
-    free_hash_table(props, NULL);
-    free(props);
+    release_hash_table(&props, NULL);
     return err;
 }
 

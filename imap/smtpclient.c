@@ -182,9 +182,7 @@ EXPORTED int smtpclient_close(smtpclient_t **smp)
 
     /* Free internal state */
     if (sm->have_exts) {
-        free_hash_table(sm->have_exts, free);
-        free(sm->have_exts);
-        sm->have_exts = NULL;
+        release_hash_table(&sm->have_exts, free);
     }
     buf_free(&sm->buf);
     free(sm->by);
