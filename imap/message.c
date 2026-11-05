@@ -1030,7 +1030,8 @@ static void message_parse_headers(struct msg *msg, struct body *body,
  */
 static void message_parse_address(const char *hdr, struct address **addrp)
 {
-    char *hdrend, hdrendchar = '\0';
+    const char *hdrend;
+    char *val;
 
     /* If we saw this header already, discard the earlier value */
     if (*addrp) {
@@ -1042,19 +1043,16 @@ static void message_parse_address(const char *hdr, struct address **addrp)
     hdrend = strchr(hdr, '\n');
     while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'))
         hdrend = strchr(hdrend+1, '\n');
-
-    /* Put a NUL character at the end of header */
-    /* gnb:TODO this is evil and should be stopped */
     if (hdrend) {
         if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
-        hdrendchar = *hdrend;
-        *hdrend = '\0';
+    }
+    else {
+        hdrend = hdr + strlen(hdr);
     }
 
-    parseaddr_list(hdr, addrp);
-
-    /* Put character at end of header back */
-    if (hdrend) *hdrend = hdrendchar;
+    val = xstrndup(hdr, hdrend - hdr);
+    parseaddr_list(val, addrp);
+    free(val);
 }
 
 /*

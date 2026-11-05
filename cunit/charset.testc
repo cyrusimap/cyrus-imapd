@@ -1750,7 +1750,7 @@ static void test_encode_mimebody(void)
 
     /* empty input encodes to nothing, even when wrapping */
     for (int wrap = 0; wrap <= 1; wrap++) {
-        char guard[4] = "XXXX";
+        char guard[5] = "XXXX";
         size_t outlen = 0x1234;
 
         charset_b64encode_mimebody(NULL, 0, NULL, &outlen, NULL, wrap);
