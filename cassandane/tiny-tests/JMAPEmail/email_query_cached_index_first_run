@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+use LWP::ConnCache;
+
+# A query run before the index covers anything has an index snapshot of 0,
+# just like a query that never read the index.  Once squatter first runs,
+# Email/query must still notice and rebuild, rather than keep serving a
+# result that grouped every email as matching no condition.
+
+sub test_email_query_cached_index_first_run
+    :JMAPExtensions :JMAPQueryCacheMaxAge1s
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing(
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/performance',
+    );
+
+    # The cache is per httpd process, so every request must reach the same
+    # one: keep the connection open, as a real client would.
+    $jmap->ua->lwp->conn_cache(LWP::ConnCache->new);
+
+    my $mbox = $user->mailboxes->create({ name => 'A' });
+
+    my sub create_email ($subject, $from, $received_at) {
+        my $email = $user->emails->create({
+            mailboxIds    => { $mbox->id => JSON::true },
+            subject       => $subject,
+            from          => [ { email => $from } ],
+            receivedAt    => $received_at,
+            bodyStructure => { type => 'text/plain', partId => 'part1' },
+            bodyValues    => { part1 => { value => 'hello' } },
+        });
+        return q{} . $email->id;
+    }
+
+    my $alpha   = create_email('alpha', 'ann@example.com', '2020-01-01T00:00:00Z');
+    my $bravo   = create_email('bravo', 'bob@example.com', '2021-01-01T00:00:00Z');
+    my $charlie = create_email('charlie', 'ann@example.com', '2022-01-01T00:00:00Z');
+
+    my %query_args = (
+        filter => { inMailbox => $mbox->id },
+        sort   => [
+            { property    => 'category',
+              isAscending => JSON::true,
+              groupBy     => [ { from => 'ann@example.com' } ] },
+            { property    => 'receivedAt',
+              isAscending => JSON::false },
+        ],
+    );
+
+    my sub query {
+        my $res = $jmap->request([ [ 'Email/query', \%query_args, 'R1' ] ]);
+        $res->assert_successful;
+        return $res->single_sentence('Email/query')->arguments;
+    }
+
+    xlog $self, 'query before squatter has ever run: nothing matches the group';
+    my $args = query();
+    $self->assert_cmp_deeply([ $charlie, $bravo, $alpha ], $args->{ids});
+    my $first_query_state = $args->{queryState};
+
+    $args = query();
+    $self->assert_cmp_deeply(jtrue(), $args->{performance}{details}{isCached},
+        'repeated query is cached');
+
+    xlog $self, 'run squatter for the first time';
+    $self->{instance}->run_command({cyrus => 1}, 'squatter');
+
+    $args = query();
+    $self->assert_cmp_deeply(jfalse(), $args->{performance}{details}{isCached},
+        'query is rebuilt once the index covers the emails');
+    $self->assert_cmp_deeply([ $charlie, $alpha, $bravo ], $args->{ids},
+        'emails from ann now group first');
+    $self->assert_str_not_equals($first_query_state, $args->{queryState});
+}

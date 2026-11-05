@@ -1,0 +1,27 @@
+Description:
+
+Email/query no longer serves a cached result after the search index has
+caught up on Emails the result left out.  A filter or category sort that
+reads the index is now rebuilt once the index moves on, so Email/query
+and Email/queryChanges agree on the query state and clients no longer
+loop between the two.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
