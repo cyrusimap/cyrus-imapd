@@ -105,9 +105,15 @@ A calendar deleted after the cutoff is restored whole, into the live
 calendar with the same `DAV:displayname` if there is one, or else into a new
 calendar with that displayname and the old `calendar-color`.  Each event's
 latest version is recreated, unless the event was destroyed before the
-cutoff.  The live calendar is not checked for an event with the same
-resource name.  The deleted calendar is then removed permanently.
-Calendars deleted before the cutoff are ignored.
+cutoff.  The deleted calendar is then removed permanently.  Calendars
+deleted before the cutoff are ignored.
+
+An account has at most one event per iCalendar UID.  A version is not
+recreated, in either kind of calendar, if its UID is live in any other
+resource, or was already restored by this request.  So an event moved
+between calendars after the cutoff is not duplicated, and of several
+destroyed events sharing a UID, the first one reached is restored.  Undoing
+an update is allowed, since it replaces the live version in place.
 
 Undoing a change to an event with an ORGANIZER sends iTIP through
 `sched_defer()`, as if the user had made the change:

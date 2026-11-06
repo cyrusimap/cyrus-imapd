@@ -1,0 +1,26 @@
+Description:
+
+Backup/restoreCalendars no longer restores an event whose iCalendar UID
+is already in use in the account, such as an event moved to another
+calendar after the restore point, or a second destroyed event with the
+same UID.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
