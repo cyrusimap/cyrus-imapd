@@ -7,8 +7,11 @@
 
 #include <config.h>
 
+#include <stdbool.h>
+
 #include "mailbox.h"
 #include "sqldb.h"
+#include "user.h"
 
 struct sieve_db;
 
@@ -112,13 +115,62 @@ int sieve_script_rename(struct mailbox *mailbox,
 int sieve_script_fetch(struct mailbox *mailbox,
                        const struct sieve_data *sdata, struct buf *content);
 
+/**
+ * Whether a userid names the global Sieve scripts rather than a user's.
+ *
+ * A userid with no localpart, "" or "@domain", names the global scripts of
+ * the server or of that domain.  They are kept in a shared mailbox, which
+ * only admins may access, rather than in a user's.
+ *
+ * @param userid  a userid, or "" or "@domain"
+ * @return        true if @p userid names global scripts
+ */
+bool sieve_userid_isglobal(const char *userid);
+
+/**
+ * Make sure the Sieve mailbox of a user, or the global one, exists.
+ *
+ * Creates the mailbox if need be, and moves into it any scripts still kept
+ * in the corresponding Sieve directory.
+ *
+ * @param userid      the owner, or "" or "@domain" for global scripts
+ * @param mailboxptr  if not NULL, set to the opened (write-locked) mailbox;
+ *                    if NULL and the Sieve directory doesn't exist, nothing
+ *                    is created
+ * @param silent      don't record the changes for replication
+ * @return            0 on success, or an IMAP error code
+ */
 int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr,
                         int silent);
 
+/**
+ * Bring a script's bytecode in a Sieve directory up to date.
+ *
+ * The script is read from the Sieve mailbox of @p userid if it is stored
+ * there, else from the script file in @p sievedir.
+ *
+ * @param userid    the owner, or "" or "@domain" for global scripts
+ * @param sievedir  the Sieve directory holding the bytecode
+ * @param script    the script's name
+ * @return          0 on success, or an IMAP error code
+ */
 int sieve_script_rebuild(const char *userid,
                          const char *sievedir, const char *script);
 
-/* calculate a mailbox name */
+/**
+ * Lock the namespace that protects a user's, or the global, Sieve mailbox.
+ *
+ * @param userid  the owner, or "" or "@domain" for global scripts
+ * @return        the lock, to release with user_nslock_release()
+ */
+user_nslock_t *sieve_nslock_lock_w(const char *userid);
+
+/**
+ * Name the Sieve mailbox of a user, or of the global scripts.
+ *
+ * @param userid  the owner, or "" or "@domain" for global scripts
+ * @return        the internal mailbox name, which the caller must free
+ */
 char *sieve_mboxname(const char *userid);
 
 #endif /* SIEVE_DB_H */
