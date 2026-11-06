@@ -1,0 +1,120 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::MD5 qw(md5);
+use Digest::SHA qw(sha256);
+
+# How a response is framed decides where its digest goes, if anywhere:
+# a compressed chunked response has it as a trailer, of the compressed
+# bytes; an HTTP/1.0 response (close-delimited, so no trailer section) and
+# a multipart/byteranges response have none; Content-MD5 is of the bytes
+# sent too; and a digest trailer is listed in Trailer along with CTag.
+sub test_content_digest_framing
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(httpallowcompress => 'yes',
+                                     httpcontentmd5 => 'yes');
+    $self->_start_instances();
+
+    my $collection = '/dav/calendars/user/cassandane/Default/';
+    my $path = "${collection}framing.ics";
+    my $description = join(' ', map { "line $_ of a long description." } 1..40);
+    my sub ical ($uid) {
+        return join("\r\n",
+            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+            'BEGIN:VEVENT', "UID:$uid", 'DTSTAMP:20260101T000000Z',
+            'DTSTART:20260101T100000Z', 'DURATION:PT1H',
+            "SUMMARY:$uid", "DESCRIPTION:$description",
+            'END:VEVENT', 'END:VCALENDAR', '');
+    }
+
+    my $put = $self->http1_request(
+        method  => 'PUT',
+        path    => $path,
+        headers => [ 'content-type' => 'text/calendar',
+                     'connection'   => 'close' ],
+        body    => ical('framing'),
+        timeout => 10,
+    );
+    $self->assert_str_equals('201', $put->{statuses}[0] // '');
+
+    my sub request ($method, $target, %opts) {
+        my $service = $self->{instance}->get_service('http');
+        my $s = $self->http1_connect();
+        my $body = $opts{body};
+        http1_send($s,
+            "$method $target HTTP/", ($opts{version} // '1.1'), "\r\n",
+            "Host: ", $service->host, ":", $service->port, "\r\n",
+            "Authorization: Basic ", encode_base64('cassandane:pass', ''),
+            "\r\n",
+            (map { "$_\r\n" } @{$opts{headers} // []}),
+            (defined $body ? "Content-Length: " . length($body) . "\r\n" : ''),
+            "\r\n",
+            $body // '');
+        my $res = http1_read_response($s);
+        close($s);
+        return $res;
+    }
+
+    my sub sha256_digest ($data) {
+        return 'sha-256=:' . encode_base64(sha256($data), '') . ':';
+    }
+    my $want = 'Want-Content-Digest: sha-256=10';
+
+    xlog $self, "compressed and chunked: a trailer, of the compressed bytes";
+    my $res = request('GET', $collection,
+                      headers => [ $want, 'Accept-Encoding: gzip' ]);
+    $self->assert_http_response({
+        status   => 200,
+        headers  => { 'content-encoding'  => 'gzip',
+                      'transfer-encoding' => re(qr/^chunked$/i) },
+        trailers => { 'content-digest' => sha256_digest($res->{body}) },
+    }, $res);
+
+    xlog $self, "HTTP/1.0, so close-delimited: no digest";
+    $res = request('GET', $collection, version => '1.0', headers => [ $want ]);
+    $self->assert_http_response({
+        status  => 200,
+        headers => { trailer          => undef,
+                     'content-digest' => undef,
+                     'content-md5'    => undef },
+        body    => re(qr/^UID:framing\r$/m),
+    }, $res);
+
+    xlog $self, "multipart/byteranges: no digest";
+    $res = request('GET', $path,
+                   headers => [ $want, 'Range: bytes=0-9,1400-1409' ]);
+    $self->assert_http_response({
+        status  => 206,
+        headers => { 'content-type'   => re(qr{^multipart/byteranges}),
+                     'content-digest' => undef,
+                     'content-md5'    => undef },
+    }, $res);
+
+    xlog $self, "Content-MD5 of a range is of the range";
+    $res = request('GET', $path, headers => [ 'Range: bytes=10-29' ]);
+    $self->assert_num_equals(20, length $res->{body});
+    $self->assert_http_response({
+        status  => 206,
+        headers => { 'content-md5' => encode_base64(md5($res->{body}), '') },
+    }, $res);
+
+    xlog $self, "Content-MD5 of compressed content is of the compressed bytes";
+    $res = request('GET', $path, headers => [ 'Accept-Encoding: gzip' ]);
+    $self->assert_http_response({
+        status  => 200,
+        headers => { 'content-encoding' => 'gzip',
+                     'content-md5' => encode_base64(md5($res->{body}), '') },
+    }, $res);
+
+    xlog $self, "a bulk import: the digest is a trailer alongside CTag";
+    $res = request('POST', $collection,
+                   headers => [ $want, 'Content-Type: text/calendar' ],
+                   body => ical('framing-import'));
+    $self->assert_http_response({
+        status   => 207,
+        headers  => { trailer => 'CTag, Content-Digest' },
+        trailers => { ctag             => ignore(),
+                      'content-digest' => sha256_digest($res->{body}) },
+    }, $res);
+}

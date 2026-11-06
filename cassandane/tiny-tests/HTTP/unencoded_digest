@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::SHA qw(sha256);
+use IO::Compress::Gzip qw(gzip $GzipError);
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError);
+
+# Unencoded-Digest (draft-ietf-httpbis-unencoded-digest) is of the whole
+# selected representation with no content coding: the same whether or not
+# the response is compressed or a range, and in the trailer section of a
+# chunked response.  A request's is checked once its content is decoded.
+sub test_unencoded_digest
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(httpallowcompress => 'yes');
+    $self->_start_instances();
+
+    my $collection = '/dav/calendars/user/cassandane/Default/';
+    my $path = "${collection}unencoded.ics";
+    my $description = join(' ', map { "line $_ of a long description." } 1..40);
+    my sub ical ($uid) {
+        return join("\r\n",
+            'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+            'BEGIN:VEVENT', "UID:$uid", 'DTSTAMP:20260101T000000Z',
+            'DTSTART:20260101T100000Z', 'DURATION:PT1H',
+            "SUMMARY:$uid", "DESCRIPTION:$description",
+            'END:VEVENT', 'END:VCALENDAR', '');
+    }
+    my sub digest ($data) {
+        return 'sha-256=:' . encode_base64(sha256($data), '') . ':';
+    }
+    my sub gunzipped ($data) {
+        my $out;
+        gunzip(\$data => \$out) or die "gunzip failed: $GunzipError";
+        return $out;
+    }
+
+    my $put = $self->http1_request(
+        method  => 'PUT',
+        path    => $path,
+        headers => [ 'content-type' => 'text/calendar',
+                     'connection'   => 'close' ],
+        body    => ical('unencoded'),
+        timeout => 10,
+    );
+    $self->assert_str_equals('201', $put->{statuses}[0] // '');
+
+    my sub get ($target, @hdrs) {
+        my $service = $self->{instance}->get_service('http');
+        my $s = $self->http1_connect();
+        http1_send($s,
+            "GET $target HTTP/1.1\r\n",
+            "Host: ", $service->host, ":", $service->port, "\r\n",
+            "Authorization: Basic ", encode_base64('cassandane:pass', ''),
+            "\r\n",
+            "Want-Unencoded-Digest: sha-256=10\r\n",
+            (map { "$_\r\n" } @hdrs),
+            "\r\n");
+        my $res = http1_read_response($s);
+        close($s);
+        return $res;
+    }
+
+    xlog $self, "identity: the digest is of the content";
+    my $res = get($path);
+    my $representation = $res->{body};
+    $self->assert_http_response({
+        status  => 200,
+        headers => { 'unencoded-digest' => digest($representation),
+                     'content-digest'   => undef },
+    }, $res);
+
+    xlog $self, "compressed: the digest is of the uncompressed content";
+    $res = get($path, 'Accept-Encoding: gzip');
+    $self->assert_str_equals($representation, gunzipped($res->{body}));
+    $self->assert_http_response({
+        status  => 200,
+        headers => { 'content-encoding' => 'gzip',
+                     'unencoded-digest' => digest($representation) },
+    }, $res);
+
+    xlog $self, "a range: the digest is of the whole representation";
+    $res = get($path, 'Range: bytes=10-29');
+    $self->assert_http_response({
+        status  => 206,
+        headers => { 'unencoded-digest' => digest($representation) },
+    }, $res);
+
+    xlog $self, "chunked and compressed: a trailer, of the uncompressed bytes";
+    $res = get($collection, 'Accept-Encoding: gzip');
+    $self->assert_http_response({
+        status   => 200,
+        headers  => { 'transfer-encoding' => re(qr/^chunked$/i),
+                      trailer             => 'Unencoded-Digest',
+                      'unencoded-digest'  => undef },
+        trailers => { 'unencoded-digest' => digest(gunzipped($res->{body})) },
+    }, $res);
+
+    xlog $self, "a request: checked against the decoded content";
+    my $n = 0;
+    for my $case ([1, 0, '201'], [0, 0, '400'], [1, 1, '201'], [0, 1, '400']) {
+        my ($matching, $compressed, $status) = @$case;
+        my $body = ical('unencoded-put' . ++$n);
+        my $sent = $body;
+        if ($compressed) {
+            gzip(\$body => \$sent) or die "gzip failed: $GzipError";
+        }
+        my $res = $self->http1_request(
+            method  => 'PUT',
+            path    => "${collection}unencoded-put$n.ics",
+            headers => [ 'content-type'     => 'text/calendar',
+                         'connection'       => 'close',
+                         ($compressed ? ('content-encoding' => 'gzip') : ()),
+                         'unencoded-digest' =>
+                             digest($matching ? $body : 'something else') ],
+            body    => $sent,
+            timeout => 10,
+        );
+        $self->assert_str_equals($status, $res->{statuses}[0] // '');
+    }
+}

@@ -11,6 +11,7 @@
 #include <syslog.h>
 
 #include "http_client.h"
+#include "http_digest.h"
 #include "prot.h"
 #include "tok.h"
 
@@ -400,7 +401,15 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
             return HTTP_BAD_REQUEST;
         }
 #endif
+    }
 
+    /* Content-Digest is of the content: before decoding its content coding */
+    if (!(body->flags & (BODY_RESPONSE | BODY_DISCARD))) {
+        r = http_digest_verify(hdrs, &body->payload, errstr);
+        if (r) return r;
+    }
+
+    if (!(body->flags & BODY_DISCARD) && buf_len(&body->payload)) {
         /* Decode the representation, if necessary */
         if (body->flags & BODY_DECODE) {
             const char **hdr;
@@ -433,6 +442,15 @@ EXPORTED int http_read_body(struct protstream *pin, hdrcache_t hdrs,
                 return HTTP_BAD_REQUEST;
             }
         }
+    }
+
+    /* Unencoded-Digest is of the representation: checkable only once any
+       content coding is removed */
+    if (!(body->flags & (BODY_RESPONSE | BODY_DISCARD)) &&
+        ((body->flags & BODY_DECODE) ||
+         !spool_getheader(hdrs, "Content-Encoding"))) {
+        r = http_digest_verify_unencoded(hdrs, &body->payload, errstr);
+        if (r) return r;
     }
 
     return 0;

@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::SHA qw(sha256 sha512);
+
+# A response carries Content-Digest when Want-Content-Digest asks for it
+# (RFC 9530), using the most preferred algorithm the server supports.
+sub test_content_digest_want
+    ($self)
+{
+    my $path = '/dav/calendars/user/cassandane/Default/content-digest.ics';
+    my $ical = join("\r\n",
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//EN',
+        'BEGIN:VEVENT', 'UID:content-digest', 'DTSTAMP:20260101T000000Z',
+        'DTSTART:20260101T100000Z', 'DURATION:PT1H',
+        'SUMMARY:Content-Digest test', 'END:VEVENT', 'END:VCALENDAR', '');
+
+    my $put = $self->http1_request(
+        method  => 'PUT',
+        path    => $path,
+        headers => [ 'content-type' => 'text/calendar',
+                     'connection'   => 'close' ],
+        body    => $ical,
+        timeout => 10,
+    );
+    $self->assert_str_equals('201', $put->{statuses}[0] // '');
+
+    my sub get_with_want ($want) {
+        my $service = $self->{instance}->get_service('http');
+        my $s = $self->http1_connect();
+        http1_send($s,
+            "GET $path HTTP/1.1\r\n",
+            "Host: ", $service->host, ":", $service->port, "\r\n",
+            "Authorization: Basic ", encode_base64('cassandane:pass', ''),
+            "\r\n",
+            (defined $want ? "Want-Content-Digest: $want\r\n" : ''),
+            "\r\n");
+        my $res = http1_read_response($s);
+        close($s);
+        $self->assert_num_equals(200, $res->{status});
+        return $res;
+    }
+
+    my %fn = ('sha-256' => \&sha256, 'sha-512' => \&sha512);
+    my sub expected ($alg, $body) {
+        return "$alg=:" . encode_base64($fn{$alg}->($body), '') . ':';
+    }
+
+    xlog $self, "no Want-Content-Digest, no Content-Digest";
+    my $res = get_with_want(undef);
+    $self->assert_null($res->{headers}{'content-digest'});
+
+    xlog $self, "the most preferred supported algorithm is used";
+    for my $case (['sha-256=10', 'sha-256'],
+                  ['sha-512=5, sha-256=3', 'sha-512'],
+                  ['sha-256=3, sha-512=5', 'sha-512'],
+                  ['sha=10, sha-256=1', 'sha-256'],
+                  ['sha-256=0', 'sha-512']) {
+        my ($want, $alg) = @$case;
+        $res = get_with_want($want);
+        $self->assert_str_equals(expected($alg, $res->{body}),
+                                 $res->{headers}{'content-digest'});
+    }
+
+    xlog $self, "only unsupported algorithms: one is used anyway";
+    $res = get_with_want('md5=10');
+    $self->assert_str_equals(expected('sha-256', $res->{body}),
+                             $res->{headers}{'content-digest'});
+
+    xlog $self, "every supported algorithm ruled out, or a malformed field";
+    for my $want ('sha-256=0, sha-512=0', 'sha-256=10,', 'sha-256="10"x') {
+        $res = get_with_want($want);
+        $self->assert_null($res->{headers}{'content-digest'});
+    }
+}
