@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_tzlist($self)
+{
+    my $result = $self->tzlist();
+
+    my $synctoken = $result->{synctoken};
+    $self->assert(length $synctoken > 0);
+    my $all = $result->{timezones};
+    my $total = scalar @$all;
+    $self->assert($total > 300);
+
+    my @patterns = qw(Pacific/Chatham pAcIfI* *ham *ath*);
+    my @leaked_internal;
+    my %publisher;
+    my %version;
+    my %want;
+
+    for my $tz (@$all) {
+        push @leaked_internal, $tz->{tzid} unless $tz->{tzid} =~ /\A[A-Z]/;
+        ++$publisher{$tz->{publisher}};
+        ++$version{$tz->{version}};
+        for my $pattern (@patterns) {
+            my $re = $pattern =~ s/\*/.*/gr;
+            push $want{$pattern}->@*, $tz if $tz->{tzid} =~ /\A$re\z/i;
+        }
+    }
+    $self->assert_equals("", "@leaked_internal", 'no internal metadata leaked');
+    $self->assert_cmp_deeply({ $self->{tzdb_publisher} => $total }, \%publisher,
+                             'all TZ entries have the correct publisher');
+    $self->assert_cmp_deeply({ $self->{tzdb_version} => $total }, \%version,
+                             'all TZ entries have the correct version');
+
+    for my $pattern (@patterns) {
+        $result = $self->tzlist(pattern => $pattern);
+        $self->assert_cmp_deeply(bag($want{$pattern}->@*), $result->{timezones},
+                                 "consistent result(s) for $pattern");
+    }
+
+    $result = $self->tzlist(pattern => 'NZ-CHAT');
+    $self->assert_cmp_deeply(bag($want{'Pacific/Chatham'}->@*),
+                             $result->{timezones},
+                             'found NZ-CHAT, an alias of Pacific/Chatham');
+
+    $result = $self->tzlist(pattern => 'lunchtime');
+    $self->assert_cmp_deeply([], $result->{timezones},
+                             'a missing timezone is not an error');
+
+
+    $result = $self->tzlist(changedsince => $synctoken);
+    $self->assert_str_equals($synctoken, $result->{synctoken});
+    $self->assert_cmp_deeply([], $result->{timezones},
+                             'nothing changed, hence no timezones returned');
+
+    $result = $self->tzlist(changedsince => "anything else");
+    $self->assert_str_equals($synctoken, $result->{synctoken});
+    $self->assert_cmp_deeply(bag(@$all), $result->{timezones},
+                             'unrecognised changedsince hence all returned');
+}
