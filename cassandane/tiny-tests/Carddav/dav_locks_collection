@@ -1,0 +1,86 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Simple;
+
+# RFC 4918, Section 7 (item 3), 9.6.1 and 9.9.2: a write lock on a member
+# resource protects its URL mapping, so DELETE or MOVE of the collection
+# holding it fails with 423 unless the lock token is submitted.
+
+sub test_dav_locks_collection ($self)
+{
+    my $CardDAV = $self->{carddav};
+
+    my $fooId = $CardDAV->NewAddressBook('foo');
+    my $barId = $CardDAV->NewAddressBook('bar');
+    $self->assert_not_null($fooId);
+    $self->assert_not_null($barId);
+
+    my $href = $CardDAV->fullpath("$fooId/foo.vcf");
+    my $card = <<EOF;
+BEGIN:VCARD
+VERSION:3.0
+UID:0b5c2a5e-27d0-4a0f-9a6e-3c1f8b0f6a11
+N:Gump;Forrest;;Mr.
+FN:Forrest Gump
+END:VCARD
+EOF
+    $card =~ s/\r?\n/\r\n/gs;
+    my $res = $CardDAV->SafeRequest('PUT', $href, $card,
+                                    'Content-Type' => 'text/vcard');
+    $self->assert_equals(201, $res->{http_response}{status});
+
+    my $xml = <<"EOF";
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+  <D:owner><D:href>mailto:cassandane\@example.com</D:href></D:owner>
+</D:lockinfo>
+EOF
+
+    xlog $self, "LOCK member resource";
+    $res = $CardDAV->SafeRequest('LOCK', $href, $xml,
+                                 'Content-Type' => 'text/xml');
+    $self->assert_equals(200, $res->{http_response}{status});
+    my $xmlResp = XMLin($res->{http_response}{content});
+    my $lockToken =
+        $xmlResp->{'D:lockdiscovery'}{'D:activelock'}{'D:locktoken'}{'D:href'};
+    $self->assert_not_null($lockToken);
+
+    my $collection = $CardDAV->fullpath("$fooId/");
+    my $moved = $CardDAV->fullpath("moved/");
+
+    xlog $self, "Attempt to MOVE collection with locked member";
+    $res = $CardDAV->SafeRequest('MOVE', $collection, '',
+                                 'Destination' => $moved);
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "Attempt to DELETE collection with locked member";
+    $res = $CardDAV->SafeRequest('DELETE', $collection, '');
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "Attempt to DELETE collection with bad lock token";
+    $res = $CardDAV->SafeRequest('DELETE', $collection, '',
+                                 'If' => "<$href> (<foo>)");
+    $self->assert_equals(412, $res->{http_response}{status});
+
+    xlog $self, "Member is still there";
+    $res = $CardDAV->SafeRequest('GET', $href, '');
+    $self->assert_equals(200, $res->{http_response}{status});
+
+    xlog $self, "A collection without locked members can still be deleted";
+    $res = $CardDAV->SafeRequest('DELETE', $CardDAV->fullpath("$barId/"), '');
+    $self->assert_equals(204, $res->{http_response}{status});
+
+    xlog $self, "DELETE collection with the member's lock token";
+    $res = $CardDAV->SafeRequest('DELETE', $collection, '',
+                                 'If' => "<$href> (<$lockToken>)");
+    $self->assert_equals(204, $res->{http_response}{status});
+    $res = $CardDAV->SafeRequest('GET', $href, '');
+    $self->assert_equals(404, $res->{http_response}{status});
+}

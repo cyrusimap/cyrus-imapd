@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Simple;
+
+# A MOVE of a collection into one of its own descendants renames only the
+# collection itself (dav_move_collection() turns recursion off), so a
+# locked member of a child collection, which stays where it is, must not
+# make that MOVE fail.  Collections only nest under /dav/drive.
+
+sub test_dav_locks_move_nested
+    :NoStartInstances
+    ($self)
+{
+    $self->config_set(httpmodules => 'carddav caldav webdav');
+    $self->_start_instances();
+
+    my $service = $self->{instance}->get_service("http");
+    my $talk = Net::DAVTalk->new(
+        user => 'cassandane',
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+    );
+
+    my $base = '/dav/drive/user/cassandane';
+    for my $col ("$base/foo/", "$base/foo/kid/") {
+        my $res = $talk->SafeRequest('MKCOL', $col, '');
+        $self->assert_equals(201, $res->{http_response}{status});
+    }
+
+    my $href = "$base/foo/kid/x.txt";
+    my $res = $talk->SafeRequest('PUT', $href, 'hello',
+                                 'Content-Type' => 'text/plain');
+    $self->assert_equals(201, $res->{http_response}{status});
+
+    my $xml = <<"EOF2";
+<D:lockinfo xmlns:D="DAV:">
+  <D:lockscope><D:exclusive/></D:lockscope>
+  <D:locktype><D:write/></D:locktype>
+  <D:owner><D:href>mailto:cassandane\@example.com</D:href></D:owner>
+</D:lockinfo>
+EOF2
+    $res = $talk->SafeRequest('LOCK', $href, $xml,
+                              'Content-Type' => 'text/xml');
+    $self->assert_equals(200, $res->{http_response}{status});
+
+    xlog $self, "A recursive MOVE takes the locked member: 423";
+    $res = $talk->SafeRequest('MOVE', "$base/foo/", '',
+                              'Destination' => "$base/bar/");
+    $self->assert_equals(423, $res->{http_response}{status});
+    my $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+
+    xlog $self, "A MOVE into a descendant leaves the locked member in place";
+    $res = $talk->SafeRequest('MOVE', "$base/foo/", '',
+                              'Destination' => "$base/foo/kid/new/");
+    $self->assert_equals(201, $res->{http_response}{status});
+    $res = $talk->SafeRequest('GET', $href, '');
+    $self->assert_equals(200, $res->{http_response}{status});
+}

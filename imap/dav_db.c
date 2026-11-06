@@ -367,6 +367,67 @@ EXPORTED sqldb_t *dav_open_mailbox(struct mailbox *mailbox)
     return db;
 }
 
+#define CMD_SELLOCKS(table)                                                    \
+    "SELECT resource, lock_token, lock_ownerid FROM " table                    \
+    " WHERE mailbox = :mailbox AND alive = 1"                                  \
+    " AND lock_token IS NOT NULL AND lock_expire > :now;"
+
+struct foreach_lock_rock
+{
+    int (*cb)(void *rock,
+              const char *resource,
+              const char *token,
+              const char *ownerid);
+    void *rock;
+};
+
+static int foreach_lock_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct foreach_lock_rock *frock = (struct foreach_lock_rock *) rock;
+
+    return frock->cb(frock->rock,
+                     (const char *) sqlite3_column_text(stmt, 0),
+                     (const char *) sqlite3_column_text(stmt, 1),
+                     (const char *) sqlite3_column_text(stmt, 2));
+}
+
+EXPORTED int dav_foreach_lock(sqldb_t *db,
+                              const mbentry_t *mbentry,
+                              time_t now,
+                              int (*cb)(void *rock,
+                                        const char *resource,
+                                        const char *token,
+                                        const char *ownerid),
+                              void *rock)
+{
+    const char *cmd;
+
+    switch (mbtype_isa(mbentry->mbtype)) {
+    case MBTYPE_CALENDAR:
+        cmd = CMD_SELLOCKS("ical_objs");
+        break;
+    case MBTYPE_ADDRESSBOOK:
+        cmd = CMD_SELLOCKS("vcard_objs");
+        break;
+    case MBTYPE_COLLECTION:
+        cmd = CMD_SELLOCKS("dav_objs");
+        break;
+    default:
+        return 0;
+    }
+
+    const char *mailbox =
+        (db->version >= DB_MBOXID_VERSION) ? mbentry->uniqueid : mbentry->name;
+    struct sqldb_bindval bval[] = {
+        { ":mailbox", SQLITE_TEXT,    { .s = mailbox } },
+        { ":now",     SQLITE_INTEGER, { .i = now }     },
+        { NULL,       SQLITE_NULL,    { .s = NULL }    }
+    };
+    struct foreach_lock_rock frock = { cb, rock };
+
+    return sqldb_exec(db, cmd, bval, &foreach_lock_cb, &frock);
+}
+
 EXPORTED int dav_attach_userid(sqldb_t *db, const char *userid)
 {
     assert (!reconstruct_db);
