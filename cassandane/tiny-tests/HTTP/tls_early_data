@@ -70,18 +70,18 @@ sub test_tls_early_data_http1
     ($self)
 {
     my $service = start_early_data_https($self);
-    my $get = early_http1_request($service, 'GET', '/.well-known');
+    my $options = early_http1_request($service, 'OPTIONS', '*');
     my $delete = early_http1_request($service, 'DELETE',
         '/dav/calendars/user/cassandane/Default/nosuch.ics');
     my @sess = map { early_tmpfile($self, "sess$_") } 0..3;
 
     # A full handshake gets us a ticket
-    my $out = early_s_client($self, $service, $get, undef, $sess[0]);
+    my $out = early_s_client($self, $service, $options, undef, $sess[0]);
     $self->assert_str_equals('200', early_response_status($out));
     $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
 
     # Resuming it, a safe request can be answered from early data
-    $out = early_s_client($self, $service, $get, $sess[0], $sess[1]);
+    $out = early_s_client($self, $service, $options, $sess[0], $sess[1]);
     $self->assert_matches(qr/^Reused, TLSv1\.3/m, $out);
     $self->assert_matches(qr/^Early data was accepted/m, $out);
     $self->assert_str_equals('200', early_response_status($out));
@@ -93,7 +93,7 @@ sub test_tls_early_data_http1
 
     # A ticket is good once: replaying the first ClientHello gets a full
     # handshake, and its early data goes unread
-    $out = early_s_client($self, $service, $get, $sess[0], $sess[3]);
+    $out = early_s_client($self, $service, $options, $sess[0], $sess[3]);
     $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
     $self->assert_matches(qr/^Early data was rejected/m, $out);
     $self->assert_null(early_response_status($out));
@@ -111,14 +111,14 @@ sub test_tls_early_data_large
     my $count = 30;
 
     # Padded, so that $count of them make over 8 KiB
-    my $get = early_http1_request($service, 'GET', '/.well-known');
-    $get =~ s/\r\n/\r\nX-Pad: @{[ 'x' x 250 ]}\r\n/;
-    (my $keepalive = $get) =~ s/Connection: close\r\n//;
-    my $early = ($keepalive x ($count - 1)) . $get;
+    my $options = early_http1_request($service, 'OPTIONS', '*');
+    $options =~ s/\r\n/\r\nX-Pad: @{[ 'x' x 250 ]}\r\n/;
+    (my $keepalive = $options) =~ s/Connection: close\r\n//;
+    my $early = ($keepalive x ($count - 1)) . $options;
     $self->assert(length($early) > 8192, "early data is only "
                                          . length($early) . " bytes");
 
-    my $out = early_s_client($self, $service, $get, undef, $sess0);
+    my $out = early_s_client($self, $service, $options, undef, $sess0);
     $self->assert_str_equals('200', early_response_status($out));
 
     $self->{instance}->getsyslog();
@@ -129,7 +129,7 @@ sub test_tls_early_data_large
     $self->assert_num_equals($count, scalar @ok);
 
     my @early = grep { m{event=http\.request\.completed\b}
-                       && m{\shttp\.uri=/\.well-known\s}
+                       && m{\shttp\.uri=\*\s}
                        && m{\shttp\.early_data=1\b} }
                 $self->{instance}->getsyslog();
     $self->assert_num_equals($count, scalar @early);
@@ -148,20 +148,20 @@ sub test_tls_early_data_process_reuse
     $self->_start_instances();
     my $service = $self->{instance}->get_service('httpsreuse');
 
-    my $get = early_http1_request($service, 'GET', '/.well-known');
+    my $options = early_http1_request($service, 'OPTIONS', '*');
     my $delete = early_http1_request($service, 'DELETE',
         '/dav/calendars/user/cassandane/Default/nosuch.ics');
     my @sess = map { early_tmpfile($self, "reuse$_") } 0..4;
 
     $self->{instance}->getsyslog();
 
-    my $out = early_s_client($self, $service, $get, undef, $sess[0]);
+    my $out = early_s_client($self, $service, $options, undef, $sess[0]);
     $self->assert_str_equals('200', early_response_status($out));
 
     # Each of these follows a connection that had early data, answered
     # requests, and was closed by the client
     for my $i (1..3) {
-        my $req = $i == 2 ? $delete : $get;
+        my $req = $i == 2 ? $delete : $options;
         $out = early_s_client($self, $service, $req, $sess[$i-1], $sess[$i]);
         $self->assert_matches(qr/^Early data was accepted/m, $out);
         $self->assert_str_equals($i == 2 ? '425' : '200',
@@ -169,7 +169,7 @@ sub test_tls_early_data_process_reuse
     }
 
     # And a connection without early data after all that
-    $out = early_s_client($self, $service, $get, undef, $sess[4]);
+    $out = early_s_client($self, $service, $options, undef, $sess[4]);
     $self->assert_matches(qr/^New, TLSv1\.3/m, $out);
     $self->assert_str_equals('200', early_response_status($out));
 
@@ -230,7 +230,7 @@ sub test_tls_early_data_http2
     # Two requests as early data, and one after the handshake
     $write->($first, $preface . $goaway);
     $write->($early, $preface
-                     . early_h2_request($service, 1, 'GET', '/.well-known')
+                     . early_h2_request($service, 1, 'OPTIONS', '*')
                      . early_h2_request($service, 3, 'DELETE', $event));
     $write->($late, early_h2_request($service, 5, 'DELETE', $event)
                     . $goaway);
