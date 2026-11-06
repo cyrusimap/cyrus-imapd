@@ -11,7 +11,7 @@ sub test_alt_svc_frame
     my $s = http1_connect($self);
 
     http1_send($s,
-        "GET /.well-known HTTP/1.1\r\n",
+        "OPTIONS * HTTP/1.1\r\n",
         "Host: " . $service->host . ":" . $service->port . "\r\n",
         "Connection: Upgrade, HTTP2-Settings\r\n",
         "Upgrade: h2c\r\n",
