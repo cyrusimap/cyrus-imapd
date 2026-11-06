@@ -107,6 +107,12 @@ attach::
     cyradm -u user@example.com localhost
     localhost.localdomain> mboxcfg shared.folder@example.com sieve my_script
 
+Global scripts are stored in a shared ``#sieve`` mailbox (one per domain), as a
+user's are stored in their own.  It has an empty ACL, so it isn't visible to
+users.  The first time an admin connects to :cyrusman:`timsieved(8)`, any
+global scripts that were installed directly in the global Sieve directory are
+moved into that mailbox; until then, they are still used from the directory.
+
 
 Testing the Sieve Server
 ========================

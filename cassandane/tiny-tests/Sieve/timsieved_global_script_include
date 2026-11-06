@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+# A user's script can include a global script an admin stored over
+# ManageSieve.
+sub test_timsieved_global_script_include
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    xlog $self, "store a global script over ManageSieve as an admin";
+    my $client = $self->timsieved_client('admin');
+
+    my $script = <<~"EOF";
+      require "imap4flags";
+      addflag "\\\\flagged";
+      EOF
+    my $slen = length($script);
+
+    timsieved_write($client, <<~"EOF");
+      PUTSCRIPT "global-flag" {$slen+}\r
+      $script
+      EOF
+    $self->assert_str_equals("OK\r\n", timsieved_read($client));
+
+    xlog $self, "a user script includes it";
+    $self->{instance}->install_sieve_script(<<~'EOF');
+      require ["include"];
+      include :global "global-flag";
+      keep;
+      EOF
+
+    my $msg = $self->{gen}->generate(subject => "Test Message");
+    $self->{instance}->deliver($msg);
+
+    my $talk = $self->{store}->get_client();
+    $talk->select('INBOX');
+    my $res = $talk->fetch('1:*', '(FLAGS)');
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ flags => superbagof('\\Flagged') }) },
+        $res);
+}
