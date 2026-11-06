@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sysexits.h>
 
+#include "charset.h"
 #include "global.h"
 #include "imparse.h"
 #include "search_expr.h"
@@ -43,6 +44,21 @@ EXPORTED int getword(struct protstream *in, struct buf *buf)
             fatal("[TOOBIG] Word too long", EX_PROTOCOL);
         }
     }
+}
+
+/* RFC 9755, Section 3: once the client has enabled UTF-8,
+ * 8-bit octets in a quoted string or atom must be UTF-8. */
+static bool is_bad_utf8(struct protstream *pin, const struct buf *buf)
+{
+    if (!pin->isclient
+        || !(client_capa & (ENABLED_UTF8_ACCEPT | ENABLED_IMAP4REV2)))
+    {
+        return false;
+    }
+
+    struct char_counts counts =
+        charset_count_validutf8(buf_base(buf), buf_len(buf));
+    return counts.invalid || counts.bytelen[0];
 }
 
 /*
@@ -94,7 +110,12 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
             }
             else if (c == '\"') {
                 buf_cstring(buf);
-                return prot_getc(pin);
+                c = prot_getc(pin);
+                if (is_bad_utf8(pin, buf)) {
+                    if (c != EOF) prot_ungetc(c, pin);
+                    return EOF;
+                }
+                return c;
             }
             else if (c == EOF || c == '\r' || c == '\n') {
                 buf_cstring(buf);
@@ -186,6 +207,10 @@ EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
                           c == ')' || c == '\"') {
                     /* gotta handle NIL here too */
                     const char *atom = buf_cstring(buf);
+                    if (is_bad_utf8(pin, buf)) {
+                        if (c != EOF) prot_ungetc(c, pin);
+                        return EOF;
+                    }
                     if ((flags & GXS_NIL) && !strcmp(atom, "NIL")) {
                         /* indicate NIL with a NULL buf.s pointer */
                         buf_free(buf);

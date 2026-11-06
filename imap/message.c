@@ -2494,6 +2494,103 @@ EXPORTED void message_write_nstring_map(struct buf *buf,
  * Append the string @s to the buffer @buf in a binary
  * format almost exactly
  */
+/* The U-labels of an IDN host, if it has any A-labels that IDNA accepts and
+ * that decode to no ASCII but letters, digits, hyphens and dots */
+static char *host_to_ulabels(const char *host, size_t len)
+{
+    size_t i;
+
+    for (i = 0; i + 4 <= len; i++) {
+        if (!strncasecmp(host + i, "xn--", 4)) break;
+    }
+    if (i + 4 > len) return NULL;
+
+    char *h = xstrndup(host, len);
+    char *ulabels = charset_idna_to_utf8(h);
+    free(h);
+    if (!ulabels) return NULL;
+
+    for (const char *p = ulabels; *p; p++) {
+        if (!(*p & 0x80) && !Uisalnum(*p) && *p != '-' && *p != '.') {
+            free(ulabels);
+            return NULL;
+        }
+    }
+
+    return ulabels;
+}
+
+EXPORTED bool message_envelope_ulabels(const struct buf *env, struct buf *out)
+{
+    const char *p = buf_base(env), *end = p + buf_len(env);
+    int idx[4] = { 0 };  /* the field number at each depth we care about */
+    int depth = 0;
+    bool changed = false;
+
+    buf_reset(out);
+
+    while (p < end) {
+        const char *tok = p, *val = NULL;
+        size_t vlen = 0;
+
+        if (*p == '(' || *p == ')' || *p == ' ') {
+            if (*p == '(') {
+                if (++depth < 4) idx[depth] = 0;
+            }
+            else if (*p == ')') {
+                if (--depth < 0) goto bad;
+                if (depth < 4) idx[depth]++;
+            }
+            buf_putc(out, *p++);
+            continue;
+        }
+
+        if (*p == '"') {
+            const char *q = memchr(p + 1, '"', end - p - 1);
+            if (!q) goto bad;
+            val = p + 1;
+            vlen = q - val;
+            p = q + 1;
+        }
+        else if (*p == '{') {
+            char *e;
+            unsigned long n = strtoul(p + 1, &e, 10);
+            if (end - e < 3 || e[0] != '}' || e[1] != '\r' || e[2] != '\n' ||
+                (unsigned long) (end - (e + 3)) < n) goto bad;
+            val = e + 3;
+            vlen = n;
+            p = val + n;
+        }
+        else if (end - p >= 3 && !strncmp(p, "NIL", 3)) {
+            p += 3;
+        }
+        else goto bad;
+
+        /* An address's host is the 4th field of an address in one of the
+           envelope's address lists, its 3rd (from) to 8th (bcc) fields */
+        char *ulabels = NULL;
+        if (val && depth == 3 && idx[3] == 3 && idx[1] >= 2 && idx[1] <= 7)
+            ulabels = host_to_ulabels(val, vlen);
+
+        if (ulabels) {
+            message_write_nstring(out, ulabels);
+            free(ulabels);
+            changed = true;
+        }
+        else {
+            buf_appendmap(out, tok, p - tok);
+        }
+
+        if (depth < 4) idx[depth]++;
+    }
+
+    return changed;
+
+  bad:
+    buf_reset(out);
+    return false;
+}
+
 EXPORTED void message_write_xdrstring(struct buf *buf, const struct buf *s)
 {
     unsigned padlen;
