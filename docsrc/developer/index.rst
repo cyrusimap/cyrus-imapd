@@ -47,6 +47,7 @@ details about how Cyrus is implemented.
     Cyrus APIs <API>
     Annotator protocol <annotator-protocol>
     Replication protocol <replication-protocol>
+    JMAP Backup restores <jmap-backup>
     Thoughts & Notes <thoughts>
 
 This :download:`diagram <images/master-state-machine.svg>` shows

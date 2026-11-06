@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_restore_mail_memo ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $memo = sub ($n) {
+        return {
+            mailboxIds => { '$inbox' => JSON::true },
+            messageId  => ["memo$n\@local"],
+            inReplyTo  => ['message@local'],
+            from       => [ { email => 'cassandane@example.com' } ],
+            subject    => 'test message',
+            bodyValues => { 1 => { value => "memo $n" } },
+            textBody   => [ { partId => '1' } ],
+            keywords   => { '$memo' => JSON::true },
+        };
+    };
+
+    xlog $self, "create an email and a memo for it";
+    my $set = $jmap->request([
+        ['Email/set', {
+            create => {
+                email => {
+                    mailboxIds => { '$inbox' => JSON::true },
+                    messageId  => ['message@local'],
+                    from       => [ { email => 'a@example.com' } ],
+                    to         => [ { email => 'cassandane@example.com' } ],
+                    subject    => 'test message',
+                    bodyValues => { 1 => { value => 'test' } },
+                    textBody   => [ { partId => '1' } ],
+                },
+                memo1 => $memo->(1),
+            },
+        }],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+    my $emailId = "" . $set->created_id('email');
+    my $memo1Id = "" . $set->created_id('memo1');
+
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "replace the memo, then destroy the email and its memo";
+    $set = $jmap->request([
+        ['Email/set', {
+            create  => { memo2 => $memo->(2) },
+            destroy => [ $memo1Id ],
+        }],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+    my $memo2Id = "" . $set->created_id('memo2');
+
+    sleep 1;
+    $set = $jmap->request([
+        ['Email/set', { destroy => [ $emailId, $memo2Id ] }],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+    $self->assert_cmp_deeply(bag($emailId, $memo2Id), [ $set->destroyed_ids ]);
+
+    my $period = "PT" . (time() - $mark) . "S";
+
+    xlog $self, "restore mail: the email and only its latest memo come back";
+    my $res = $jmap->request([
+        ['Backup/restoreMail', {
+            restoreDrafts    => JSON::false,
+            restoreNonDrafts => JSON::true,
+            undoPeriod       => $period,
+        }],
+        ['Email/get', {
+            ids        => [ $emailId, $memo1Id, $memo2Id ],
+            properties => [ 'keywords' ],
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ numDraftsRestored => jnum(0),
+                      numNonDraftsRestored => jnum(2) }),
+        $res->sentence_named('Backup/restoreMail')->arguments,
+    );
+
+    $self->assert_cmp_deeply(superhashof({
+        list => bag(
+            {
+                id       => $emailId,
+                keywords => { '$restored' => jtrue(),
+                              '$hasmemo'  => jtrue() },
+            },
+            {
+                id       => $memo2Id,
+                keywords => { '$restored' => jtrue(),
+                              '$memo'     => jtrue() },
+            },
+        ),
+        notFound => [ $memo1Id ],
+    }), $res->sentence_named('Email/get')->arguments);
+}
