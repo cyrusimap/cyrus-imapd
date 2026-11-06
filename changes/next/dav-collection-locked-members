@@ -1,0 +1,27 @@
+Description:
+
+A WebDAV, CalDAV or CardDAV DELETE or MOVE of a collection now fails with
+423 Locked while a member resource holds an unexpired write lock, unless the
+lock owner submits that member's lock token in the If header (RFC 4918,
+Sections 7, 9.6.1 and 9.9.2).  Previously the collection was deleted or moved
+along with the locked member.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None

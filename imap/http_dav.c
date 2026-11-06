@@ -4308,6 +4308,133 @@ int meth_acl(struct transaction_t *txn, void *params)
     return ret;
 }
 
+/* RFC 4918, Section 7 (item 3), 9.6.1 and 9.9.2: a write lock protects the
+ * mapping of its lock-root, so a DELETE or MOVE of a collection MUST fail
+ * while a member resource is locked, unless that lock's owner submits its
+ * lock token in the If header.
+ */
+struct locked_member_rock
+{
+    const char *ifhdr;
+    time_t now;
+    const char *prefix;
+    struct mailbox *mailbox; /* the collection, if the caller has it open */
+    char *userid;            /* whose DAV DB 'db' is */
+    sqldb_t *db;
+    struct buf href;
+};
+
+static int locked_member_cb(void *rock,
+                            const char *resource,
+                            const char *token,
+                            const char *ownerid)
+{
+    struct locked_member_rock *lrock = (struct locked_member_rock *) rock;
+
+    if (lrock->ifhdr && !strcmpsafe(ownerid, httpd_userid)) {
+        char *tag = strconcat("<", token, ">", NULL);
+        int submitted = (strstr(lrock->ifhdr, tag) != NULL);
+
+        free(tag);
+        if (submitted) {
+            return 0;
+        }
+    }
+
+    buf_setcstr(&lrock->href, resource);
+    return HTTP_LOCKED;
+}
+
+static int locked_member_mbox(const mbentry_t *mbentry, void *rock)
+{
+    struct locked_member_rock *lrock = (struct locked_member_rock *) rock;
+    char *userid = mboxname_to_userid(mbentry->name);
+    struct mailbox *mailbox = NULL;
+    sqldb_t *db = NULL;
+    int r = 0;
+
+    if (userid) {
+        /* All of a user's collections share one DAV DB: open it once */
+        if (!lrock->db || strcmpsafe(userid, lrock->userid)) {
+            dav_close(&lrock->db);
+            free(lrock->userid);
+            lrock->userid = userid;
+            lrock->db = dav_open_userid(userid);
+        }
+        else {
+            free(userid);
+        }
+        db = lrock->db;
+    }
+    else if (lrock->mailbox
+             && !strcmp(mailbox_name(lrock->mailbox), mbentry->name))
+    {
+        /* A shared collection keeps its DAV DB in its own metadata */
+        db = dav_open_mailbox(lrock->mailbox);
+    }
+    else if (!mailbox_open_irl(mbentry->name, &mailbox)) {
+        db = dav_open_mailbox(mailbox);
+    }
+
+    if (db) {
+        r = dav_foreach_lock(db, mbentry, lrock->now, &locked_member_cb, lrock);
+        if (db != lrock->db) {
+            dav_close(&db);
+        }
+    }
+    mailbox_close(&mailbox);
+
+    if (r == HTTP_LOCKED) {
+        /* Report the URL of the locked member in the namespace of the
+         * authenticated user */
+        mbname_t *mbname = mbname_from_intname(mbentry->name);
+        struct buf url = BUF_INITIALIZER;
+
+        make_collection_url(&url, lrock->prefix, 0, mbname, httpd_userid);
+        buf_append(&url, &lrock->href);
+        buf_move(&lrock->href, &url);
+        mbname_free(&mbname);
+        return r;
+    }
+
+    return 0;
+}
+
+/* Fail with 423 if a member of 'mboxname' (and of its children, unless
+ * 'flags' has MBOXTREE_SKIP_CHILDREN) holds a lock whose token was not
+ * submitted.  'mailbox' is the collection itself if the caller has it open.
+ */
+static int check_locked_members(struct transaction_t *txn,
+                                const char *mboxname,
+                                struct mailbox *mailbox,
+                                int flags)
+{
+    static struct buf resource = BUF_INITIALIZER;
+    const char **hdr = spool_getheader(txn->req_hdrs, "If");
+    struct locked_member_rock lrock = { hdr ? hdr[0] : NULL,
+                                        time(NULL),
+                                        txn->req_tgt.namespace->prefix,
+                                        mailbox,
+                                        NULL,
+                                        NULL,
+                                        BUF_INITIALIZER };
+    int r = mboxlist_mboxtree(mboxname, &locked_member_mbox, &lrock, flags);
+
+    dav_close(&lrock.db);
+    free(lrock.userid);
+
+    if (r == HTTP_LOCKED) {
+        buf_move(&resource, &lrock.href);
+        txn->error.precond = DAV_NEED_LOCK_TOKEN;
+        txn->error.resource = buf_cstring(&resource);
+    }
+    else {
+        r = 0;
+    }
+
+    buf_free(&lrock.href);
+    return r;
+}
 
 struct move_rock {
     int omlen;
@@ -4501,6 +4628,15 @@ static int dav_move_collection(struct transaction_t *txn,
             oldmailboxname[nmlen] == '.') {
             recursive = 0;
         }
+    }
+
+    /* A locked member resource that would be moved prevents the MOVE */
+    if ((r = check_locked_members(txn,
+                                  oldmailboxname,
+                                  NULL,
+                                  recursive ? 0 : MBOXTREE_SKIP_CHILDREN)))
+    {
+        return r;
     }
 
     user_nslock_t *user_nslock = user_nslock_bymboxname(oldmailboxname,
@@ -5187,6 +5323,14 @@ static int meth_delete_collection(struct transaction_t *txn,
 
     default:
         /* We failed a precondition - don't perform the request */
+        ret = precond;
+        goto done;
+    }
+
+    /* A locked member resource prevents the DELETE */
+    if ((precond =
+             check_locked_members(txn, txn->req_tgt.mbentry->name, mailbox, 0)))
+    {
         ret = precond;
         goto done;
     }
