@@ -1,0 +1,6 @@
+Name: carddav_create_default
+Type: SWITCH
+Default-Value: 1
+Last-Modified: UNRELEASED
+
+Create the 'Default' address book if it doesn't already exist.
