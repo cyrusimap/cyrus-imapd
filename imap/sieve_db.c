@@ -1029,7 +1029,10 @@ EXPORTED int sieve_script_rebuild(const char *userid,
             lastupdated = sbuf.st_mtime;
         }
         else {
-            xsyslog_ev(LOG_ERR, "sieve.script.stat.failed",
+            /* a missing script is the script's problem, which a caller may
+               work around, as getinclude() does for a domain's :global */
+            xsyslog_ev(errno == ENOENT ? LOG_NOTICE : LOG_ERR,
+                       "sieve.script.stat.failed",
                        lf_buf("sys.path", &namebuf));
         }
     }
@@ -1110,6 +1113,21 @@ EXPORTED user_nslock_t *sieve_nslock_lock_w(const char *userid)
 {
     /* the global Sieve mailbox is in the shared namespace */
     return user_nslock_lock_w(sieve_userid_isglobal(userid) ? NULL : userid);
+}
+
+EXPORTED char *sieve_mboxname_owner(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+
+    if (!userid) {
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        const char *domain = mbname_domain(mbname);
+
+        userid = domain ? strconcat("@", domain, (char *) NULL) : xstrdup("");
+        mbname_free(&mbname);
+    }
+
+    return userid;
 }
 
 EXPORTED char *sieve_mboxname(const char *userid)
