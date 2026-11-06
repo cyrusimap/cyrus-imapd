@@ -159,6 +159,14 @@ extern void sched_param_fini(struct caldav_sched_param *sparam);
  * Returns NULL, if no calendar is set and none could be guessed. */
 extern char *caldav_scheddefault(const char *userid, int fallback);
 
+/**
+ * Compare two calendar user addresses, ignoring case and any "mailto:".
+ *
+ * @return nonzero if they name the same calendar user; 0 if they don't,
+ *         or either is NULL
+ */
+extern int caladdress_equal(const char *a, const char *b);
+
 extern icalproperty *find_attendee(icalcomponent *comp, const char *match);
 extern const char *get_organizer(icalcomponent *comp);
 extern int partstat_changed(icalcomponent *oldcomp,
