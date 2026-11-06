@@ -1,0 +1,26 @@
+Description:
+
+Email/query can now sort by "emailState", as its sort options have always
+advertised (misspelled as "emailstate").  Sorting by the misspelled name
+crashed httpd; it is now rejected as an unsupported sort.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients that sent "emailstate" because the server advertised it should send
+"emailState" instead.
+
+
+GitHub issue:
+
+None.
