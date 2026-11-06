@@ -1975,6 +1975,14 @@ HIDDEN int jmap_headermatch_match(struct jmap_headermatch *hm, message_t *msg)
             }
             buf_setmap(val, p, q - p);
 
+            /* Decode RFC 2047 encoded-words: a stored message's cached
+               fields already are, but one being delivered has no cache */
+            if (strstr(buf_cstring(val), "=?")) {
+                char *dec = charset_parse_mimeheader(buf_cstring(val),
+                                        CHARSET_KEEPCASE|CHARSET_MIME_UTF8);
+                if (dec) buf_initmcstr(val, dec);
+            }
+
             /* Match header value */
             headermatch_normalize(hm, val);
             if (buf_len(val) >= hm->len) {
