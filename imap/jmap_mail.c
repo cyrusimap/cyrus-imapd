@@ -206,7 +206,7 @@ static struct email_sortfield email_sortfields[] = {
         NULL
     },
     {
-        "emailstate",
+        "emailState",
         NULL
     },
     {
@@ -3117,10 +3117,6 @@ static struct sortcrit *_email_buildsort(jmap_req_t *req,
          * implementation applies to the sorted result. */
         if (!strcmp(prop, "category")) continue;
 
-        if (json_object_get(jcomp, "isAscending") == json_false()) {
-            sortcrit[j].flags |= SORT_REVERSE;
-        }
-
         /* Note: add any new sort criteria also to is_supported_email_sort */
 
         if (!strcmp(prop, "receivedAt")) {
@@ -3180,6 +3176,15 @@ static struct sortcrit *_email_buildsort(jmap_req_t *req,
         }
         else if (!strcmp(prop, "spamScore")) {
             sortcrit[j].key = SORT_SPAMSCORE;
+        }
+        else {
+            /* Drop a comparator we couldn't map: its key would be 0, which is
+               SORT_SEQUENCE and ends the list before the tie-breakers below */
+            continue;
+        }
+
+        if (json_object_get(jcomp, "isAscending") == json_false()) {
+            sortcrit[j].flags |= SORT_REVERSE;
         }
 
         j++;
