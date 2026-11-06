@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+# An admin's ManageSieve scripts are the global ones, stored in the shared
+# #sieve mailbox, and a shared mailbox's sieve annotation runs one of them.
+sub test_timsieved_global_script
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    xlog $self, "store a script over ManageSieve as an admin";
+    my $client = $self->timsieved_client('admin');
+
+    my $name = 'test-script';
+    my $script = <<~"EOF";
+      require "imap4flags";
+      keep :flags "\\\\flagged";
+      EOF
+    my $slen = length($script);
+
+    timsieved_write($client, <<~"EOF");
+      PUTSCRIPT "$name" {$slen+}\r
+      $script
+      EOF
+    $self->assert_str_equals("OK\r\n", timsieved_read($client));
+
+    timsieved_write($client, "LISTSCRIPTS\n");
+    $self->assert_str_equals("\"$name\"\r\nOK\r\n", timsieved_read($client));
+
+    timsieved_write($client, "GETSCRIPT \"$name\"\n");
+    $self->assert_str_equals("{$slen}\r\n$script\r\nOK\r\n",
+                             timsieved_read($client));
+
+    xlog $self, "the script is in the shared #sieve mailbox, whose ACL is empty";
+    my $admintalk = $self->{adminstore}->get_client(NoLogin => 1);
+    $admintalk->login("admin+dav", "secret");
+
+    my $res = $admintalk->getacl('#sieve');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_cmp_deeply([], $res);
+
+    # Even admins must grant themselves rights to read it over IMAP
+    $admintalk->setacl('#sieve', admin => 'lr');
+    $admintalk->examine('#sieve');
+    $res = $admintalk->fetch('1:*',
+                             '(BODY[HEADER.FIELDS (Subject)] BODY[TEXT])');
+    $self->assert_str_equals($name, $res->{1}{headers}{subject}[0]);
+    $self->assert_str_equals($script, $res->{1}{body});
+
+    xlog $self, "a shared mailbox's sieve annotation runs the script";
+    my $mboxname = 'shared-mailbox';
+    $admintalk->create($mboxname);
+    $admintalk->setacl($mboxname, anyone => 'lrswp');
+    $admintalk->setmetadata($mboxname,
+                            '/shared/vendor/cmu/cyrus-imapd/sieve', $name);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $msg = $self->{gen}->generate(subject => "Test Message");
+    $self->{instance}->deliver($msg, users => [ "" ], folder => $mboxname);
+
+    $admintalk->examine($mboxname);
+    $res = $admintalk->fetch('1:*', '(FLAGS)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ flags => bag('\\Recent', '\\Flagged') }) },
+        $res);
+}
