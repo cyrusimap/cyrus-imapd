@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_restore_calendars_deleted_versions ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create a calendar with events A, B, C and D";
+    my $cal = $self->default_user->calendars->create({ name => 'foo' });
+    my %event = map {; $_ => $cal->create_event({ title => $_ }) } qw(A B C D);
+
+    xlog $self, "before the cutoff, update A and destroy C";
+    $event{A}->update({ title => 'A2' });
+    $event{C}->destroy;
+
+    my $mark = time();
+    sleep 2;
+
+    xlog $self, "after the cutoff, update B, destroy D, then the calendar";
+    $event{B}->update({ title => 'B2' });
+    $event{D}->destroy;
+
+    my $res = $jmap->request([
+        ['Calendar/set', {
+            destroy               => [ $cal->id ],
+            onDestroyRemoveEvents => JSON::true,
+        }],
+    ]);
+    $res->single_sentence('Calendar/set')->as_set->assert_no_errors;
+
+    my $period = "PT" . (time() - $mark) . "S";
+
+    xlog $self, "restore: the latest version of A, B and D comes back once";
+    $res = $jmap->request([
+        ['Backup/restoreCalendars', { undoPeriod => $period }],
+        ['CalendarEvent/get', { properties => [ 'title' ] }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            numCreatesUndone  => 0,
+            numUpdatesUndone  => 0,
+            numDestroysUndone => 3,
+        }),
+        $res->sentence_named('Backup/restoreCalendars')->arguments,
+    );
+
+    $self->assert_cmp_deeply(
+        bag(map {; superhashof({ title => $_ }) } qw(A2 B2 D)),
+        $res->sentence_named('CalendarEvent/get')->arguments->{list},
+    );
+}
