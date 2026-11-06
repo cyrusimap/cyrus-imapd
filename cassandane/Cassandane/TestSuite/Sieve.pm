@@ -17,6 +17,7 @@ use Date::Parse;
 
 use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
+use Cassandane::Util::ICalendar;
 use Cassandane::Util::Log;
 use Encode qw(decode encode);
 use MIME::Base64 qw(encode_base64 decode_base64);
