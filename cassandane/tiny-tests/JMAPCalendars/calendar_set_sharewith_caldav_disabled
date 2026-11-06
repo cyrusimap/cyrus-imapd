@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendar_set_sharewith_caldav_disabled
+    ($self)
+{
+    my $instance = $self->{instance};
+
+    # Provision the sharee's calendar home while CalDAV is still enabled
+    my $admin = $self->{adminstore}->get_client();
+    $admin->create("user.manifold");
+    my $manifold_user = $instance->create_user_without_setup('manifold');
+    $manifold_user->caldav->GetCalendars();
+
+    xlog $self, "restart with only JMAP in httpmodules";
+    $instance->stop();
+    $instance->{re_use_dir} = 1;
+    $instance->{config}->set(httpmodules => 'jmap');
+    $instance->{config}->generate($instance->_imapd_conf());
+    $instance->start();
+
+    my $jmap = $self->default_user->jmap;
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            create => {
+                A => {
+                    name => 'A',
+                    shareWith => {
+                        manifold => {
+                            mayReadFreeBusy => JSON::true,
+                            mayReadItems => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{A});
+
+    my $manjmap = $manifold_user->jmap;
+    $manjmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:calendars',
+        'urn:ietf:params:jmap:principals',
+        'https://cyrusimap.org/ns/jmap/calendars',
+    ]);
+    $res = $manjmap->CallMethods([
+        ['ShareNotification/get', {
+            properties => ['objectType', 'objectAccountId'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ {
+            id => ignore(),
+            objectType => 'Calendar',
+            objectAccountId => 'cassandane',
+        } ],
+        $res->[0][1]{list}
+    );
+}
