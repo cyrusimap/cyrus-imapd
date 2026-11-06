@@ -1,0 +1,18 @@
+#!perl
+use Cassandane::Tiny;
+
+# Xapian finds an address whose domain is in A-labels by its U-labels.
+sub test_search_idn_domain
+    ($self)
+{
+    $self->make_message("idn", from => Cassandane::Address->new(
+        name => 'Jan', localpart => 'jan', domain => 'xn--dmi-0na.fo',
+    )) or die;
+    $self->make_message("other") or die;
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    my $talk = $self->{store}->get_client();
+    my $uids = $talk->search('charset', 'utf-8', 'fuzzy', 'from',
+                             { Quote => encode('UTF-8', "d\x{f8}mi.fo") });
+    $self->assert_cmp_deeply([1], $uids);
+}
