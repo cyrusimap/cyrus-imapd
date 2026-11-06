@@ -21,6 +21,9 @@
 
 #define FNAME_CONVERSATIONS_SUFFIX "conversations"
 
+/* holds the annotations of split conversations; MBTYPE_COLLECTION */
+#define CONVSPLITFOLDER "#splitconversations"
+
 #define CONV_FOLDER_KEY_MBOX(state, mailbox) \
     (state->folders_byname ? mailbox_name(mailbox) : mailbox_uniqueid(mailbox))
 

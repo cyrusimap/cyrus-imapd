@@ -1041,6 +1041,19 @@ static void test_isnonimapmailbox(void)
     mboxname_isa_helper(mboxname_isnonimapmailbox, results);
 }
 
+static void test_isnonimapmailbox_convsplit(void)
+{
+    /* mbtype 0: what a murder frontend has for a remote mailbox */
+    CU_ASSERT_EQUAL(1, mboxname_isnonimapmailbox("user.foo.#splitconversations", 0));
+    CU_ASSERT_EQUAL(1, mboxname_isnonimapmailbox("user.foo.#splitconversations",
+                                                 MBTYPE_COLLECTION));
+    CU_ASSERT_EQUAL(1, mboxname_isnonimapmailbox("example.com!user.foo.#splitconversations", 0));
+    CU_ASSERT_EQUAL(1, mboxname_isnonimapmailbox("#splitconversations", 0));
+    CU_ASSERT_EQUAL(0, mboxname_isnonimapmailbox("user.foo.A.#splitconversations", 0));
+    CU_ASSERT_EQUAL(0, mboxname_isnonimapmailbox("user.foo.#splitconversationsX", 0));
+    CU_ASSERT_EQUAL(0, mboxname_isnonimapmailbox("user.foo.splitconversations", 0));
+}
+
 static void test_isnondeliverymailbox(void)
 {
     int results[] = {
