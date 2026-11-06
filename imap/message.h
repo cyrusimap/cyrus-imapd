@@ -5,6 +5,7 @@
 #ifndef INCLUDED_MESSAGE_H
 #define INCLUDED_MESSAGE_H
 
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "prot.h"
@@ -152,6 +153,16 @@ extern void message_write_nstring_map(struct buf *buf, const char *s, unsigned i
 extern void message_write_body(struct buf *buf, const struct body *body,
                                   int newformat);
 extern void message_write_xdrstring(struct buf *buf, const struct buf *s);
+
+/**
+ * Rewrite a cached ENVELOPE so that each address's host is shown with
+ * U-labels rather than A-labels (RFC 5890), for a client that accepts UTF-8.
+ *
+ * @param env  the cached ENVELOPE, as message_write_cache() stores it
+ * @param out  set to the rewritten ENVELOPE if any host was rewritten
+ * @return     true if any host was rewritten, false if @p out is unused
+ */
+extern bool message_envelope_ulabels(const struct buf *env, struct buf *out);
 extern int message_write_cache(struct index_record *record, const struct body *body);
 
 extern int message_create_record(struct index_record *message_index,
