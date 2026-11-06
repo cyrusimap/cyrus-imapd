@@ -1455,7 +1455,32 @@ static void search_list_free(union search_value *v,
 struct search_string_internal {
     comp_pat *pat;
     char *s;
+    /* for an address: the term with its domain as A-labels, if different */
+    comp_pat *alt_pat;
+    char *alt_s;
 };
+
+/* The term with its domain, the part after its last '@' or the whole term
+ * without one, as A-labels (RFC 5890), or NULL if it has no U-labels */
+static char *search_term_alabels(const char *term)
+{
+    const char *at = strrchr(term, '@');
+    const char *domain = at ? at + 1 : term;
+    const char *p;
+
+    for (p = domain; *p && !(*p & 0x80); p++);
+    if (!*p) return NULL;  /* no U-labels to convert */
+
+    char *alabels = charset_idna_to_ascii(domain);
+    if (!alabels || !at) return alabels;
+
+    struct buf buf = BUF_INITIALIZER;
+    buf_appendmap(&buf, term, domain - term);
+    buf_appendcstr(&buf, alabels);
+    free(alabels);
+
+    return buf_release(&buf);
+}
 
 static int search_string_match(message_t *m,
                                 const union search_value *v __attribute__((unused)),
@@ -1468,8 +1493,12 @@ static int search_string_match(message_t *m,
     struct search_string_internal *internal = internalised;
 
     r = getter(m, &buf);
-    if (!r && buf.len)
+    if (!r && buf.len) {
         r = charset_searchstring(internal->s, internal->pat, buf.s, buf.len, charset_flags);
+        if (!r && internal->alt_pat)
+            r = charset_searchstring(internal->alt_s, internal->alt_pat,
+                                     buf.s, buf.len, charset_flags);
+    }
     else
         r = 0;
     buf_free(&buf);
@@ -1501,6 +1530,8 @@ static void search_string_internalise(struct index_state *state __attribute__((u
         struct search_string_internal *internal = *internalisedp;
         charset_freepat(internal->pat);
         free(internal->s);
+        if (internal->alt_pat) charset_freepat(internal->alt_pat);
+        free(internal->alt_s);
         free(internal);
         *internalisedp = NULL;
     }
@@ -1511,6 +1542,29 @@ static void search_string_internalise(struct index_state *state __attribute__((u
         internal->pat = charset_compilepat(internal->s);
         charset_free(&utf8);
         *internalisedp = internal;
+    }
+}
+
+/* An address in a message may have its domain as A-labels, so a term with
+ * a U-label domain also matches that form (RFC 9755) */
+static void search_address_internalise(struct index_state *state,
+                                       const union search_value *v,
+                                       void *data1,
+                                       void **internalisedp)
+{
+    search_string_internalise(state, v, data1, internalisedp);
+
+    if (v) {
+        struct search_string_internal *internal = *internalisedp;
+        char *alabels = search_term_alabels(v->s);
+
+        if (alabels) {
+            charset_t utf8 = charset_lookupname("utf8");
+            internal->alt_s = charset_convert(alabels, utf8, charset_flags);
+            internal->alt_pat = charset_compilepat(internal->alt_s);
+            charset_free(&utf8);
+            free(alabels);
+        }
     }
 }
 
@@ -2658,7 +2712,7 @@ EXPORTED void search_attr_init(void)
             SEA_FUZZABLE,
             SEARCH_PART_BCC,
             SEARCH_COST_CACHE,
-            search_string_internalise,
+            search_address_internalise,
             /*cmp*/NULL,
             search_string_match,
             search_string_serialise,
@@ -2690,7 +2744,7 @@ EXPORTED void search_attr_init(void)
             SEA_FUZZABLE,
             SEARCH_PART_CC,
             SEARCH_COST_CACHE,
-            search_string_internalise,
+            search_address_internalise,
             /*cmp*/NULL,
             search_string_match,
             search_string_serialise,
@@ -2706,7 +2760,7 @@ EXPORTED void search_attr_init(void)
             SEA_FUZZABLE,
             SEARCH_PART_FROM,
             SEARCH_COST_CACHE,
-            search_string_internalise,
+            search_address_internalise,
             /*cmp*/NULL,
             search_string_match,
             search_string_serialise,
@@ -2786,7 +2840,7 @@ EXPORTED void search_attr_init(void)
             SEA_FUZZABLE,
             SEARCH_PART_TO,
             SEARCH_COST_CACHE,
-            search_string_internalise,
+            search_address_internalise,
             /*cmp*/NULL,
             search_string_match,
             search_string_serialise,

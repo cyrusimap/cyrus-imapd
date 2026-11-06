@@ -7,6 +7,10 @@ mailbox by any Unicode normalization form of its name, not just CREATE,
 SELECT, DELETE and RENAME.  New mailbox names may no longer contain C1
 control characters, U+2028, U+2029 or unpaired surrogates.
 
+SEARCH FROM, TO, CC and BCC with a domain in Unicode now also find
+addresses whose domain is written as A-labels ("xn--"), as Xapian-indexed
+searches already did.
+
 
 Documentation:
 
