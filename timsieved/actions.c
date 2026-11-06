@@ -38,6 +38,7 @@ extern sieve_interp_t *interp;
 
 static char *sieve_dir_config = NULL;
 static char *sieved_userid = NULL;
+static char *sieved_scriptsuser = NULL; /* whose scripts: see actions_setuser() */
 
 static struct mailbox *sieve_mailbox = NULL;
 static user_nslock_t *sieved_nslock = NULL;
@@ -74,21 +75,20 @@ int actions_setuser(const char *userid)
 
     sieved_userid = xstrdup(userid);
 
+    /* An admin manages the global scripts of their domain.
+     * 'userid' is canonical, so with "virtdomains: on"
+     * it already has any domain taken from the server's address,
+     * and "on" works like "userid" here. */
     if (sieved_userisadmin) {
-        struct buf buf = BUF_INITIALIZER;
-        const char *domain = NULL;
+        const char *domain = config_virtdomains != IMAP_ENUM_VIRTDOMAINS_OFF ?
+            strrchr(userid, '@') : NULL;
 
-        buf_setcstr(&buf, sieve_dir_config);
+        sieved_scriptsuser = xstrdup(domain ? domain : "");
+    }
+    else
+        sieved_scriptsuser = xstrdup(userid);
 
-        if (config_virtdomains && (domain = strrchr(userid, '@'))) {
-            char dhash = (char) dir_hash_c(++domain, config_fulldirhash);
-            buf_printf(&buf, "%s%c/%s", FNAME_DOMAINDIR, dhash, domain);
-        }
-
-        buf_appendcstr(&buf, "/global");
-        sieve_dir = buf_release(&buf);
-    } else
-        sieve_dir = xstrdup(user_sieve_path(userid));
+    sieve_dir = xstrdup(user_sieve_path(sieved_scriptsuser));
 
     struct stat sbuf;
     int result = stat(sieve_dir, &sbuf);
@@ -106,21 +106,22 @@ int actions_setuser(const char *userid)
     return TIMSIEVE_OK;
 }
 
-/* the Sieve DB is the user's DAV DB and needs their namespace lock.  Open it
-   per command rather than for the connection, so we aren't holding a handle
-   onto files which get removed when the user is deleted */
+/* the Sieve DB is the user's DAV DB, or for global scripts the global Sieve
+   mailbox's own, and needs that namespace's lock.  Open it per command rather
+   than for the connection, so we aren't holding a handle onto files which get
+   removed when the user is deleted */
 int actions_open_user(void)
 {
-    if (!sieved_userid) return TIMSIEVE_FAIL;
+    if (!sieved_scriptsuser) return TIMSIEVE_FAIL;
 
     assert(!sieved_nslock);
-    sieved_nslock = user_nslock_lock_w(sieved_userid);
+    sieved_nslock = sieve_nslock_lock_w(sieved_scriptsuser);
 
-    sievedb = sievedb_open_userid(sieved_userid);
-    if (!sievedb) goto fail;
-
-    if (sieve_ensure_folder(sieved_userid, &sieve_mailbox, /*silent*/0))
+    if (sieve_ensure_folder(sieved_scriptsuser, &sieve_mailbox, /*silent*/0))
         goto fail;
+
+    sievedb = sievedb_open_mailbox(sieve_mailbox);
+    if (!sievedb) goto fail;
 
     mailbox_unlock_index(sieve_mailbox, NULL);
 
@@ -145,6 +146,7 @@ void actions_close_user(void)
 void actions_unsetuser(void)
 {
     xzfree(sieved_userid);
+    xzfree(sieved_scriptsuser);
 
     /* each command closes its own; belt and braces */
     actions_close_user();

@@ -1,0 +1,30 @@
+Description:
+
+Admins can manage global Sieve scripts over ManageSieve again, both
+server-wide and per domain, and attach them to shared mailboxes.  Previously
+an admin's ManageSieve session failed, because Cyrus tried to store the
+scripts in a #sieve mailbox under the admin's nonexistent INBOX.  Global
+scripts are now stored in a shared #sieve mailbox (one per domain) with an
+empty ACL.
+
+
+Documentation:
+
+docsrc/reference/admin/sieve.rst
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Global scripts installed directly in the global Sieve directory keep working.
+The first time an admin connects to timsieved, they are moved into the shared
+#sieve mailbox, and from then on should be managed over ManageSieve.
+
+
+GitHub issue:
+
+#4546
