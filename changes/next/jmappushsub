@@ -1,0 +1,19 @@
+Description:
+
+Implementation of JMAP PushSubscription
+
+
+Config changes:
+
+New 'jmap_push_types' option for specifying JMAP object types to which
+push notifications can be subscribed.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None

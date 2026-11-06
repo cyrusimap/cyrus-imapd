@@ -25,7 +25,7 @@ jmap_data_type_t;
 %%
 # RFC 8620
 "Core",                      JMAP_TYPE_CORE,                      MBTYPE_UNKNOWN,     0,                                        -1
-"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION,          MBTYPE_UNKNOWN,     0,                                        -1
+"PushSubscription",          JMAP_TYPE_PUSHSUBSCRIPTION,          MBTYPE_JMAPPUSHSUB, 0,                                        offsetof(struct mboxname_counters, jmappushsubmodseq)
 # RFC 8621
 "Mailbox",                   JMAP_TYPE_MAILBOX,                   MBTYPE_EMAIL,       JMAP_TYPE_HAS_QUOTA | JMAP_TYPE_HAS_BLOB, offsetof(struct mboxname_counters, mailmodseq)
 "Thread",                    JMAP_TYPE_THREAD,                    MBTYPE_EMAIL,       JMAP_TYPE_HAS_BLOB,                       -1
