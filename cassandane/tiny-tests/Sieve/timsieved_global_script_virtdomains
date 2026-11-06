@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+# With virtdomains, a domain admin's ManageSieve scripts are that domain's
+# global scripts, kept in the domain's own #sieve mailbox.  A domain user's
+# :global include falls back to a server-wide script.
+sub test_timsieved_global_script_virtdomains
+    :MagicPlus :NoAltNameSpace :VirtDomains :NoStartInstances
+    ($self)
+{
+    $self->config_set(admins => 'admin mailproxy mupduser repluser '
+                              . 'manager@example.com');
+    $self->_start_instances();
+
+    my sub putscript ($client, $name, $script) {
+        my $slen = length($script);
+        timsieved_write($client, <<~"EOF");
+          PUTSCRIPT "$name" {$slen+}\r
+          $script
+          EOF
+        $self->assert_str_equals("OK\r\n", timsieved_read($client));
+    }
+
+    xlog $self, "store a global script for example.com, and a server-wide one";
+    putscript($self->timsieved_client('manager@example.com'), 'dscript',
+              qq{require "imap4flags";\naddflag "\\\\flagged";\n});
+    putscript($self->timsieved_client('admin'), 'sscript',
+              qq{require "imap4flags";\naddflag "\\\\seen";\n});
+
+    my $admintalk = $self->{adminstore}->get_client(NoLogin => 1);
+    $admintalk->login("admin+dav", "secret");
+
+    xlog $self, "each is in its own #sieve mailbox, whose ACL is empty";
+    for my $mbox ('#sieve@example.com', '#sieve') {
+        my $acl = $admintalk->getacl($mbox);
+        $self->assert_str_equals('ok',
+                                 $admintalk->get_last_completion_response());
+        $self->assert_cmp_deeply([], $acl);
+    }
+
+    xlog $self, "a shared mailbox in example.com runs the domain's script";
+    my $mboxname = 'shared-mailbox@example.com';
+    $admintalk->create($mboxname);
+    $admintalk->setacl($mboxname, anyone => 'lrswp');
+    $admintalk->setmetadata($mboxname,
+                            '/shared/vendor/cmu/cyrus-imapd/sieve', 'dscript');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->{instance}->deliver($self->{gen}->generate(subject => "shared"),
+                               users => [ '@example.com' ],
+                               folder => 'shared-mailbox');
+
+    $admintalk->examine($mboxname);
+    my $res = $admintalk->fetch('1:*', '(FLAGS)');
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ flags => superbagof('\\Flagged') }) },
+        $res);
+
+    xlog $self, "a domain user's :global include falls back to the server-wide script";
+    $self->{instance}->create_user('foo@example.com');
+    $self->{instance}->install_sieve_script(<<~'EOF', username => 'foo@example.com');
+      require ["include"];
+      include :global "sscript";
+      keep;
+      EOF
+
+    $self->{instance}->deliver($self->{gen}->generate(subject => "user"),
+                               users => [ 'foo@example.com' ]);
+
+    my $footalk = $self->{instance}->get_service('imap')
+                       ->create_store(username => 'foo@example.com')
+                       ->get_client();
+    $footalk->select('INBOX');
+    $res = $footalk->fetch('1:*', '(FLAGS)');
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ flags => superbagof('\\Seen') }) },
+        $res);
+}
