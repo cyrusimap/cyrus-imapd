@@ -3981,14 +3981,7 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
 
     /* Only the owner's own Sieve mailbox holds their scripts, and only the
        global Sieve mailbox of its domain holds global scripts */
-    char *userid = mboxname_to_userid(mailbox_name(mailbox));
-    if (!userid) {
-        mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
-        const char *domain = mbname_domain(mbname);
-
-        userid = domain ? strconcat("@", domain, (char *) NULL) : xstrdup("");
-        mbname_free(&mbname);
-    }
+    char *userid = sieve_mboxname_owner(mailbox_name(mailbox));
     char *sievembox = sieve_mboxname(userid);
     bool canonical = !strcmpsafe(sievembox, mailbox_name(mailbox));
 

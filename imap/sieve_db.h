@@ -166,6 +166,15 @@ int sieve_script_rebuild(const char *userid,
 user_nslock_t *sieve_nslock_lock_w(const char *userid);
 
 /**
+ * Name whose scripts a Sieve mailbox holds.
+ *
+ * @param mboxname  the internal name of a Sieve mailbox
+ * @return          the owner's userid, or "" or "@domain" for the global
+ *                  scripts in a shared mailbox; the caller must free it
+ */
+char *sieve_mboxname_owner(const char *mboxname);
+
+/**
  * Name the Sieve mailbox of a user, or of the global scripts.
  *
  * @param userid  the owner, or "" or "@domain" for global scripts
