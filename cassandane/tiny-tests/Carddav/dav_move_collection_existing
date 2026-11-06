@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# RFC 4918, Sections 9.9.3 and 9.9.4: a MOVE of a collection onto an
+# existing collection replaces it (204) unless Overwrite is F (412).
+
+sub test_dav_move_collection_existing ($self)
+{
+    my $CardDAV = $self->{carddav};
+
+    my $fooId = $CardDAV->NewAddressBook('foo');
+    my $barId = $CardDAV->NewAddressBook('bar');
+    $self->assert_not_null($fooId);
+    $self->assert_not_null($barId);
+
+    my $fooCard = $CardDAV->fullpath("$fooId/a.vcf");
+    my $barCard = $CardDAV->fullpath("$barId/b.vcf");
+    for ([$fooCard, 'c1f0a3a2-5d1e-4b7b-9a51-0d3e1c6f2a01'],
+         [$barCard, 'c1f0a3a2-5d1e-4b7b-9a51-0d3e1c6f2a02']) {
+        my $card = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:$_->[1]\r\n"
+                 . "N:Gump;Forrest;;Mr.\r\nFN:Forrest Gump\r\nEND:VCARD\r\n";
+        my $res = $CardDAV->SafeRequest('PUT', $_->[0], $card,
+                                        'Content-Type' => 'text/vcard');
+        $self->assert_equals(201, $res->{http_response}{status});
+    }
+
+    my $src = $CardDAV->fullpath("$fooId/");
+    my $dst = $CardDAV->fullpath("$barId/");
+
+    xlog $self, "Overwrite: F onto an existing collection fails";
+    my $res = $CardDAV->SafeRequest('MOVE', $src, '',
+                                    'Destination' => $dst,
+                                    'Overwrite' => 'F');
+    $self->assert_equals(412, $res->{http_response}{status});
+    $res = $CardDAV->SafeRequest('GET', $barCard, '');
+    $self->assert_equals(200, $res->{http_response}{status});
+
+    xlog $self, "Otherwise the destination is replaced";
+    $res = $CardDAV->SafeRequest('MOVE', $src, '', 'Destination' => $dst);
+    $self->assert_equals(204, $res->{http_response}{status});
+
+    $res = $CardDAV->SafeRequest('GET', $CardDAV->fullpath("$barId/a.vcf"), '');
+    $self->assert_equals(200, $res->{http_response}{status});
+    $res = $CardDAV->SafeRequest('GET', $barCard, '');
+    $self->assert_equals(404, $res->{http_response}{status});
+    $res = $CardDAV->SafeRequest('GET', $fooCard, '');
+    $self->assert_equals(404, $res->{http_response}{status});
+}

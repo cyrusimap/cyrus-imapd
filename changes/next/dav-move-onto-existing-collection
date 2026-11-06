@@ -1,0 +1,34 @@
+
+Description:
+
+A WebDAV, CalDAV or CardDAV MOVE of a collection onto an existing collection
+now replaces it (204 No Content), or fails with 412 Precondition Failed when
+Overwrite is F (RFC 4918, Section 9.9.3).  Previously the server answered
+with a malformed status line ("HTTP/1.1 Mailbox already exists").  The MOVE
+also fails with 423 Locked while a member of the collection it would
+overwrite holds a lock whose token was not submitted.
+
+The other errors of the destination check no longer become a malformed status
+line either: a MOVE of a collection to a place where the user may not create
+one now fails with 403 Forbidden, with DAV:need-privileges when permission is
+what is missing.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None

@@ -1,0 +1,37 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Simple;
+
+# A MOVE of a collection to a destination it may not be created at fails with
+# 403, not with the IMAP error as a malformed status line.
+
+sub test_dav_move_collection_refused
+    :FastmailSharing :ReverseACLs
+    ($self)
+{
+    my $CardDAV = $self->{carddav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.manifold");
+
+    my $fooId = $CardDAV->NewAddressBook('foo');
+    $self->assert_not_null($fooId);
+    my $src = $CardDAV->fullpath("$fooId/");
+
+    xlog $self, "No permission to create in another user's home";
+    my $res = $CardDAV->SafeRequest('MOVE', $src, '',
+        'Destination' => '/dav/addressbooks/user/manifold/bar/');
+    $self->assert_equals(403, $res->{http_response}{status});
+    my $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_not_null($xmlResp->{'D:need-privileges'});
+
+    xlog $self, "A mailbox name that is too long";
+    my $long = 'x' x 600;
+    $res = $CardDAV->SafeRequest('MOVE', $src, '',
+                                 'Destination' => $CardDAV->fullpath("$long/"));
+    $self->assert_equals(403, $res->{http_response}{status});
+
+    xlog $self, "The source stays where it was";
+    $res = $CardDAV->SafeRequest('PROPFIND', $src, '', 'Depth' => '0');
+    $self->assert_equals(207, $res->{http_response}{status});
+}
