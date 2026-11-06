@@ -2,7 +2,7 @@
 use Cassandane::Tiny;
 
 sub test_scram_plus_tls13_exporter
-    :TLS :needs_dependency_openssl :NoStartInstances
+    :TLS :needs_dependency_openssl :needs_dependency_libsasl2 :NoStartInstances
     ($self)
 {
     # RFC 9266: tls-unique isn't defined for TLS 1.3

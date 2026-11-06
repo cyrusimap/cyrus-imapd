@@ -26,8 +26,8 @@
 #include <unistd.h>
 #include <ctype.h>
 
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "hash.h"
 #include "imparse.h"
@@ -100,7 +100,7 @@ static sasl_callback_t callbacks[] = {
     }, {
         SASL_CB_PASS, NULL, NULL
     }, {
-        SASL_CB_GETOPT, (int (*)(void)) (void (*)(void)) &mysasl_config, NULL
+        SASL_CB_GETOPT, SASL_CB_PROC_PTR &mysasl_config, NULL
     }, {
         SASL_CB_LIST_END, NULL, NULL
     }
