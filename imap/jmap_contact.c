@@ -342,7 +342,7 @@ static int jmap_card_get(struct jmap_req *req)
         .cid = BUF_INITIALIZER
     };
 
-    construct_hashu64_table(&rock.jmapcache, 512, 0);
+    construct_hashu64_table(&rock.jmapcache, 0, 0);
 
     /* Parse request */
     jmap_get_parse(req, &parser, &card_props, /* allow_null_ids */ 1,

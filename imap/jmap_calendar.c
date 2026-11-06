@@ -4593,7 +4593,7 @@ static void getcalendarevents_rock_init(struct getcalendarevents_rock *rock,
     rock->check_acl = strcmp(req->accountid, req->userid);
     rock->is_sharee = strcmp(req->accountid, req->userid);
     rock->utctz = icaltimezone_get_utc_timezone();
-    construct_hashu64_table(&rock->cache_jsevents, 512, 0);
+    construct_hashu64_table(&rock->cache_jsevents, 0, 0);
 }
 
 static void getcalendarevents_rock_fini(struct getcalendarevents_rock *rock)
