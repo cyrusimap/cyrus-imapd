@@ -4639,6 +4639,16 @@ static int dav_move_collection(struct transaction_t *txn,
         return r;
     }
 
+    /* ... and so does one in a destination it would overwrite */
+    if (overwrite
+        && (r = check_locked_members(txn,
+                                     newmailboxname,
+                                     NULL,
+                                     recursive ? 0 : MBOXTREE_SKIP_CHILDREN)))
+    {
+        return r;
+    }
+
     user_nslock_t *user_nslock = user_nslock_bymboxname(oldmailboxname,
                                                         newmailboxname,
                                                         LOCK_EXCLUSIVE);
@@ -4817,6 +4827,35 @@ int meth_copy_move(struct transaction_t *txn, void *params)
     /* Parse the destination path */
     dest_tgt.namespace = txn->req_tgt.namespace;
     r = cparams->parse_path(dest_uri->path, &dest_tgt, &txn->error.desc);
+    if (r && dest_tgt.mbentry && dest_tgt.mbentry->name) {
+        /* mboxlist_createmailboxcheck() failed on the destination collection.
+         * Its IMAP error is not an HTTP status, so handle it as meth_mkcol()
+         * does */
+        switch (r) {
+        case IMAP_MAILBOX_EXISTS:
+            /* dav_move_collection() overwrites it, or fails per the
+             * Overwrite header */
+            txn->error.desc = NULL;
+            r = 0;
+            break;
+
+        case IMAP_PERMISSION_DENIED:
+            txn->error.precond = DAV_NEED_PRIVS;
+            txn->error.rights = DACL_BIND;
+            buf_reset(&txn->buf);
+            buf_printf(&txn->buf, "%s/%s/%s",
+                       txn->req_tgt.namespace->prefix, USER_COLLECTION_PREFIX,
+                       dest_tgt.userid ? dest_tgt.userid : httpd_userid);
+            txn->error.resource = buf_cstring(&txn->buf);
+            ret = HTTP_NO_PRIVS;
+            goto done;
+
+        default:
+            txn->error.precond = cparams->mkcol.location_precond;
+            ret = HTTP_FORBIDDEN;
+            goto done;
+        }
+    }
     if (r) {
         ret = (r == HTTP_MOVED) ? HTTP_FORBIDDEN : r;
         goto done;
