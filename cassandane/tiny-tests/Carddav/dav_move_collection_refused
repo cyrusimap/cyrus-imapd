@@ -30,6 +30,8 @@ sub test_dav_move_collection_refused
     $res = $CardDAV->SafeRequest('MOVE', $src, '',
                                  'Destination' => $CardDAV->fullpath("$long/"));
     $self->assert_equals(403, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_not_null($xmlResp->{'C:addressbook-collection-location-ok'});
 
     xlog $self, "The source stays where it was";
     $res = $CardDAV->SafeRequest('PROPFIND', $src, '', 'Depth' => '0');
