@@ -2209,6 +2209,7 @@ $(ZONEINFO_STAMP): $(ZONEINFO_DEPS)
 	    --output-dir zoneinfo
 	$(AM_V_at)$(PERL) $(ZONEINFO_FIXUP) zoneinfo
 	$(AM_V_at)cp $(top_srcdir)/tzdata/version zoneinfo/version
+	$(AM_V_at)cp $(top_srcdir)/tzdata/leap-seconds.list zoneinfo/leap-seconds.list
 if HAVE_GUESSTZ
 ## We run cyr_guesstz here to generate data, not to test it: an ASan build
 ## would otherwise leak-check it at exit, and look for the suppressions file
