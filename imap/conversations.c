@@ -60,7 +60,6 @@
 #define FIKEY "$FOLDER_IDS"
 #define CFKEY "$COUNTED_FLAGS"
 #define IDKEY "$COMPACT_EMAILIDS"
-#define CONVSPLITFOLDER "#splitconversations"
 
 #define DB config_conversations_db
 
