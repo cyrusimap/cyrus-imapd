@@ -3968,8 +3968,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    construct_hashu64_table(&rdates, 256, 0);
-    construct_hashu64_table(&overrides, 256, 0);
+    construct_hashu64_table(&rdates, 0, 0);
+    construct_hashu64_table(&overrides, 0, 0);
 
     comp = icalcomponent_get_first_real_component(ical);
 
