@@ -1,0 +1,9 @@
+Name: sasl_mech_list
+Type: BITFIELD
+Allowed-Values: ANONYMOUS EXTERNAL PLAIN
+Default-Value: ANONYMOUS EXTERNAL PLAIN
+Last-Modified: UNRELEASED
+For-Documentation-Only: 1
+SASL-Option: mech_list
+
+Specify which mechanisms are permitted for server operations.

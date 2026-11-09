@@ -1,0 +1,9 @@
+Name: sasl_canon_user_plugin
+Type: STRING
+Default-Value: NULL
+Last-Modified: UNRELEASED
+For-Documentation-Only: 1
+SASL-Option: canon_user_plugin
+
+Specify the plugin to use for user canonicalisation.  There is no such plugin,
+so this option isn't useful.

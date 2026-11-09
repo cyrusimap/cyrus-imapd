@@ -1,8 +1,20 @@
 Name: sasl_pwcheck_method
-Type: STRING
-Default-Value: NULL
-Last-Modified: 2.3.17
+Type: BITFIELD
+Allowed-Values: alwaystrue auxprop saslauthd
+Default-Value: saslauthd
+Last-Modified: UNRELEASED
 For-Documentation-Only: 1
+SASL-Option: pwcheck_method
 
-The mechanism used by the server to verify plaintext passwords.  Possible
-values include "auxprop", "saslauthd", and "pwcheck".
+The method used by the server to verify plaintext passwords.
+
+alwaystrue
+  Accepts any username/password combination.  Mostly only useful for testing
+  things.
+auxprop
+  Validates the username and password combination using the configured
+  :imapdconf:`sasl_auxprop_plugin`.  But there are no auxprop plugins, so this
+  is not useful.
+saslauthd
+  Validates the username and password combination using the saslauthd service
+  specified by :imapdconf:`sasl_saslauthd_path`.
