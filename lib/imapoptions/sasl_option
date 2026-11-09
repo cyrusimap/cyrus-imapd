@@ -1,8 +1,13 @@
 Name: sasl_option
 Type: STRING
-Default-Value: 0
-Last-Modified: 2.3.17
+Default-Value: NULL
+Last-Modified: UNRELEASED
 For-Documentation-Only: 1
 
-Any SASL option can be set by preceding it with **sasl_**.  This file
-overrides the SASL configuration file.
+If cyrus-imapd is linked with libsasl2, then any `SASL option`_ can be set by
+prefixing it with ``sasl_``.  Options set in this way take precedence over
+those set in the libsasl2 configuration file.
+
+Otherwise, only the SASL options explicitly documented here are used.
+
+.. _SASL option: https://www.cyrusimap.org/sasl/sasl/options.html

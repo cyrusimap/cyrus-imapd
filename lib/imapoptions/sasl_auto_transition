@@ -1,8 +1,8 @@
 Name: sasl_auto_transition
 Type: SWITCH
 Default-Value: 0
-Last-Modified: 2.3.17
+Last-Modified: UNRELEASED
 For-Documentation-Only: 1
+SASL-Option: auto_transition
 
-If enabled, the SASL library will automatically create authentication
-secrets when given a plaintext password.  See the SASL documentation.
+Not clear whether this is useful, this might disappear...
