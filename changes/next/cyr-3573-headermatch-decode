@@ -1,0 +1,27 @@
+Description:
+
+A JMAP header filter condition, as used by Email/query and by Sieve's
+jmapquery test, now matches header values written as RFC 2047 encoded-words.
+Previously a Sieve rule like "Subject starts with ..." didn't match an
+incoming message whose Subject was encoded, although it matched the same
+message once stored.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

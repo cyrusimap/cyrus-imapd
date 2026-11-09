@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+# An Email/query header condition matches an RFC 2047 encoded header that
+# has no cache field, so is read raw from the message.
+sub test_email_query_header_encoded_word
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    $self->make_message("encoded", extra_headers => [
+        [ 'X-Notice', '=?utf-8?B?W1dvcmRmZW5jZSBBbGVydF0gw6ljaGVj?=' ],
+    ]) or die;
+    $self->make_message("plain", extra_headers => [
+        [ 'X-Notice', 'something else' ],
+    ]) or die;
+
+    my $res = $jmap->request([
+        [ 'Email/query', {
+            filter => { header => [ 'X-Notice', '[Wordfence Alert]', 'startsWith' ] },
+        }, 'R1' ],
+        [ 'Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => [ 'subject' ],
+        }, 'R2' ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({ subject => 'encoded' }) ],
+        $res->sentence_named('Email/get')->arguments->{list},
+    );
+}
