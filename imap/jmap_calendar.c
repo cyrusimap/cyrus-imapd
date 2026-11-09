@@ -1548,6 +1548,18 @@ static void setcalendar_parseprops(jmap_req_t *req,
                         if (!s || buf_len(&buf) == 0) {
                             jmap_parser_invalid(parser, propname);
                         }
+                        else if (!strcmp(propname, "uri")) {
+                            /* refuse another user's address, which would be
+                               ignored anyway */
+                            char *addr = xmlURIUnescapeString(buf_cstring(&buf),
+                                                              buf_len(&buf),
+                                                              NULL);
+                            if (!sched_address_permitted(addr, req->userid,
+                                                         req->accountid)) {
+                                jmap_parser_invalid(parser, propname);
+                            }
+                            free(addr);
+                        }
                         buf_reset(&buf);
                     }
                     else jmap_parser_invalid(parser, propname);

@@ -41,6 +41,11 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
+static int caladdress_mlookup(const char *name, mbentry_t **mbentryp)
+{
+    return proxy_mlookup(name, mbentryp, NULL, NULL);
+}
+
 int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
                       const strarray_t *schedule_addresses)
 {
@@ -70,43 +75,19 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
         }
     }
 
-    // does this user have an inbox on this machine?
-
-    /* XXX  Do LDAP/DB/socket lookup to see if user is local */
-    /* XXX  Hack until real lookup stuff is written */
-    int islocal = 0;
-
-    char *at = strchr(param->userid, '@');
-    if (at) {
-        int i;
-        for (i = 0; i < strarray_size(&config_cua_domains); i++) {
-            const char *domain = strarray_nth(&config_cua_domains, i);
-            if (!strcmp(at+1, domain)) {
-                islocal = 1;
-
-                if (!config_virtdomains) {
-                    *at = '\0';  // trim off the domain
-                }
-                break;
-            }
-        }
+    /* is this address a user whose calendar is on this server or another
+       server in the murder? */
+    mbentry_t *mbentry = NULL;
+    char *localid = caladdress_userid(userid, false, &caladdress_mlookup, &mbentry);
+    if (localid && mbentry) {
+        free(param->userid);
+        param->userid = localid;
+        param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
+        mboxlist_entry_free(&mbentry);
+        if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+        return 0;
     }
-
-    if (islocal) {
-        mbentry_t *mbentry = NULL;
-        /* Lookup user's cal-home-set to see if it is on this server */
-        mbname_t *mbname = mbname_from_recipient(param->userid, &httpd_namespace);
-        mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
-        int r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
-        mbname_free(&mbname);
-
-        if (!r) {
-            param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
-            mboxlist_entry_free(&mbentry);
-            if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
-            return 0;
-        }
-    }
+    free(localid);
 
     /* User is outside of our domain(s) - use iMIP */
     param->flags |= SCHEDTYPE_REMOTE;
@@ -3120,6 +3101,11 @@ void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
         strarray_fini(&owned);
         free(owner);
     }
+
+    /* a request schedules only as its user or the calendar's owner */
+    char *ownerid = mboxname_to_userid(mboxname);
+    sched_addresses_restrict(addresses, httpd_userid, ownerid);
+    free(ownerid);
 }
 
 /* delivering an iTIP message takes the recipient's namespace lock, which we
