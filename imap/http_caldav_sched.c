@@ -79,6 +79,11 @@
 #include "imap/http_err.h"
 #include "imap/imap_err.h"
 
+static int caladdress_mlookup(const char *name, mbentry_t **mbentryp)
+{
+    return proxy_mlookup(name, mbentryp, NULL, NULL);
+}
+
 int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
                       const strarray_t *schedule_addresses)
 {
@@ -110,43 +115,19 @@ int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
         }
     }
 
-    // does this user have an inbox on this machine?
-
-    /* XXX  Do LDAP/DB/socket lookup to see if user is local */
-    /* XXX  Hack until real lookup stuff is written */
-    int islocal = 0;
-
-    char *at = strchr(param->userid, '@');
-    if (at) {
-        int i;
-        for (i = 0; i < strarray_size(&config_cua_domains); i++) {
-            const char *domain = strarray_nth(&config_cua_domains, i);
-            if (!strcmp(at+1, domain)) {
-                islocal = 1;
-
-                if (!config_virtdomains) {
-                    *at = '\0';  // trim off the domain
-                }
-                break;
-            }
-        }
+    /* is this address a user whose calendar is on this server or another
+       server in the murder? */
+    mbentry_t *mbentry = NULL;
+    char *localid = caladdress_userid(userid, false, &caladdress_mlookup, &mbentry);
+    if (localid && mbentry) {
+        free(param->userid);
+        param->userid = localid;
+        param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
+        mboxlist_entry_free(&mbentry);
+        if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+        return 0;
     }
-
-    if (islocal) {
-        mbentry_t *mbentry = NULL;
-        /* Lookup user's cal-home-set to see if it is on this server */
-        mbname_t *mbname = mbname_from_recipient(param->userid, &httpd_namespace);
-        mbname_push_boxes(mbname, config_getstring(IMAPOPT_CALENDARPREFIX));
-        int r = proxy_mlookup(mbname_intname(mbname), &mbentry, NULL, NULL);
-        mbname_free(&mbname);
-
-        if (!r) {
-            param->server = xstrdupnull(mbentry->server); /* freed by sched_param_fini */
-            mboxlist_entry_free(&mbentry);
-            if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
-            return 0;
-        }
-    }
+    free(localid);
 
     /* User is outside of our domain(s) -
        Do remote scheduling (default = iMIP) */
@@ -3018,17 +2999,42 @@ void sched_reply(const char *cal_ownerid, const char *sched_userid,
 void caldav_get_schedule_addresses(hdrcache_t req_hdrs, const char *mboxname,
                                    const char *userid, strarray_t *addresses)
 {
-    /* allow override of schedule-address per-message (FM specific) */
+    get_schedule_addresses(mboxname, userid, addresses);
+
+    /* Allow a per-request override of which identity to schedule as (FM
+     * specific), but only to one the calendar's owner actually holds.  The
+     * header is client-supplied, so honoring an address that isn't the
+     * owner's would let any writer schedule, and send iMIP, as some other
+     * ORGANIZER/ATTENDEE.  Validate against the owner rather than userid,
+     * since a sharee writing a shared calendar legitimately schedules as
+     * the owner (e.g. a team calendar). */
     const char **hdr = req_hdrs ?
         spool_getheader(req_hdrs, "Schedule-Address") : NULL;
-
     if (hdr) {
-        if (!strncasecmp(hdr[0], "mailto:", 7))
-            strarray_add(addresses, hdr[0]+7);
-        else
-            strarray_add(addresses, hdr[0]);
+        const char *claimed = hdr[0];
+        if (!strncasecmp(claimed, "mailto:", 7)) claimed += 7;
+
+        char *owner = mboxname_to_userid(mboxname);
+        strarray_t owned = STRARRAY_INITIALIZER;
+        if (owner) get_schedule_addresses(mboxname, owner, &owned);
+
+        if (strarray_contains_case(&owned, claimed)) {
+            /* Narrow to the chosen identity */
+            strarray_truncate(addresses, 0);
+            strarray_add(addresses, claimed);
+        }
+        else {
+            xsyslog(LOG_NOTICE, "ignoring Schedule-Address not held by owner",
+                    "userid=<%s> mboxname=<%s> address=<%s>",
+                    userid, mboxname, hdr[0]);
+        }
+
+        strarray_fini(&owned);
+        free(owner);
     }
-    else {
-        get_schedule_addresses(mboxname, userid, addresses);
-    }
+
+    /* a request schedules only as its user or the calendar's owner */
+    char *ownerid = mboxname_to_userid(mboxname);
+    sched_addresses_restrict(addresses, httpd_userid, ownerid);
+    free(ownerid);
 }

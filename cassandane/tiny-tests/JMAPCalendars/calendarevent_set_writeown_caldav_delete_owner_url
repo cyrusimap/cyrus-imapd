@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+# With fastmailsharing, a sharee may address a shared event by the owner's
+# URL.  Deciding whether the sharee organizes the event must still go by the
+# authenticated user's addresses, not those of the user named in the URL.
+sub test_calendarevent_set_writeown_caldav_delete_owner_url
+    :FastMailSharing
+{
+    my ($self) = @_;
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    xlog "Create sharee user";
+    $self->{instance}->create_user("sharee");
+    my $service = $self->{instance}->get_service("http");
+    my $shareeCaldav = Net::CalDAVTalk->new(
+        user => "sharee",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    xlog "Share calendar with mayWriteOwn only";
+    my $res = $jmap->CallMethods([
+        ['Calendar/set', {
+            update => {
+                Default => {
+                    shareWith => {
+                        sharee => {
+                            mayReadItems => JSON::true,
+                            mayWriteOwn => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{Default});
+
+    xlog "Create event organized by the owner";
+    my $ownerHref = '/dav/calendars/user/cassandane/Default/cassowner.ics';
+    $caldav->Request('PUT', $ownerHref, <<'EOF', 'Content-Type' => 'text/calendar');
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+DTSTART:20260928T160000Z
+DURATION:PT1H
+UID:40d6fe3c-6a51-489e-823e-3ea22f427a3e
+DTSTAMP:20260928T132434Z
+SUMMARY:cassowner
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:mailto:cassandane@example.com
+ATTENDEE:mailto:attendee@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+
+    xlog "Delete as sharee via the owner's URL is forbidden";
+    $res = $shareeCaldav->SafeRequest('DELETE', $ownerHref, '');
+    $self->assert_num_equals(403, $res->{http_response}{status});
+
+    xlog "The owner's event must still exist";
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { properties => ['title'] }, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar @{$res->[0][1]{list}});
+    $self->assert_str_equals('cassowner', $res->[0][1]{list}[0]{title});
+}

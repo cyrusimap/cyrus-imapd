@@ -155,6 +155,14 @@ extern xmlNodePtr xml_add_schedresponse(xmlNodePtr root, xmlNsPtr dav_ns,
 extern int caladdress_lookup(const char *addr, struct caldav_sched_param *param,
                              const strarray_t *schedule_addresses);
 
+/**
+ * Add to addresses the calendar user addresses a CalDAV request schedules
+ * as in mailbox mboxname: the Schedule-Address request header, or else
+ * get_schedule_addresses() for userid.  Then remove from all of addresses,
+ * including any it held before, every address of a local user other than
+ * the authenticated user and the owner of mboxname
+ * (sched_addresses_restrict()).
+ */
 extern void caldav_get_schedule_addresses(hdrcache_t req_hdrs,
                                           const char *mboxname,
                                           const char *userid,

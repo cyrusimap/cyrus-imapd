@@ -1,0 +1,111 @@
+#!perl
+use Cassandane::Tiny;
+
+# A calendar resource keeps the scheduling addresses it was stored with, and
+# a user can store one over IMAP with any of them.  Destroying it must not
+# cancel the event as an address that belongs to another local user.
+sub test_calendarevent_set_destroy_stored_address
+    :MagicPlus
+{
+    my ($self) = @_;
+    my $uid = '9a4d2c6e-81f3-4b57-a0e2-5d7c3f1b6e48';
+
+    my ($attendeeJmap, $attendeeCalDAV) = $self->create_user('test');
+    $attendeeCalDAV->GetCalendars();
+    my ($otherJmap, $otherCalDAV) = $self->create_user('other');
+    $otherCalDAV->GetCalendars();
+
+    my $attendee_event = sub {
+        my $res = $attendeeJmap->CallMethods([
+            ['CalendarEvent/get', { properties => [qw(uid title status)] }, 'R1'],
+        ]);
+        my ($ev) = grep { $_->{uid} eq $uid } @{$res->[0][1]{list}};
+        $self->assert_not_null($ev);
+        return $ev;
+    };
+
+    xlog $self, "organizer invites a local attendee";
+    my $res = $self->{jmap}->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            create => {
+                1 => {
+                    calendarIds => { Default => JSON::true },
+                    uid => $uid,
+                    title => 'Budget review',
+                    start => '2026-09-15T09:00:00',
+                    duration => 'PT1H',
+                    timeZone => 'Etc/UTC',
+                    replyTo => { imip => 'mailto:cassandane@example.com' },
+                    participants => {
+                        cassandane => {
+                            roles => { owner => JSON::true,
+                                       attendee => JSON::true },
+                            sendTo => { imip => 'mailto:cassandane@example.com' },
+                            participationStatus => 'accepted',
+                        },
+                        test => {
+                            roles => { attendee => JSON::true },
+                            sendTo => { imip => 'mailto:test@example.com' },
+                            participationStatus => 'needs-action',
+                            expectReply => JSON::true,
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null($res->[0][1]{created}{1});
+    $self->assert_str_equals('Budget review', $attendee_event->()->{title});
+
+    xlog $self, "another user stores the event over IMAP with the organizer's address";
+    my $imap = $self->{instance}->get_service('imap')
+                    ->create_store(username => 'other+dav')->get_client();
+    my $mime = <<EOF;
+From: <other\@example.com>
+Subject: Budget review
+Date: Tue, 01 Sep 2026 12:00:00 +0000
+Message-ID: <$uid\@example.com>
+Content-Type: text/calendar; charset=utf-8; component=VEVENT
+Content-Transfer-Encoding: 8bit
+Content-Disposition: attachment;
+        filename*0="$uid.ics"
+X-Schedule-User-Address: cassandane\@example.com
+MIME-Version: 1.0
+
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:$uid
+DTSTAMP:20260901T120000Z
+DTSTART:20260915T090000Z
+DTEND:20260915T100000Z
+SEQUENCE:1
+SUMMARY:Budget review
+ORGANIZER:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:MAILTO:cassandane\@example.com
+ATTENDEE;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:MAILTO:test\@example.com
+END:VEVENT
+END:VCALENDAR
+EOF
+    $mime =~ s/\r?\n/\r\n/g;
+    $imap->append('#calendars.Default', $mime) || die $@;
+
+    $res = $otherJmap->CallMethods([
+        ['CalendarEvent/get', { properties => ['uid'] }, 'R1'],
+    ]);
+    my ($ev) = grep { $_->{uid} eq $uid } @{$res->[0][1]{list}};
+    $self->assert_not_null($ev);
+
+    xlog $self, "that user destroys it";
+    $otherJmap->CallMethods([
+        ['CalendarEvent/set', {
+            sendSchedulingMessages => JSON::true,
+            destroy => [ $ev->{id} ],
+        }, 'R1'],
+    ]);
+
+    $self->assert_str_not_equals('cancelled',
+                                 $attendee_event->()->{status} // '');
+}
