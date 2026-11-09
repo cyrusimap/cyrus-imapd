@@ -1176,7 +1176,14 @@ static int action_list(struct transaction_t *txn)
         }
 
         if (pattern) {
-            construct_hash_table(&tzids, 500, 1);
+            /* This hash table is used to de-duplicate results if a pattern
+             * lookup matches the same tzid more than once (ie aliases)
+             * It's not neeed for "list everything" because for that case
+             * zoneinfo_find's callback find_p sets frock->tzid_only, and that
+             * skips entries of type ZI_LINK (aliases)
+             * Hence a reasonable default size is "small", as we ought to
+             * optimise for glob-free patterns, or tight matches. */
+            construct_hash_table(&tzids, 0, 0);
             lrock.tztable = &tzids;
         }
 
