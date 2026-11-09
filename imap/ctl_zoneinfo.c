@@ -116,7 +116,8 @@ int main(int argc, char **argv)
         char buf[3000];
         FILE *fp;
 
-        construct_hash_table(&tzentries, 500, 1);
+        /* In 2026f this hash table grows to 599 entries */
+        construct_hash_table(&tzentries, 1024, 0);
 
         /* Add INFO record (overall lastmod and TZ DB source version) */
         info = xzmalloc(sizeof(struct zoneinfo));
