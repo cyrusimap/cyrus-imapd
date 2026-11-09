@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_sort_emailstate
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    $self->make_message("email$_") or die for 1..3;
+
+    my sub query ($sort) {
+        return $jmap->request([
+            [ 'Email/query', { sort => $sort }, 'R1' ],
+            [ 'Email/get', {
+                '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+                properties => [ 'subject' ],
+            }, 'R2' ],
+        ]);
+    }
+    my sub subjects ($res) {
+        return [ map { $_->{subject} }
+                     $res->sentence_named('Email/get')->arguments->{list}->@* ];
+    }
+
+    xlog $self, "change email1, so it has the highest modseq";
+    my $res = query([ { property => 'subject' } ]);
+    my $id1 = $res->sentence_named('Email/query')->arguments->{ids}[0];
+    $jmap->request([
+        [ 'Email/set', { update => { $id1 => { 'keywords/$flagged' => JSON::true } } } ],
+    ])->single_sentence('Email/set')->as_set->assert_no_errors;
+
+    xlog $self, "sort by emailState";
+    $self->assert_cmp_deeply([ qw(email1 email3 email2) ],
+        subjects(query([ { property => 'emailState', isAscending => JSON::false } ])));
+    $self->assert_cmp_deeply([ qw(email2 email3 email1) ],
+        subjects(query([ { property => 'emailState', isAscending => JSON::true } ])));
+
+    xlog $self, "an unknown sort property is unsupported, rather than crashing";
+    $res = $jmap->request([
+        [ 'Email/query', {
+            sort => [ { property => 'emailstate', isAscending => JSON::false } ],
+            limit => 1,
+        } ],
+    ]);
+    $self->assert_str_equals('unsupportedSort',
+        $res->single_sentence('error')->arguments->{type});
+}
