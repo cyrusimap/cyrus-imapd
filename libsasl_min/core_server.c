@@ -15,7 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DEFAULT_CHECKPASS_MECH "auxprop"
+#define DEFAULT_CHECKPASS_MECH "saslauthd"
 
 /* Contains functions:
  *
