@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+use XML::Simple;
+
+# RFC 4918, Sections 7 (item 3) and 9.9.2: a MOVE that would overwrite a
+# collection holding a locked member fails with 423 unless the lock token
+# is submitted.
+
+sub test_dav_locks_collection_overwrite ($self)
+{
+    my $CardDAV = $self->{carddav};
+
+    my $fooId = $CardDAV->NewAddressBook('foo');
+    my $barId = $CardDAV->NewAddressBook('bar');
+    $self->assert_not_null($fooId);
+    $self->assert_not_null($barId);
+
+    my $href = $CardDAV->fullpath("$barId/b.vcf");
+    my $card = "BEGIN:VCARD\r\nVERSION:3.0\r\n"
+             . "UID:3d6c2f7e-1b8a-4e0c-8f2d-5a9b7c4e1d03\r\n"
+             . "N:Gump;Forrest;;Mr.\r\nFN:Forrest Gump\r\nEND:VCARD\r\n";
+    my $res = $CardDAV->SafeRequest('PUT', $href, $card,
+                                    'Content-Type' => 'text/vcard');
+    $self->assert_equals(201, $res->{http_response}{status});
+
+    my $xml = '<D:lockinfo xmlns:D="DAV:">'
+            . '<D:lockscope><D:exclusive/></D:lockscope>'
+            . '<D:locktype><D:write/></D:locktype>'
+            . '<D:owner><D:href>mailto:cassandane@example.com</D:href></D:owner>'
+            . '</D:lockinfo>';
+    $res = $CardDAV->SafeRequest('LOCK', $href, $xml,
+                                 'Content-Type' => 'text/xml');
+    $self->assert_equals(200, $res->{http_response}{status});
+    my $xmlResp = XMLin($res->{http_response}{content});
+    my $lockToken =
+        $xmlResp->{'D:lockdiscovery'}{'D:activelock'}{'D:locktoken'}{'D:href'};
+    $self->assert_not_null($lockToken);
+
+    my $src = $CardDAV->fullpath("$fooId/");
+    my $dst = $CardDAV->fullpath("$barId/");
+
+    xlog $self, "MOVE over a collection with a locked member";
+    $res = $CardDAV->SafeRequest('MOVE', $src, '', 'Destination' => $dst);
+    $self->assert_equals(423, $res->{http_response}{status});
+    $xmlResp = XMLin($res->{http_response}{content});
+    $self->assert_str_equals($href,
+                             $xmlResp->{'D:lock-token-submitted'}{'D:href'});
+    $res = $CardDAV->SafeRequest('GET', $href, '');
+    $self->assert_equals(200, $res->{http_response}{status});
+
+    xlog $self, "MOVE over it with the member's lock token";
+    $res = $CardDAV->SafeRequest('MOVE', $src, '',
+                                 'Destination' => $dst,
+                                 'If' => "<$href> (<$lockToken>)");
+    $self->assert_equals(204, $res->{http_response}{status});
+    $res = $CardDAV->SafeRequest('GET', $href, '');
+    $self->assert_equals(404, $res->{http_response}{status});
+}
