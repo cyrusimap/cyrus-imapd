@@ -12,7 +12,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
-#include <libxml/HTMLparser.h>
+#include <libxml/entities.h>
 #include <libxml/tree.h>
 
 #include <sasl/saslutil.h>
@@ -174,13 +174,10 @@ static void add_address(struct address_t **recipients, icalproperty *prop,
 
 static void HTMLencode(struct buf *output, const char *input)
 {
-    int inlen = strlen(input);
-    int outlen = 8*inlen;  /* room for every char to become a named entity */
+    xmlChar *enc = xmlEncodeEntitiesReentrant(NULL, (const xmlChar *) input);
 
-    buf_ensure(output, outlen+1);
-    htmlEncodeEntities((unsigned char *) buf_base(output), &outlen,
-                       (unsigned char *) input, &inlen, 0);
-    buf_truncate(output, outlen);
+    /* libxml2 allocates with malloc(), so buf can take ownership */
+    buf_initm(output, (char *) enc, xmlStrlen(enc));
     buf_replace_all(output, "\n", "\r\n  <br>");
 }
 
