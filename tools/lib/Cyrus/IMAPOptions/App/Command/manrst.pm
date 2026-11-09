@@ -158,6 +158,12 @@ sub _print_option ($name, $option)
 
     print "Default: $dv\n\n";
 
+    if ($option->has_sasl_option) {
+        print ".. Note:: If cyrus-imapd is linked with libsasl2, then see\n";
+        print "  :saslconf:`" . $option->sasl_option . "`\n";
+        print "  in the SASL options documentation.\n\n";
+    }
+
     if ($option->has_documentation) {
         foreach my $line ($option->documentation->@*) {
             chomp $line;

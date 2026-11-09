@@ -117,6 +117,15 @@ When Deprecated-Since is not set, this header is forbidden.
 There are some options that we need to document but which do not get an
 entry in the imapopts struct.  Set this flag to 1 for that behaviour.
 
+When SASL-Option is set, this header is required.
+
+When SASL-Option is not set, this header is optional.
+
+## SASL-Option
+We document the SASL options that libsasl_min implements.  Set this to the
+name of the equivalent libsasl2 option to have its documentation
+cross-referenced.
+
 This header is optional.
 
 # DOCUMENTATION
