@@ -1,0 +1,9 @@
+Name: sasl_auxprop_plugin
+Type: STRING
+Default-Value: NULL
+Last-Modified: UNRELEASED
+For-Documentation-Only: 1
+SASL-Option: auxprop_plugin
+
+Specify the plugins to use when looking up or storing auxilliary properties.
+There are no such plugins, so this option isn't useful.
