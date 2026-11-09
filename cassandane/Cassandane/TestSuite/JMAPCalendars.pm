@@ -9,10 +9,10 @@ use DateTime;
 use JSON::XS;
 use Net::CalDAVTalk 0.14;
 use Net::CardDAVTalk 0.11;
-use Data::ICal;
 use Data::Dumper;
 use Data::GUID qw(guid_string);
 use Storable 'dclone';
+use Test::Deep qw(:v1);
 use Cwd qw(abs_path);
 use File::Basename;
 use XML::Spice;
@@ -20,6 +20,7 @@ use MIME::Base64 qw(encode_base64url decode_base64url encode_base64 decode_base6
 
 use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::CRLF;
+use Cassandane::Util::ICalendar;
 use Cassandane::Util::Log;
 use Cassandane::Util::Slurp;
 
@@ -452,32 +453,42 @@ sub assert_rewrite_webdav_attachment_url_itip
     $self->assert_not_null($imip);
     my $payload = decode_json($imip->{MESSAGE});
 
-    my $ical = Data::ICal->new(data => $payload->{ical});
-    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
-    my $event = $entries{'VEVENT'};
+    my $ical = ical2hash($payload->{ical});
+    my ($event) = grep { $_->{type} eq 'vevent' } $ical->{objects}->@*;
     $self->assert_not_null($event);
 
-    my $attach = $event->property('ATTACH');
-    $self->assert_num_equals(1, scalar @{$attach});
-    $self->assert_null($attach->[0]->parameters()->{'MANAGED-ID'});
-    $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
-    $self->assert_str_equals('c29tZWJsb2I=', $attach->[0]->value()); # 'someblob' in base64
+    $self->assert_cmp_deeply(
+        [
+            {
+                name   => 'attach',
+                params => superhashof({ value => [ 'BINARY' ] }),
+                value  => 'c29tZWJsb2I=', # 'someblob' in base64
+            },
+        ],
+        $event->{properties}{attach},
+    );
+    $self->assert_null($event->{properties}{attach}[0]{params}{'managed-id'});
 
     xlog "Assert ATTACH on server is a WebDAV attachment URI";
     my $caldavResponse = $caldav->Request('GET', $eventHref);
-    $ical = Data::ICal->new(data => $caldavResponse->{content});
-    %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
-    $event = $entries{'VEVENT'};
+    $ical = ical2hash($caldavResponse->{content});
+    ($event) = grep { $_->{type} eq 'vevent' } $ical->{objects}->@*;
     $self->assert_not_null($event);
 
-    $attach = $event->property('ATTACH');
-    $self->assert_num_equals(1, scalar @{$attach});
-    $self->assert_not_null($attach->[0]->parameters()->{'MANAGED-ID'});
-    $self->assert_null($attach->[0]->parameters()->{VALUE});
     my $webdavAttachURI =
        $self->{instance}->{config}->get('webdav_attachments_baseurl') .
        '/dav/calendars/user/cassandane/Attachments/';
-    $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
+    $self->assert_cmp_deeply(
+        [
+            {
+                name   => 'attach',
+                params => superhashof({ 'managed-id' => [ ignore() ] }),
+                value  => re(qr/^\Q$webdavAttachURI\E./),
+            },
+        ],
+        $event->{properties}{attach},
+    );
+    $self->assert_null($event->{properties}{attach}[0]{params}{value});
 }
 
 sub create_user_and_allocate_calendar

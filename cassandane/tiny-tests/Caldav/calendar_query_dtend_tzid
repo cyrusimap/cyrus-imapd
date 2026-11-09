@@ -60,12 +60,12 @@ EOF
     my $responses = $res->{'{DAV:}response'};
     $self->assert_equals(1, scalar @$responses);
 
-    my $ical = Data::ICal->new(data =>
-                               $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
+    my $ical = ical2hash(
+        $res->{'{DAV:}response'}[0]{'{DAV:}propstat'}[0]{'{DAV:}prop'}{'{urn:ietf:params:xml:ns:caldav}calendar-data'}{content});
     $self->assert_str_equals($uuid,
-                             $ical->{entries}[0]{properties}{uid}[0]{value});
+                             $ical->{objects}[0]{properties}{uid}[0]{value});
     $self->assert_str_equals('20250127T120000Z',
-                             $ical->{entries}[0]{properties}{dtstart}[0]{value});
+                             $ical->{objects}[0]{properties}{dtstart}[0]{value});
     $self->assert_str_equals('20250127T190000Z',
-                             $ical->{entries}[0]{properties}{dtend}[0]{value});
+                             $ical->{objects}[0]{properties}{dtend}[0]{value});
 }
