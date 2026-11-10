@@ -12,8 +12,8 @@ Cyrus supports JMAP, IMAP, POP3, CalDAV, CardDAV, and
 filtering email. You can read more about Cyrus features in our full :ref:`list
 of features <imap-features>`.
 
-* This is version |imap_latest_development_version|: **development** branch.
-* The latest stable version |imap_current_stable_version| is at :cyrus-stable:`/`.
+* This is the documentation for version |release| of Cyrus IMAP: **stable** branch.
+* The latest development version |imap_latest_development_version| is at :cyrus-dev:`/`.
 
 .. Update this when there is a changeover from stable to development.
 
