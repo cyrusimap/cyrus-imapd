@@ -1,16 +1,12 @@
 <sup>master: </sup>[![Build Status:master](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml/badge.svg)](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml)
-<sup> stable(3.12): </sup>[![Build Status:3.12](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml/badge.svg?branch=cyrus-imapd-3.12)](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml)
+<sup> stable(3.14): </sup>[![Build Status:3.14](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml/badge.svg?branch=cyrus-imapd-3.14)](https://github.com/cyrusimap/cyrus-imapd/actions/workflows/main.yml)
 
 -----
 
 Welcome
 =======
 
-This is the Cyrus IMAP Server, developer version 3.13.  This version is under
-active development, and is not considered "stable".
-
-The current stable series is 3.12.  That release still receives security
-updates and some non-security bug fixes.
+This is the Cyrus IMAP Server, stable version 3.14.
 
 What is Cyrus
 =============
@@ -91,7 +87,7 @@ from source (see next section).
 The latest development code is on the branch called 'master',
 and the latest code destined for the stable release is on
 the branch 'cyrus-imapd-$major.$minor'.  So the current
-stable release is called cyrus-imapd-3.12
+stable release is called cyrus-imapd-3.14
 
 Unlike releases, the git repository doesn't have a pre-built
 ./configure script.  You need to generate it with autoreconf:
