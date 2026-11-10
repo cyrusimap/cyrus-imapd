@@ -1,0 +1,103 @@
+#!perl
+use Cassandane::Tiny;
+
+# Ensure we can query for a message that is snoozed and we can still query
+# for it once it is woken up when using incremental squatter
+
+sub test_email_query_snooze_wakeup
+    :needs_component_calalarmd
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    my $user = $self->default_user;
+
+    my $inbox  = $user->mailboxes->inbox;
+    my $snoozed = $user->mailboxes->create({
+        name => 'Snoozed', role => 'snoozed'
+    });
+    my $trash  = $user->mailboxes->create({
+        name => 'Trash', role => 'trash'
+    });
+    my $spam   = $user->mailboxes->create({
+        name => 'Spam',  role => 'junk'
+    });
+    my $email  = $inbox->new_email({
+        subject => "correcthorsebatterystaple"
+    });
+
+    my sub check_query {
+        my (undef, undef, $line) = caller;
+
+        xlog $self, "run squatter";
+        $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+        xlog $self, "query from line $line";
+        my $res = $user->jmap->request([[
+            "Email/query" => {
+                calculateTotal    => JSON::false,
+                collapseThreads   => JSON::true,
+                findAllInThread   => JSON::true,
+                findMatchingParts => JSON::true,
+                limit             => 30,
+                position          => 0,
+                sort => [{
+                  isAscending => JSON::false,
+                  property    => 'receivedAt',
+                }],
+                filter => {
+                    conditions => [
+                        { inMailboxOtherThan => [ $trash->id, $spam->id ] },
+                        { text => "correcthorsebatterystaple", },
+                    ],
+                    operator => 'AND',
+                },
+            },
+        ]]);
+
+        $self->assert_cmp_deeply(
+            superhashof({ ids => [ $email->id ] }),
+            $res->sentence_named("Email/query")->arguments,
+        );
+    }
+
+    check_query();
+
+    xlog $self, "Snooze email";
+
+    my $maildate = DateTime->now();
+    $maildate->add(DateTime::Duration->new(seconds => 30));
+    my $datestr = $maildate->strftime('%Y-%m-%dT%TZ');
+
+    my $res = $user->jmap->request([[
+        'Email/set' => {
+            update => {
+                $email->id => {
+                    "mailboxIds/" . $inbox->id   => undef,
+                    "mailboxIds/" . $snoozed->id => $JSON::true,
+                    "snoozed" => { "until" => "$datestr", },
+                },
+            },
+        },
+    ]]);
+    $res->assert_single_successful_set();
+
+    check_query();
+
+    xlog $self, "Trigger awakening of snoozed email";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'calalarmd', '-t' => $maildate->epoch() + 30 );
+
+    check_query();
+
+    xlog $self, "Verify email was awakened to Inbox";   
+    $res = $user->jmap->request([[
+        'Email/get' => {
+            ids => [ $email->id ],
+            properties => [ 'mailboxIds' ]
+        },
+    ]]);
+    $self->assert_cmp_deeply(
+        [ superhashof({ mailboxIds => { $inbox->id => jtrue } }) ],
+        $res->sentence_named("Email/get")->arguments->{list},
+    );
+}
