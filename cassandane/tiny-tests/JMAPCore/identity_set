@@ -1,0 +1,77 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_identity_set ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([['Identity/get', {} ]]);
+    my $get = $res->single_sentence('Identity/get')->arguments;
+    my $identity = $get->{list}[0];
+    my $id = $identity->{id};
+    $self->assert_not_null($id);
+
+    my $set = sub {
+        my ($args) = @_;
+        return $jmap->request([['Identity/set', $args ]])
+                    ->single_sentence('Identity/set')->arguments;
+    };
+
+    xlog "create is forbidden: there is only the user's own Identity";
+    my $args = $set->({ create => { new => { email => 'x@example.com' } } });
+    $self->assert_str_equals('forbidden', $args->{notCreated}{new}{type});
+    $self->assert_null($args->{created});
+
+    xlog "an update that changes nothing succeeds";
+    $args = $set->({ update => { $id => {
+        name    => $identity->{name},
+        email   => $identity->{email},
+        replyTo => undef,
+    } } });
+    $self->assert(exists $args->{updated}{$id});
+    $self->assert_null($args->{notUpdated});
+
+    xlog "changing a mutable property is forbidden";
+    $args = $set->({ update => { $id => { name => 'Someone Else' } } });
+    $self->assert_str_equals('forbidden', $args->{notUpdated}{$id}{type});
+
+    xlog "changing an immutable or server-set property is invalidProperties";
+    $args = $set->({ update => { $id => { email => 'other@example.com' } } });
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['email'] },
+        $args->{notUpdated}{$id},
+    );
+    $args = $set->({ update => { $id => { mayDelete => JSON::true } } });
+    $self->assert_cmp_deeply(
+        { type => 'invalidProperties', properties => ['mayDelete'] },
+        $args->{notUpdated}{$id},
+    );
+
+    xlog "the Identity may not be destroyed (mayDelete is false)";
+    $args = $set->({ destroy => [ $id ] });
+    $self->assert_str_equals('forbidden', $args->{notDestroyed}{$id}{type});
+    $self->assert_null($args->{destroyed});
+
+    xlog "any other id is notFound";
+    $args = $set->({
+        update  => { nosuchidentity => { name => 'x' } },
+        destroy => [ 'nosuchidentity2' ],
+    });
+    $self->assert_str_equals('notFound',
+                             $args->{notUpdated}{nosuchidentity}{type});
+    $self->assert_str_equals('notFound',
+                             $args->{notDestroyed}{nosuchidentity2}{type});
+
+    xlog "nothing changed, so the state is still Identity/get's";
+    $self->assert_str_equals($get->{state}, $args->{oldState});
+    $self->assert_str_equals($get->{state}, $args->{newState});
+
+    xlog "ifInState that is not the current state is stateMismatch";
+    $res = $jmap->request([['Identity/set', {
+        ifInState => 'notthestate',
+        update    => { $id => { name => $identity->{name} } },
+    } ]]);
+    $self->assert_str_equals('error', $res->single_sentence->name);
+    $self->assert_str_equals('stateMismatch',
+                             $res->single_sentence->arguments->{type});
+}
