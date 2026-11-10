@@ -2,6 +2,8 @@ Description:
 
 Email/query with a text filter no longer misses a message that got unsnoozed
 or sent on schedule after the search index got updated incrementally.
+The same applies to a message appended again while an identical copy already
+was indexed, such as one delivery filed into two mailboxes.
 
 
 Documentation:

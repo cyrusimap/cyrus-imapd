@@ -480,7 +480,8 @@ static void select_messages_to_index(search_text_receiver_t *rx,
                                      seqset_t *uids,
                                      dynarray_t *attachparts,
                                      int *is_incomplete,
-                                     uint32_t *nextuid)
+                                     uint32_t *nextuid,
+                                     modseq_t *skipped_createdmodseq)
 {
     int reindex_partials = flags & SEARCH_UPDATE_REINDEX_PARTIALS;
     int batch_size = search_batch_size();
@@ -524,6 +525,9 @@ static void select_messages_to_index(search_text_receiver_t *rx,
             create_attachpart(mailbox, msg, attachparts);
             seqset_add(uids, record->uid, 1);
         }
+        else if (record->createdmodseq > *skipped_createdmodseq) {
+            *skipped_createdmodseq = record->createdmodseq;
+        }
 
         message_unref(&msg);
     }
@@ -540,6 +544,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     int r = 0;                  /* Using IMAP_* not SQUAT_* return codes here */
     int is_incomplete = 0;
     uint32_t nextuid = 0;
+    /* Highest createdmodseq of the messages that need no indexing */
+    modseq_t skipped_createdmodseq = 0;
     bool in_mailbox = false;
     seqset_t *uids = seqset_init(0, SEQ_SPARSE);
     dynarray_t attachparts = DYNARRAY_INITIALIZER(sizeof(struct attachpart));
@@ -556,7 +562,8 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     // Determine the messages to index, and the parts to extract text from
 
     select_messages_to_index(rx, mailbox, min_indexlevel, flags, *resumeuidptr,
-                             uids, &attachparts, &is_incomplete, &nextuid);
+                             uids, &attachparts, &is_incomplete, &nextuid,
+                             &skipped_createdmodseq);
 
     if (!seqset_first(uids))
         goto done;
@@ -651,6 +658,10 @@ EXPORTED int search_update_mailbox(search_text_receiver_t *rx,
     free(mboxname);
     free(uniqueid);
     if (in_mailbox) {
+        /* A message skipped because its contents already are indexed has
+         * its own createdmodseq, which the index must cover, too. */
+        if (!r && skipped_createdmodseq && rx->update_highest_createdmodseq)
+            rx->update_highest_createdmodseq(rx, skipped_createdmodseq);
         int r2 = rx->end_mailbox(rx, mailbox);
         if (!r) r = r2;
     }

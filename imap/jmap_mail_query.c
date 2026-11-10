@@ -1638,6 +1638,7 @@ static int _matchmime_index_message(matchmime_t *matchmime, json_t *jfilter)
             _matchmime_tr_end_part,
             _matchmime_tr_end_bodypart,
             _matchmime_tr_end_message,
+            NULL, /* update_highest_createdmodseq */
             _matchmime_tr_end_mailbox,
             _matchmime_tr_flush,
             _matchmime_tr_audit_mailbox,
