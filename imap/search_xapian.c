@@ -1127,7 +1127,10 @@ static int store_indexed(struct indexeddb *idb,
 
 /* Given the directory of a xapian database which has just had
  * messages indexed into it, add the sequence of UIDs to the
- * record for the given mailbox and uidvalidity */
+ * record for the given mailbox and uidvalidity.
+ *
+ * If seq is NULL, only update the highest createdmodseq and index
+ * generation, and only if the indexed.db in this directory exists. */
 static int write_indexed(const char *dir,
                          const char *mboxname,
                          uint32_t uidvalidity,
@@ -1144,7 +1147,7 @@ static int write_indexed(const char *dir,
     char *fname = indexeddb_fname(dir);
     int r = 0;
 
-    if (verbose) {
+    if (verbose && seq) {
         char *str = seqset_cstring(seq);
         xsyslog_ev(LOG_INFO, "search.xapian.indexed.write",
                    lf_s("sys.path", fname),
@@ -1153,18 +1156,26 @@ static int write_indexed(const char *dir,
         free(str);
     }
 
-    r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
+    r = indexeddb_open(userid, fname, seq ? CYRUSDB_CREATE : 0, &idb);
+    if (r == CYRUSDB_NOTFOUND && !seq) {
+        /* Nothing got indexed into this directory yet. A reader ignores
+         * a directory that only has an indexed.db, so don't create one. */
+        r = 0;
+        goto out;
+    }
     if (r) goto out;
 
-    if (idb->version >= 2) {
-        buf_printf(&key, "*M*%s*", uniqueid);
-    }
-    else {
-        buf_printf(&key, "%s.%u", mboxname, uidvalidity);
-    }
+    if (seq) {
+        if (idb->version >= 2) {
+            buf_printf(&key, "*M*%s*", uniqueid);
+        }
+        else {
+            buf_printf(&key, "%s.%u", mboxname, uidvalidity);
+        }
 
-    r = store_indexed(idb, key.s, key.len, seq);
-    if (r) goto out;
+        r = store_indexed(idb, key.s, key.len, seq);
+        if (r) goto out;
+    }
 
     /* Update highest createdmodseq and index generation, if required. */
     if (highest_createdmodseq != idb->highest_createdmodseq ||
@@ -2313,7 +2324,8 @@ struct xapian_update_receiver
     int mode;
     int flags;
     /* Highest and lowest createdmodseq across the messages indexed by the
-     * current mailbox update (0 if none got indexed yet). */
+     * current mailbox update (0 if none got indexed yet). The highest one
+     * also covers messages passed to update_highest_createdmodseq. */
     modseq_t batch_highest_createdmodseq;
     modseq_t batch_lowest_createdmodseq;
     /* The createdmodseq of the message currently being indexed. It only
@@ -2495,12 +2507,16 @@ static int update_indexeddb(xapian_update_receiver_t *tr)
         return IMAP_IOERROR;
     }
 
-    /* Nothing got indexed, so there is no state to write. Only a message
-     * that got indexed contributes a batch createdmodseq. */
-    if (!tr->indexed) return 0;
+    /* Nothing got indexed and no skipped message raises the highest
+     * createdmodseq, so there is no state to write. */
+    if (!tr->indexed &&
+            tr->batch_highest_createdmodseq <= tr->highest_createdmodseq)
+        return 0;
 
     if (tr->batch_highest_createdmodseq) {
-        if (tr->batch_lowest_createdmodseq <= tr->highest_createdmodseq) {
+        /* Only an indexed message sets the lowest createdmodseq */
+        if (tr->batch_lowest_createdmodseq &&
+                tr->batch_lowest_createdmodseq <= tr->highest_createdmodseq) {
             /* This update indexed a message that has a lower createdmodseq
              * than the highest createdmodseq in the index. This means we
              * either reindexed a message, fully or partially, or a message got
@@ -3199,6 +3215,15 @@ static uint8_t is_indexed(search_text_receiver_t *rx, message_t *msg)
     return ret;
 }
 
+static void update_highest_createdmodseq(search_text_receiver_t *rx,
+                                         modseq_t createdmodseq)
+{
+    xapian_update_receiver_t *tr = (xapian_update_receiver_t *)rx;
+
+    if (createdmodseq > tr->batch_highest_createdmodseq)
+        tr->batch_highest_createdmodseq = createdmodseq;
+}
+
 static int end_mailbox_update(search_text_receiver_t *rx,
                               struct mailbox *mailbox
                             __attribute__((unused)))
@@ -3241,6 +3266,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.super.end_part = end_part;
     tr->super.super.end_bodypart = end_bodypart;
     tr->super.super.end_message = end_message_update;
+    tr->super.super.update_highest_createdmodseq = update_highest_createdmodseq;
     tr->super.super.end_mailbox = end_mailbox_update;
     tr->super.super.flush = flush;
     tr->super.super.audit_mailbox = audit_mailbox;
