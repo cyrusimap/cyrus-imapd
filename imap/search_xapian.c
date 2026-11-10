@@ -803,6 +803,37 @@ static void read_highest_createdmodseq_at_dir(const char *userid,
     free(fname);
 }
 
+/* Read the highest createdmodseq and index generation of the search index:
+ * from the first of the active tier directories dirs that has them set.
+ * dirs must include the tiers without a Xapian database: squatter writes
+ * them to the top tier even if it skipped all messages it visited because
+ * their contents already are indexed. */
+static void read_highest_createdmodseq_at_dirs(const char *userid,
+                                               const strarray_t *dirs,
+                                               modseq_t *highest_createdmodseq,
+                                               uint64_t *index_generation)
+{
+    *highest_createdmodseq = 0;
+    *index_generation = 0;
+
+    for (int i = 0; i < strarray_size(dirs); i++) {
+        read_highest_createdmodseq_at_dir(userid, strarray_nth(dirs, i),
+                highest_createdmodseq, index_generation);
+        if (*highest_createdmodseq || *index_generation)
+            break;
+    }
+}
+
+/* Return true if dir contains a cyrus.indexed.db */
+static bool has_indexeddb(const char *dir)
+{
+    char *fname = indexeddb_fname(dir);
+    struct stat sbuf;
+    bool exists = !stat(fname, &sbuf);
+    free(fname);
+    return exists;
+}
+
 /*
  * Merge the indexed.db of all search tiers activetiers[1..n] into the
  * indexed.db of the top tier.
@@ -1130,7 +1161,7 @@ static int store_indexed(struct indexeddb *idb,
  * record for the given mailbox and uidvalidity.
  *
  * If seq is NULL, only update the highest createdmodseq and index
- * generation, and only if the indexed.db in this directory exists. */
+ * generation. */
 static int write_indexed(const char *dir,
                          const char *mboxname,
                          uint32_t uidvalidity,
@@ -1156,13 +1187,7 @@ static int write_indexed(const char *dir,
         free(str);
     }
 
-    r = indexeddb_open(userid, fname, seq ? CYRUSDB_CREATE : 0, &idb);
-    if (r == CYRUSDB_NOTFOUND && !seq) {
-        /* Nothing got indexed into this directory yet. A reader ignores
-         * a directory that only has an indexed.db, so don't create one. */
-        r = 0;
-        goto out;
-    }
+    r = indexeddb_open(userid, fname, CYRUSDB_CREATE, &idb);
     if (r) goto out;
 
     if (seq) {
@@ -1389,10 +1414,12 @@ struct xapiandb_lock {
     struct mboxlock *namelock;
     strarray_t *activedirs;
     strarray_t *activetiers;
+    /* All active tier directories, including those without a database */
+    strarray_t *alldirs;
     xapian_db_t *db;
 };
 
-#define XAPIANDB_LOCK_INITIALIZER { NULL, NULL, NULL, NULL, NULL }
+#define XAPIANDB_LOCK_INITIALIZER { NULL, NULL, NULL, NULL, NULL, NULL }
 
 static void xapiandb_lock_release(struct xapiandb_lock *lock)
 {
@@ -1410,6 +1437,7 @@ static void xapiandb_lock_release(struct xapiandb_lock *lock)
 
     strarray_free(lock->activedirs);
     strarray_free(lock->activetiers);
+    strarray_free(lock->alldirs);
 
     memset(lock, 0, sizeof(struct xapiandb_lock));
 }
@@ -1456,6 +1484,7 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
     assert(lock->activefile == NULL);
     assert(lock->activedirs == NULL);
     assert(lock->activetiers == NULL);
+    assert(lock->alldirs == NULL);
 
     /* Do nothing if there is no userid */
     userid = mboxname_to_userid(mailbox_name(mailbox));
@@ -1479,6 +1508,8 @@ static int xapiandb_lock_open(struct mailbox *mailbox, struct xapiandb_lock *loc
     /* only try to open directories with databases in them */
     lock->activedirs = activefile_resolve(mailbox_name(mailbox), mailbox_partition(mailbox), active,
             /*dostat*/1, &lock->activetiers);
+    lock->alldirs = activefile_resolve(mailbox_name(mailbox),
+            mailbox_partition(mailbox), active, /*dostat*/0, NULL);
 
     /* open the databases */
     if (lock->activedirs->count) {
@@ -2228,23 +2259,23 @@ static modseq_t session_get_highest_createdmodseq(search_session_t *session,
                                                   uint64_t *index_generation)
 {
     if (index_generation) *index_generation = 0;
-    if (!session || !session->lock.activedirs || !session->lock.activedirs->count)
+    if (!session || !session->lock.alldirs || !session->lock.alldirs->count)
         return 0;
 
-    /* Read the highest createdmodseq and index generation from indexeddb
-     * of the top tier. We hold a read lock on the activefile, so multiple
-     * calls to this function in the same session are guaranteed to return
-     * the same values. */
+    /* We hold a read lock on the activefile, so multiple calls to this
+     * function in the same session are guaranteed to return the same
+     * values. */
 
     modseq_t highest_createdmodseq = 0;
+    uint64_t generation = 0;
     char *userid = mboxname_to_userid(mailbox_name(session->mailbox));
 
     // XXX This opens indexeddb on every call. This is fine with the current
     // callers, but we might cache the highest modseq and index generation
     // in the session if this gets called multiple times for a session.
-    read_highest_createdmodseq_at_dir(userid,
-            strarray_nth(session->lock.activedirs, 0),
-            &highest_createdmodseq, index_generation);
+    read_highest_createdmodseq_at_dirs(userid, session->lock.alldirs,
+            &highest_createdmodseq, &generation);
+    if (index_generation) *index_generation = generation;
 
     free(userid);
     return highest_createdmodseq;
@@ -3059,15 +3090,11 @@ static int begin_mailbox_update(search_text_receiver_t *rx,
     /* Read highest createdmodseq and index generation of the top tier.
      * If this is a new tier, read them from the newest former tier that
      * has them set. */
-    tr->highest_createdmodseq = 0;
-    tr->index_generation = 0;
-    for (int i = 0; i < strarray_size(tr->activedirs); i++) {
-        read_highest_createdmodseq_at_dir(userid,
-                strarray_nth(tr->activedirs, i),
-                &tr->highest_createdmodseq, &tr->index_generation);
-        if (tr->highest_createdmodseq || tr->index_generation)
-            break;
-    }
+    strarray_t *alldirs = activefile_resolve(mailbox_name(mailbox),
+            mailbox_partition(mailbox), active, /*dostat*/0, NULL);
+    read_highest_createdmodseq_at_dirs(userid, alldirs,
+            &tr->highest_createdmodseq, &tr->index_generation);
+    strarray_free(alldirs);
     if (!tr->highest_createdmodseq && !tr->index_generation) {
         /* Could not read from any tier. This must be
          * a brand-new index. Initialize the index generation to the current
@@ -4137,9 +4164,12 @@ static void cleanup_xapiandirs(const char *mboxname, const char *partition, stra
     strarray_fini(&bogus);
 }
 
+/* Write the highest createdmodseq and index generation across srcdirs
+ * and topdir to topdir. srcdirs must include the source tiers that have
+ * no Xapian database, their indexed.db may hold the highest values. */
 static int compact_set_highest_createdmodseq(const char *userid,
                                              const char *topdir,
-                                             const char *srcdir,
+                                             const strarray_t *srcdirs,
                                              bool did_reindex)
 {
     modseq_t highest_createdmodseq = 0;
@@ -4148,15 +4178,20 @@ static int compact_set_highest_createdmodseq(const char *userid,
     char *fname = NULL;
     int r = 0;
 
-    /* Read highest_createdmodseq from source tier. */
-    if (srcdir && strcmp(topdir, srcdir)) {
+    /* Read highest_createdmodseq from source tiers. */
+    for (int i = 0; i < strarray_size(srcdirs); i++) {
+        const char *srcdir = strarray_nth(srcdirs, i);
+        if (!strcmp(topdir, srcdir)) continue;
+
         char *src_fname = indexeddb_fname(srcdir);
         struct indexeddb *src_idb = NULL;
 
         r = indexeddb_open(userid, src_fname, 0, &src_idb);
         if (!r) {
-            highest_createdmodseq = src_idb->highest_createdmodseq;
-            index_generation = src_idb->index_generation;
+            if (src_idb->highest_createdmodseq > highest_createdmodseq)
+                highest_createdmodseq = src_idb->highest_createdmodseq;
+            if (src_idb->index_generation > index_generation)
+                index_generation = src_idb->index_generation;
             r = indexeddb_close(&src_idb, r);
         }
         else if (r == CYRUSDB_NOTFOUND) {
@@ -4523,7 +4558,9 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
         strarray_remove_all(active, strarray_nth(tochange, i));
 
     /* Write the highest createdmodseq and index generation of the
-     * destination tier to the new top tier. */
+     * destination and source tiers to the new top tier. Readers take them
+     * from the first tier that has them, which may be a tier that has an
+     * indexed.db but no Xapian database. */
     {
         char *topdir = NULL;
         for (i = 0; i < active->count; i++) {
@@ -4533,14 +4570,19 @@ static int compact_dbs(const char *userid, const strarray_t *reindextiers,
             }
             else {
                 topdir = activefile_path(mboxname, mbentry->partition, item,
-                                         /*dostat*/1);
+                                         /*dostat*/0);
+                if (topdir && xapstat(topdir) && !has_indexeddb(topdir))
+                    xzfree(topdir);
             }
             if (topdir) break;
         }
         if (topdir) {
-            r = compact_set_highest_createdmodseq(userid, topdir,
-                    created_something ? tempdestdir : NULL,
+            strarray_t *statedirs = activefile_resolve(mboxname,
+                    mbentry->partition, tochange, /*dostat*/0, NULL);
+            if (created_something) strarray_append(statedirs, tempdestdir);
+            r = compact_set_highest_createdmodseq(userid, topdir, statedirs,
                     toreindex && toreindex->count);
+            strarray_free(statedirs);
             free(topdir);
             if (r) {
                 printf("ERROR: failed to carry highest createdmodseq for %s\n",

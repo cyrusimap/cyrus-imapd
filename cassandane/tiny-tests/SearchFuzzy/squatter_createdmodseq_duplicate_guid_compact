@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# After a compaction, the top tier has no Xapian database until squatter
+# indexes a message into it. The createdmodseq of a duplicate that squatter
+# skips must count nevertheless, and a later compaction must keep it.
+sub test_squatter_createdmodseq_duplicate_guid_compact
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->create("A") || die;
+
+    xlog $self, "Create and index message in INBOX";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX");
+    $talk->select("INBOX");
+    my $mime = $talk->fetch('1', 'BODY.PEEK[]')->{1}{body};
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Compact index to tier t2";
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't2', '-t', 't1');
+    my ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+
+    xlog $self, "Append the same message to A and index incrementally";
+    my $createdmodseqA = $self->append_mime("A", $mime);
+    $self->assert_num_lt($createdmodseqA, $createdmodseq);
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert the duplicate raised the highest createdmodseq";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Compact all tiers to t3";
+    $self->{instance}->run_command({cyrus => 1},
+        'squatter', '-z', 't3', '-t', 't1,t2');
+
+    xlog $self, "Assert compaction kept the highest createdmodseq";
+    ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+}
