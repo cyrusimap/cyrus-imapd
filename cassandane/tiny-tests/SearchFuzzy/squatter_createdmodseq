@@ -18,6 +18,18 @@ sub create_message_in_mailbox($self, $mboxname, $params = {})
     return $createdmodseq;
 }
 
+# Append the MIME message mime to mboxname, creating a record with the same
+# GUID if mime is a copy. The return value is the createdmodseq.
+sub append_mime($self, $mboxname, $mime)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->append($mboxname, "()", { Literal => $mime }) || die;
+    $talk->select($mboxname);
+    my $res = $talk->fetch('*', '(createdmodseq)');
+    my ($rec) = values %$res;
+    return $rec->{createdmodseq}[0];
+}
+
 # Read highest createdmodseq and index generation from squatter.
 sub get_squatter_createdmodseq($self)
 {
@@ -406,4 +418,168 @@ sub test_squatter_createdmodseq_failed_msg
     my ($highest_createdmodseq, $index_generation) =
         $self->get_squatter_createdmodseq;
     $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+}
+
+# Appending the exact bytes of an indexed message creates a new record with
+# the same GUID. Squatter does not index it again, but its createdmodseq must
+# count towards the highest createdmodseq.
+sub test_squatter_createdmodseq_duplicate_guid
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Create mailboxes";
+    $talk->create("A") || die;
+    $talk->create("B") || die;
+
+    xlog $self, "Create message in INBOX";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX");
+    $talk->select("INBOX");
+    my $mime = $talk->fetch('1', 'BODY.PEEK[]')->{1}{body};
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    my ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+
+    xlog $self, "Append the same message to mailbox A";
+    my $createdmodseqA = $self->append_mime("A", $mime);
+    $self->assert($createdmodseq < $createdmodseqA);
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert the duplicate raised the highest createdmodseq";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqA, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Append the same message to mailbox B";
+    my $createdmodseqB = $self->append_mime("B", $mime);
+    $self->assert($createdmodseqA < $createdmodseqB);
+
+    xlog $self, "Index mailbox B (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i', 'user.cassandane.B');
+
+    xlog $self, "Assert the duplicate raised the highest createdmodseq";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+
+    xlog $self, "Index all mailboxes again (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert nothing changed";
+    $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseqB, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
+}
+
+# A duplicate GUID with a higher createdmodseq than a message that fails to
+# index must not raise the highest createdmodseq past the failed message.
+sub test_squatter_createdmodseq_duplicate_guid_failed_msg
+    :SearchAttachmentExtractor :NoCheckSyslog
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Start an extractor that fails for our attachment";
+    $self->start_echo_extractor(fail_content => qr/badattachment/);
+
+    xlog $self, "Create and index a plain text message";
+    my $createdmodseq = $self->create_message_in_mailbox("INBOX",
+        { subject => "plainmsg" });
+    $talk->select("INBOX");
+    my $mime = $talk->fetch('1', 'BODY.PEEK[]')->{1}{body};
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Create a message that fails to index, then a duplicate";
+    my $failed_createdmodseq = $self->create_message_in_mailbox("INBOX", {
+        subject => "failmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."badattachment"
+            ."\r\n--123456789abcdef--\r\n",
+        },
+    });
+    my $dup_createdmodseq = $self->append_mime("INBOX", $mime);
+    $self->assert_num_lt($dup_createdmodseq, $failed_createdmodseq);
+
+    xlog $self, "Index all mailboxes (incremental)";
+    my $failed = 0;
+    $self->{instance}->run_command({
+        cyrus => 1,
+        handlers => {
+            exited_abnormally => sub { $failed = 1; return 0; },
+        },
+    }, 'squatter', '-i');
+    $self->assert_num_equals(1, $failed);
+
+    xlog $self, "Assert the highest createdmodseq covers the plain text message only";
+    my ($highest_createdmodseq) = $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($createdmodseq, $highest_createdmodseq);
+}
+
+# A duplicate GUID indexed along with a message with an attachment raises the
+# highest createdmodseq, without bumping the index generation.
+sub test_squatter_createdmodseq_duplicate_guid_attachment
+    :SearchAttachmentExtractor
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "Start extractor";
+    $self->start_echo_extractor();
+
+    xlog $self, "Create and index a plain text message";
+    $self->create_message_in_mailbox("INBOX", { subject => "plainmsg" });
+    $talk->select("INBOX");
+    my $mime = $talk->fetch('1', 'BODY.PEEK[]')->{1}{body};
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+    my ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+
+    xlog $self, "Create a message with an attachment, then a duplicate";
+    my $attach_createdmodseq = $self->create_message_in_mailbox("INBOX", {
+        subject => "attachmsg",
+        args => {
+            mime_type => "multipart/related",
+            mime_boundary => "123456789abcdef",
+            body => ""
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: text/plain\r\n"
+            ."\r\n"
+            ."plaintext"
+            ."\r\n--123456789abcdef\r\n"
+            ."Content-Type: application/pdf\r\n"
+            ."\r\n"
+            ."attachment"
+            ."\r\n--123456789abcdef--\r\n",
+        },
+    });
+    my $dup_createdmodseq = $self->append_mime("INBOX", $mime);
+    $self->assert_num_lt($dup_createdmodseq, $attach_createdmodseq);
+
+    xlog $self, "Index all mailboxes (incremental)";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Assert the duplicate raised the highest createdmodseq";
+    my $prev_index_generation = $index_generation;
+    ($highest_createdmodseq, $index_generation) =
+        $self->get_squatter_createdmodseq;
+    $self->assert_num_equals($dup_createdmodseq, $highest_createdmodseq);
+    $self->assert_num_equals($prev_index_generation, $index_generation);
 }

@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+# Appending the bytes of an indexed message creates a record with a new
+# createdmodseq, which squatter skips. Email/query must find that record
+# after an incremental squatter run, also if the search index got compacted
+# before and the top tier has no Xapian database yet.
+sub assert_email_query_duplicate ($self, $compact)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->new_jmaptester([
+        $self->jmap_default_using->@*,
+        'https://cyrusimap.org/ns/jmap/performance',
+    ]);
+
+    my $inbox = $user->mailboxes->inbox;
+    $user->mailboxes->create({ name => 'A' });
+    my $email = $inbox->new_email({ subject => 'correcthorsebatterystaple' });
+
+    xlog $self, "Index incrementally";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    if ($compact) {
+        xlog $self, "Compact index to tier t2";
+        $self->{instance}->run_command({cyrus => 1},
+            'squatter', '-z', 't2', '-t', 't1');
+    }
+
+    xlog $self, "Append message to A and expunge it from INBOX";
+    my $imap = $user->imap;
+    $imap->select('INBOX');
+    my $mime = $imap->fetch('1', 'BODY.PEEK[]')->{1}{body};
+    $imap->append('A', '()', { Literal => $mime }) || die;
+    $imap->store('1', '+flags', '(\\Deleted)') || die;
+    $imap->expunge() || die;
+
+    xlog $self, "Index incrementally";
+    $self->{instance}->run_command({cyrus => 1}, 'squatter', '-i');
+
+    xlog $self, "Query by text";
+    # Unlike guidsearch, uidsearch filters out messages with a higher
+    # createdmodseq than the search index has
+    my $res = $jmap->request([
+        ['Email/query', {
+            filter => { text => 'correcthorsebatterystaple' },
+            disableGuidSearch => JSON::true,
+        }],
+    ]);
+
+    $self->assert_cmp_deeply(
+        [ $email->id ],
+        $res->single_sentence('Email/query')->arguments->{ids},
+    );
+}
+
+sub test_email_query_duplicate__no_compact ($self)
+{
+    $self->assert_email_query_duplicate(0);
+}
+
+sub test_email_query_duplicate__compact ($self)
+{
+    $self->assert_email_query_duplicate(1);
+}
