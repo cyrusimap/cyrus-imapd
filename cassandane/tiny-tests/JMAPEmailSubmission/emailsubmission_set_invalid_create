@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailsubmission_set_invalid_create
+    :min_version_3_1
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods( [ [ 'Identity/get', {}, "R1" ] ] );
+    my $identityid = $res->[0][1]->{list}[0]->{id};
+    my $inboxid = $self->getinbox()->{id};
+
+    xlog $self, "Create a draft with a From, and one without";
+    $res = $jmap->CallMethods([
+    [ 'Email/set', {
+        create => {
+            'withfrom' => {
+                subject    => 'with from',
+                from       => [{ email => 'from@localhost' }],
+                to         => [{ email => 'rcpt@localhost' }],
+                keywords   => { '$Draft' => JSON::true },
+                mailboxIds => { $inboxid => JSON::true },
+                textBody   => [{ partId => '1' }],
+                bodyValues => { '1' => { value => 'body' } },
+            },
+            'nofrom' => {
+                subject    => 'no from',
+                to         => [{ email => 'rcpt@localhost' }],
+                keywords   => { '$Draft' => JSON::true },
+                mailboxIds => { $inboxid => JSON::true },
+                textBody   => [{ partId => '1' }],
+                bodyValues => { '1' => { value => 'body' } },
+            },
+        },
+    }, "R1" ] ]);
+    my $withfrom = $res->[0][1]{created}{withfrom}{id};
+    my $nofrom   = $res->[0][1]{created}{nofrom}{id};
+    $self->assert_not_null($withfrom);
+    $self->assert_not_null($nofrom);
+
+    xlog $self, "No identityId, but an envelope: still sent.  Whether mail";
+    xlog $self, "without an identity may go is the submission server's call";
+    xlog $self, "(a redirect is sent this way: no identity, resent)";
+    $res = $jmap->CallMethods([
+    [ 'EmailSubmission/set', {
+        create => {
+            's1' => {
+                emailId  => $withfrom,
+                envelope => {
+                    mailFrom => { email => 'from@localhost' },
+                    rcptTo   => [{ email => 'rcpt@localhost' }],
+                },
+            },
+        },
+    }, "R2" ] ]);
+    $self->assert_not_null($res->[0][1]{created}{s1}{id});
+    $self->assert_null($res->[0][1]{notCreated});
+
+    xlog $self, "No Sender or From to send as, and no envelope: invalidEmail";
+    $res = $jmap->CallMethods([
+    [ 'EmailSubmission/set', {
+        create => {
+            's2' => {
+                emailId    => $nofrom,
+                identityId => $identityid,
+                envelope   => undef,
+            },
+        },
+    }, "R3" ] ]);
+    $self->assert_null($res->[0][1]{created});
+    $self->assert_str_equals('invalidEmail',
+                             $res->[0][1]{notCreated}{s2}{type});
+    $self->assert_cmp_deeply(['from'],
+                             $res->[0][1]{notCreated}{s2}{properties});
+}

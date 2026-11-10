@@ -862,8 +862,12 @@ static void _emailsubmission_create(jmap_req_t *req,
             jfrom = json_object_get(msg, "from");
             jfrom = json_object_get(json_array_get(jfrom, 0), "email");
         }
-        if (!jfrom) {
-            *set_err = json_pack("{s:s}", "type", "notPermittedFrom");
+        const char *jfromval = json_string_value(jfrom);
+        if (!jfromval || !*jfromval) {
+            /* Neither a Sender nor a From address to send as: the Email is
+             * invalid (RFC 8621 Section 7.5) */
+            *set_err = json_pack("{s:s s:[s]}", "type", "invalidEmail",
+                                 "properties", "from");
             goto done;
         }
         const char *from = json_string_value(jfrom);
