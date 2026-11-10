@@ -6693,7 +6693,7 @@ static void cmd_search(const char *tag, const char *cmd)
             /*cstate*/NULL
         };
 
-        construct_hash_table(&mrock.mailboxes, 100, 0);  // arbitrary size
+        construct_hash_table(&mrock.mailboxes, 0, 0);
 
         if (!searchargs->returnopts) {
             /* RFC 7377: 2.1
@@ -14377,7 +14377,7 @@ static void list_data_recursivematch(struct listargs *listargs)
 
     rock.count = 0;
     rock.listargs = listargs;
-    construct_hash_table(&rock.table, 100, 1);
+    construct_hash_table(&rock.table, 0, 0);
 
     /* find */
     mboxlist_findsubmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin, imapd_userid,
@@ -15694,7 +15694,7 @@ static void cmd_notify(char *tag, int set)
         int i;
 
         if (new_egroups->filters & ~FILTER_SELECTED) {
-            srock.mboxnames = construct_hash_table(&mboxnames, 100, 0);
+            srock.mboxnames = construct_hash_table(&mboxnames, 0, 0);
         }
 
         if (new_egroups->selected.events && imapd_index) {
