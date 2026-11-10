@@ -70,7 +70,13 @@ series will be 3.8 (and then master will become 3.9).
 
 5. Update `docsrc/index.rst` to state that this is the stable version, not
    the development one.  It's easiest to just copy and update the text from the
-   previous stable version of this file.
+   previous stable version of this file, or, copy/paste this over what's there:
+
+.. code-block:: none
+
+    * This is the documentation for version |release| of Cyrus IMAP: **stable** branch.
+    * The latest development version |imap_latest_development_version| is at :cyrus-dev:`/`.
+
 6. Add release notes infrastructure:
 
    a. Make the directories for the new series:
