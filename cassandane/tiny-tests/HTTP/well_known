@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_well_known
+    ($self)
+{
+    my $service = $self->{instance}->get_service('http');
+    my $host = $service->host . ":" . $service->port;
+    my $s = http1_connect($self);
+
+    # Nothing is listed at /.well-known itself, whatever the Host
+    for my $path ('/.well-known', '/.well-known/') {
+        http1_send($s,
+            "GET $path HTTP/1.1\r\n",
+            "Host: <b>$host</b>\r\n",
+            "\r\n");
+
+        my $res = http1_read_response($s);
+        $self->assert_num_equals(404, $res->{status}, $path);
+        $self->assert_does_not_match(qr/<b>/, $res->{body});
+    }
+
+    # but an enabled namespace's well-known URI still redirects
+    http1_send($s,
+        "GET /.well-known/caldav HTTP/1.1\r\n",
+        "Host: $host\r\n",
+        "\r\n");
+
+    my $res = http1_read_response($s);
+    $self->assert_num_equals(301, $res->{status});
+    $self->assert_str_equals("http://$host/dav/calendars", $res->{headers}{location});
+}
