@@ -1,0 +1,24 @@
+Description:
+
+Email/query with a text filter no longer misses a message that got unsnoozed
+or sent on schedule after the search index got updated incrementally.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
