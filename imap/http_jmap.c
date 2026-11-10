@@ -148,6 +148,7 @@ static void jmap_init(struct buf *serverinfo)
 
     initialize_JMAP_error_table();
 
+    /* Currently we register 79, 88 or 91 methods. Hence 128 is a good size: */
     construct_hash_table(&my_jmap_settings.methods, 128, 0);
     my_jmap_settings.server_capabilities = json_object();
 

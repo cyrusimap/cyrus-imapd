@@ -41,10 +41,10 @@ EXPORTED search_query_t *search_query_new(struct index_state *state,
     query = xzmalloc(sizeof(*query));
     query->state = state;
     query->searchargs = searchargs;
-    construct_hash_table(&query->subs_by_folder, 128, 0);
-    construct_hash_table(&query->subs_by_indexed, 128, 0);
+    construct_hash_table(&query->subs_by_folder, 0, 0);
+    construct_hash_table(&query->subs_by_indexed, 0, 0);
     ptrarray_init(&query->merged_msgdata);
-    construct_hash_table(&query->folders_by_name, 128, 0);
+    construct_hash_table(&query->folders_by_name, 0, 0);
     ptrarray_init(&query->folders_by_id);
     construct_hashu64_table(&query->partid_by_num, 0, 0);
     construct_hash_table(&query->partnum_by_id, 0, 0);

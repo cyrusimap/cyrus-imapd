@@ -3302,7 +3302,7 @@ static search_text_receiver_t *begin_update(int verbose)
 
     tr->super.verbose = verbose;
 
-    construct_hash_table(&tr->cached_seqs, 128, 0);
+    construct_hash_table(&tr->cached_seqs, 0, 0);
 
     return &tr->super.super;
 }

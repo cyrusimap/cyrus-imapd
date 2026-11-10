@@ -8394,7 +8394,7 @@ static int _email_get_keywords(jmap_req_t *req,
         if (r) return r;
     }
     if (!hash_constructed(&ctx->seenseq_by_mbox_id)) {
-        construct_hash_table(&ctx->seenseq_by_mbox_id, 128, 0);
+        construct_hash_table(&ctx->seenseq_by_mbox_id, 0, 0);
     }
     /* Gather keywords for all message records */
     struct email_get_keywords_rock rock = { req, _EMAIL_KEYWORDS_INITIALIZER };
