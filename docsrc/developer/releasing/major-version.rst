@@ -95,6 +95,9 @@ series will be 3.8 (and then master will become 3.9).
       to copy the release notes file from the previous major release, delete
       all the bullet points (leaving just the headings), and fix all the
       numbers.
+   e. Add stub release notes for the new dev version too. Copy an example
+      from, say, docsrc/download/release-notes/3.13/x/3.13.0-alpha0.rst, and
+      then adjust the version numbers as appropriate.
 
 7. Update `README.md`:
 
