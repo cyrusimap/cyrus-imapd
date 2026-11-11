@@ -438,6 +438,26 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 0);
 
+    /* If present, the day needs to be valid, but we ignore it (because all code
+     * paths end up in mktime, which ignores tm_wday)
+     * "valid" turns out to be "a 3 character token starting with a letter"
+     *
+     * This is not conformant with RFC 5322:
+     *     A date-time specification MUST be semantically valid.  That is, the
+     *     day-of-week (if included) MUST be the day implied by the date, ...
+     * Arguably we should fix our code, and move these test to test_rfc5322_fail
+     * below. */
+
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322("Sun, 01 Jan 1970 01:00:00 +0100", &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, 31);
+    CU_ASSERT_EQUAL(t, 0);
+
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322("Q42, 01 Jan 1970 01:00:00 +0100", &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, 31);
+    CU_ASSERT_EQUAL(t, 0);
+
     /* Zero Hour - we don't allow it any more, because the date returns negative */
     t = UNINIT_TIMET;
     r = time_from_rfc5322("WED, 31 DEC 1969 19:36:29 -0500", &t, DATETIME_FULL); /* NYC */
@@ -447,6 +467,21 @@ test_rfc5322(void)
     r = time_from_rfc5322(" 1-JAN-1970 11:36:29 +1100", &t, DATETIME_FULL); /* MEL */
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 2189);
+
+    /* The comma after the HH:MM is seen as a valid place to terminate parsing. */
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322(" 1-JAN-1970 11:36,29 +1100", &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, 17);
+    CU_ASSERT_EQUAL(t, 41760);
+
+    /* Currently compute_tzoffset() treats all unrecognised timezone sequences
+     * as -0000. Hence the 2 digits here are treated as such. Arguably this
+     * ought actually to be a parse error, as it's not uknown alphabetics.
+     * For now, we test the current behaviour to avoid unexpected changes. */
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322(" 1-JAN-1970 11:36:29 +11", &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, 24);
+    CU_ASSERT_EQUAL(t, 41789);
 
     /* Pre Jan 1 1970 - we don't allow */
     t = UNINIT_TIMET;
@@ -484,12 +519,6 @@ test_rfc5322(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, 1497912578);
 
-    /* https://github.com/cyrusimap/cyrus-imapd/issues/2247 */
-    t = UNINIT_TIMET;
-    r = time_from_rfc5322("Tue, 20  Jun  2017 00:49:38 +0000", &t, DATETIME_FULL);
-    CU_ASSERT_EQUAL(r, 33);
-    CU_ASSERT_EQUAL(t, 1497919778);
-
     /* Timezone tests - same time different timezones*/
     t = UNINIT_TIMET;
     r = time_from_rfc5322("FRI, 26 NOV 2010 14:22:02 +1100", &t, DATETIME_FULL); /* MEL */
@@ -516,6 +545,14 @@ test_rfc5322(void)
     /* Time with period as separator */
     t = UNINIT_TIMET;
     r = time_from_rfc5322(" 3-jan-2009 04.05    -0400", &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, 26);
+    CU_ASSERT_EQUAL(t, 1230969900);
+
+    /* We don't fault the missing + or -.
+     * and, current implementation is that we treat this case as -
+     * fix this to parse fail? Or at least, treat it as positive? */
+    t = UNINIT_TIMET;
+    r = time_from_rfc5322(" 3-jan-2009 04.05     0400", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1230969900);
 
@@ -564,6 +601,45 @@ test_rfc5322(void)
     t = UNINIT_TIMET;
     r = time_from_rfc5322("0100200200300400502989587984579845", &t, DATETIME_FULL);
     CU_ASSERT_EQUAL(r, -1);
+}
+
+/* https://github.com/cyrusimap/cyrus-imapd/issues/2247 and variations */
+static void assert_fws_parsed(const char *ts)
+{
+    time_t t = UNINIT_TIMET;
+    int r = time_from_rfc5322(ts, &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, strlen(ts));
+    CU_ASSERT_EQUAL(t, 1497919778);
+}
+
+static void test_fws_parsed(void)
+{
+    assert_fws_parsed("Tue, 20  Jun  2017 00:49:38 +0000");
+
+    assert_fws_parsed("Tue,20 Jun 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue,\t20 Jun 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue,\t 20 Jun 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue, \t20 Jun 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue,  20 Jun 2017 00:49:38 +0000");
+
+    assert_fws_parsed("Tue, 20\tJun 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue, 20\t Jun 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue, 20 \tJun 2017 00:49:38 +0000");
+
+    assert_fws_parsed("Tue, 20 Jun\t2017 00:49:38 +0000");
+    assert_fws_parsed("Tue, 20 Jun\t 2017 00:49:38 +0000");
+    assert_fws_parsed("Tue, 20 Jun \t2017 00:49:38 +0000");
+
+    assert_fws_parsed("Tue, 20 Jun 2017\t00:49:38 +0000");
+    assert_fws_parsed("Tue, 20 Jun 2017\t 00:49:38 +0000");
+    assert_fws_parsed("Tue, 20 Jun 2017 \t00:49:38 +0000");
+
+    assert_fws_parsed("Tue, 20 Jun 2017 00:49:38+0000");
+    assert_fws_parsed("Tue, 20 Jun 2017 00:49:38\t+0000");
+    assert_fws_parsed("Tue, 20 Jun 2017 00:49:38 \t+0000");
+    assert_fws_parsed("Tue, 20 Jun 2017 00:49:38\t +0000");
+
+    assert_fws_parsed("Tue, 20 Jun 2017 00:49:38-0000");
 }
 
 static void
@@ -753,6 +829,148 @@ test_offsettime_rfc5322_ignore_wday(void)
 
 
 #undef TESTCASE
+}
+
+static void
+assert_rfc5322_result(const char *ts, int want_n, time_t want_t)
+{
+    struct offsettime ot;
+    time_t t = UNINIT_TIMET;
+    int r;
+
+    r = time_from_rfc5322(ts, &t, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, want_n);
+    if (want_n >= 0)
+        CU_ASSERT_EQUAL(t, want_t);
+
+    r = offsettime_from_rfc5322(ts, &ot, DATETIME_FULL);
+    CU_ASSERT_EQUAL(r, want_n);
+}
+
+static void
+assert_rfc5322_fail(const char *ts)
+{
+    assert_rfc5322_result(ts, -1, 0);
+}
+
+static void
+test_rfc5322_fail(void)
+{
+    assert_rfc5322_fail("Tue 20 Jun 2017 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20Jun 2017 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun2017 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, ! Jun 2017 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 020 Jun 2017 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun ! 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 201 00:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 000:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 0:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 !:49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00,49:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:049:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:9:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:!:38 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:038 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:8 +0000");
+    assert_rfc5322_fail("Tue, 20 Jun 2017 00:49:! +0000");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 +!");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 +");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 -!");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38 -");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38+!");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38+");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38-!");
+    assert_rfc5322_fail("Tue, 20 Thu 2017 00:49:38-");
+
+    assert_rfc5322_fail("Tue, 20!Jun 2017 00:49:38");
+    assert_rfc5322_fail("Tue, 20 Jun!2017 00:49:38");
+
+    /* 4294969313 truncated to 32 bits is 2017.
+     * The previous implementation made this mistake, and treated this as 2017 */
+    assert_rfc5322_fail("Tue, 20 Jun 4294969313 00:49:38");
+}
+
+static void
+test_rfc5322_truncated(void)
+{
+    char testcase[] = "Tue, 20 Jun 2017 00:49:38 +0200";
+    char testcase8[] = "Tue, 20 Jun 2017 00:49:38 +0200";
+    size_t len = strlen(testcase);
+
+    assert_rfc5322_result(testcase, len, 1497912578);
+
+    /* "... +020", "... +02", "... +0" are all treated as -0000" */
+    int i = 3;
+    do {
+        testcase[--len] = '\0';
+        assert_rfc5322_result(testcase, len, 1497919778);
+
+        testcase8[len] ^= 0x80;
+        assert_rfc5322_result(testcase8, len, 1497919778);
+        testcase8[len] ^= 0x80;
+    } while (--i);
+
+    /* The trailing + ought to be a parse error, surely? */
+    testcase[--len] = '\0';
+    // assert_rfc5322_fail(testcase);
+    assert_rfc5322_result(testcase, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    // assert_rfc5322_fail(testcase8);
+    assert_rfc5322_result(testcase8, len, 1497919778);
+    testcase8[len] ^= 0x80;
+
+    /* A trailing space is accepted */
+    testcase[--len] = '\0';
+    assert_rfc5322_result(testcase, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_result(testcase8, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    /* HH::MM::SS */
+    testcase[--len] = '\0';
+    assert_rfc5322_result(testcase, len, 1497919778);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_result(testcase8, len, 1497919778);
+    testcase8[len] ^= 0x80;
+
+    /* HH::MM:S is an error, as is HH::MM: */
+    testcase[--len] = '\0';
+    assert_rfc5322_fail(testcase);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_fail(testcase8);
+    testcase8[len] ^= 0x80;
+    testcase[--len] = '\0';
+    assert_rfc5322_fail(testcase);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_fail(testcase8);
+    testcase8[len] ^= 0x80;
+
+    /* HH:MM is valid */
+    testcase[--len] = '\0';
+    assert_rfc5322_result(testcase, len, 1497919740);
+    testcase8[len] ^= 0x80;
+    assert_rfc5322_result(testcase8, len, 1497919740);
+    testcase8[len] ^= 0x80;
+
+    /* Everything shorter than this is a parse failure */
+    do {
+        testcase[--len] = '\0';
+        assert_rfc5322_fail(testcase);
+        testcase8[len] ^= 0x80;
+        assert_rfc5322_fail(testcase8);
+        testcase8[len] ^= 0x80;
+    } while (len);
+}
+
+static void
+test_rfc5322_nonascii(void)
+{
+    assert_rfc5322_fail("\xb8");
+    assert_rfc5322_fail("\xff\xfe\xfd, 01 Jan 1970 00:00:00 +0000");
+    assert_rfc5322_fail("Thu, \xb8" "1 Jan 1970 00:00:00 +0000");
+    assert_rfc5322_fail("Thu, 01 \xb8" "an 1970 00:00:00 +0000");
+    assert_rfc5322_fail("Thu, 01 Jan 1970 \xb8:00:00 +0000");
+    assert_rfc5322_result("Thu, 01 Jan 1970 00:00:00 \xb8", 26, 0);
 }
 
 /* vim: set ft=c: */

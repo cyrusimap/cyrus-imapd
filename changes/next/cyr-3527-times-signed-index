@@ -1,0 +1,27 @@
+Description:
+
+Cyrus now rejects RFC 5322 date-times containing non-ASCII bytes, such as in
+a message's Date header, without reading outside its character tables.
+Previously, such bytes caused out-of-bounds reads while parsing the date.
+
+Reported by interpolwantme.  This is CYR-3527.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

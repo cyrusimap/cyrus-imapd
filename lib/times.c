@@ -43,18 +43,13 @@ static const char rfc5322_separators[256] = {
 
 enum {
     Alpha = 1,              /* Alphabet */
-    UAlpha = 2,             /* Uppercase Alphabet */
-    LAlpha = 4,             /* Lowercase Alphabet */
-    Digit = 8,              /* Digits/Numbers */
-    TZSign = 16,            /* Timezone sign +/- */
+    Digit = 8               /* Digits/Numbers */
 };
 
-static const long rfc5322_usascii_charset[257] = {
-    ['0' + 1 ... '9' + 1] = Digit,
-    ['A' + 1 ... 'Z' + 1] = Alpha | UAlpha,
-    ['a' + 1 ... 'z' + 1] = Alpha | LAlpha,
-    ['+' + 1] = TZSign,
-    ['-' + 1] = TZSign
+static const char rfc5322_usascii_charset[256] = {
+    ['0' ... '9'] = Digit,
+    ['A' ... 'Z'] = Alpha,
+    ['a' ... 'z'] = Alpha
 };
 
 struct rfc5322dtbuf {
@@ -922,12 +917,9 @@ baddate:
  **/
 static inline int get_next_char(struct rfc5322dtbuf *buf)
 {
-    int c;
-
     if (buf->offset < buf->len) {
         buf->offset++;
-        c = buf->str[buf->offset];
-        return c;
+        return (unsigned char) buf->str[buf->offset];
     }
 
     return EOB;
@@ -938,7 +930,7 @@ static inline int get_current_char(struct rfc5322dtbuf *buf)
     int offset = buf->offset;
 
     if (offset < buf->len)
-        return buf->str[offset];
+        return (unsigned char) buf->str[offset];
     else
         return EOB;
 }
@@ -949,15 +941,11 @@ static inline int get_current_char(struct rfc5322dtbuf *buf)
 static int skip_ws(struct rfc5322dtbuf *buf,
                    int skipcomment __attribute__((unused)))
 {
-    int c = buf->str[buf->offset];
+    int c = (unsigned char) buf->str[buf->offset];
 
-    while (c != EOB) {
-        if (rfc5322_special[c]) {
-            c = get_next_char(buf);
-            continue;
-        }
-
-        break;
+    while (rfc5322_special[c]) {
+        c = get_next_char(buf);
+        if (c == EOB) break;
     }
 
     return 1;
@@ -982,7 +970,7 @@ static int get_next_token(struct rfc5322dtbuf *buf, char **str, int *len)
         if (rfc5322_special[c] || rfc5322_separators[c])
             break;
 
-        ch = rfc5322_usascii_charset[c + 1];
+        ch = rfc5322_usascii_charset[c];
         if (!(ch & (Alpha | Digit)))
             break;
 
@@ -1005,37 +993,43 @@ static int get_next_token(struct rfc5322dtbuf *buf, char **str, int *len)
     return ret;
 }
 
-static inline int to_int(char *str, int len)
+static inline int to_int(const char *str, int len, int *result)
 {
-    int i, num = 0;
+    bit64 value;
+    const char *end;
 
-    for (i = 0; i < len; i++) {
-        if (rfc5322_usascii_charset[str[i] + 1] & Digit)
-            num = num * 10 + (str[i] - '0');
-        else {
-            num = -9999;
-            break;
-        }
-    }
+    /* The convention in this file is that these support functions return 0 on failure.
+     * parsenum returns -1 on failure, 0 on success */
+    if (parsenum(str, &end, len, &value) == -1) return 0;
+    /* We need to consume all the characters of the "token", else it wasn't the integer we
+     * expected */
+    if (str + len != end)  return 0;
+    /* We support 5 digit years. And 6. And ... and 11 overflows: */
+    if (value > INT_MAX) return 0;
 
-    return num;
+    *result = value;
+    return 1;
 }
 
-static inline int to_upper(char ch)
-{
-    if (rfc5322_usascii_charset[ch + 1] & LAlpha)
-        ch =  ch - 32;
-
-    return ch;
-}
-
-static inline int to_lower(char ch)
-{
-    if (rfc5322_usascii_charset[ch + 1] & UAlpha)
-        ch = ch + 32;
-
-    return ch;
-}
+/* This code appears to be buggy, because it appears to be conflating return
+ * value of 0 to mean "+0000" (or "UT" or "Z") with 0 to mean "parse failed".
+ * It isn't. RFC 5322 says:
+ *    Other multi-character (usually between 3 and 5) alphabetic time zones
+ *    have been used in Internet messages.  Any such time zone whose
+ *    meaning is not known SHOULD be considered equivalent to "-0000"
+ *    unless there is out-of-band information confirming their meaning.
+ *
+ * However, a tighter reading of "any such" suggests that only unknown
+ * *alphabetic* timezones should be treated as -0000. Implying that sequences of
+ * digits other than length 4 should be parse errors. And, arguably, also
+ * alphanumeric sequences.
+ *
+ * That said, this code isn't able to convey the semantics of "-0000":
+ *    Though "-0000" also indicates Universal Time, it is
+ *    used to indicate that the time was generated on a system that may be
+ *    in a local time zone other than Universal Time and that the date-time
+ *    contains no information about the local time zone.
+ */
 
 static int compute_tzoffset(char *str, int len, int sign)
 {
@@ -1043,7 +1037,9 @@ static int compute_tzoffset(char *str, int len, int sign)
 
     if (len == 1) {         /* Military timezone */
         int ch;
-        ch = to_upper(str[0]);
+        ch = TOUPPER(str[0]);
+        if (ch < 'A')
+            return 0;
         if (ch < 'J')
             return (str[0] - 'A' + 1) * 60;
         if (ch == 'J')
@@ -1057,39 +1053,35 @@ static int compute_tzoffset(char *str, int len, int sign)
     }
 
     if (len == 2 &&
-        to_upper(str[0]) == 'U' &&
-        to_upper(str[1]) == 'T') {         /* Universal Time zone (UT) */
+        TOUPPER(str[0]) == 'U' &&
+        TOUPPER(str[1]) == 'T') {         /* Universal Time zone (UT) */
         return 0;
     }
 
     if (len == 3) {
         const char *p;
 
-        if (to_upper(str[2]) != 'T')
+        if (TOUPPER(str[2]) != 'T')
             return 0;
 
-        p = strchr("AECMPYHB", to_upper(str[0]));
+        p = strchr("AECMPYHB", TOUPPER(str[0]));
         if (!p)
             return 0;
         offset = (strlen(p) - 12) *  60;
 
-        if (to_upper(str[1]) == 'D')
+        if (TOUPPER(str[1]) == 'D')
             return offset + 60;
-        if (to_upper(str[1]) == 'S')
+        if (TOUPPER(str[1]) == 'S')
             return offset;
     }
 
     if (len == 4) {         /* The number timezone offset */
-        int i;
+        int hours;
+        int minutes;
 
-        for (i = 0; i < len; i++) {
-            if (!(rfc5322_usascii_charset[str[i] + 1] & Digit))
-                return 0;
-        }
+        if (!to_int(str, 2, &hours) || !to_int(str + 2, 2, &minutes)) return 0;
 
-        offset = ((str[0] - '0') * 10 + (str[1] - '0')) * 60 +
-            (str[2] - '0') * 10 +
-            (str[3] - '0');
+        offset = hours * 60 + minutes;
 
         return (sign == '+') ? offset : -offset;
     }
@@ -1130,7 +1122,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (c == EOB)
         goto failed;
 
-    ch = rfc5322_usascii_charset[c + 1];
+    ch = rfc5322_usascii_charset[c];
     if (ch & Alpha) {       /* Most likely a weekday at the start. */
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
@@ -1162,28 +1154,29 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 
-    if (len < 1 || len > 2 ||
-        !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
-        goto failed;
-
-    tm->tm_mday = to_int(str_token, len);
-    if (tm->tm_mday == -9999)
+    if (len < 1 || len > 2 || !to_int(str_token, len, &tm->tm_mday))
         goto failed;
 
     /* the separator here is either '-' or FWS */
-    c = get_next_char(buf);
-    if (rfc5322_special[c])
+    c = get_current_char(buf);
+    if (c == '-') {
+        /* consume the '-' */
+        get_next_char(buf);
+    }
+    else if (c != EOB && rfc5322_special[c]) {
+        /* consume the whitespace */
         skip_ws(buf, 0);
-
-    /* month name */
-    if (!get_next_token(buf, &str_token, &len) ||
-        len != 3 ||
-        !(rfc5322_usascii_charset[str_token[0] + 1] & Alpha))
+    }
+    else
         goto failed;
 
-    str_token[0] = to_upper(str_token[0]);
-    str_token[1] = to_lower(str_token[1]);
-    str_token[2] = to_lower(str_token[2]);
+    /* month name */
+    if (!get_next_token(buf, &str_token, &len) || len != 3)
+        goto failed;
+
+    str_token[0] = TOUPPER(str_token[0]);
+    str_token[1] = TOLOWER(str_token[1]);
+    str_token[2] = TOLOWER(str_token[2]);
     for (i = 0; i < 12; i++) {
         if (memcmp(monthname[i], str_token, 3) == 0) {
             tm->tm_mon = i;
@@ -1194,16 +1187,23 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         goto failed;
 
     /* the separator here is either '-' or FWS */
-    c = get_next_char(buf);
-    if (rfc5322_special[c])
+    c = get_current_char(buf);
+    if (c == '-') {
+        /* consume the '-' */
+        get_next_char(buf);
+    }
+    else if (c != EOB && rfc5322_special[c]) {
+        /* consume the whitespace */
         skip_ws(buf, 0);
+    }
+    else
+        goto failed;
 
     /* year 2, 4 or >4 digits */
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 
-    tm->tm_year = to_int(str_token, len);
-    if (tm->tm_year == -9999)
+    if (!to_int(str_token, len, &tm->tm_year))
         goto failed;
 
     if (len == 2) {
@@ -1227,12 +1227,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 
-    if (len < 1 || len > 2 ||
-        !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
-        goto failed;
-
-    tm->tm_hour = to_int(str_token, len);
-    if (tm->tm_hour == -9999)
+    if (len != 2 || !to_int(str_token, len, &tm->tm_hour))
         goto failed;
 
     /* minutes */
@@ -1245,12 +1240,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
     if (!get_next_token(buf, &str_token, &len))
         goto failed;
 
-    if (len < 1 || len > 2 ||
-        !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
-        goto failed;
-
-    tm->tm_min = to_int(str_token, len);
-    if (tm->tm_min == -9999)
+    if (len != 2 || !to_int(str_token, len, &tm->tm_min))
         goto failed;
 
 
@@ -1262,12 +1252,7 @@ static int tokenise_str_and_create_tm(struct rfc5322dtbuf *buf, struct tm *tm,
         if (!get_next_token(buf, &str_token, &len))
             goto failed;
 
-        if (len < 1 || len > 2 ||
-            !(rfc5322_usascii_charset[str_token[0] + 1] & Digit))
-            goto failed;
-
-        tm->tm_sec = to_int(str_token, len);
-        if (tm->tm_sec == -9999)
+        if (len != 2 || !to_int(str_token, len, &tm->tm_sec))
             goto failed;
 
     }
