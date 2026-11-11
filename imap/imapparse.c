@@ -1400,16 +1400,16 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c <= EOF) goto missingarg;
-            if ((arg.s[0] != 'A' && arg.s[0] != 'T') ||
-                !conversation_id_decode(&cid, arg.s+1)) {
-                prot_printf(pout, "%s BAD Invalid threadid in Search command\r\n",
-                            base->tag);
-                if (c != EOF) prot_ungetc(c, pin);
-                return EOF;
+            if ((arg.s[0] == 'A' || arg.s[0] == 'T') &&
+                conversation_id_decode(&cid, arg.s+1) && cid) {
+                e = search_expr_new(parent, SEOP_MATCH);
+                e->attr = search_attr_find("cid");
+                e->value.u = cid;
             }
-            e = search_expr_new(parent, SEOP_MATCH);
-            e->attr = search_attr_find("cid");
-            e->value.u = cid;
+            else {
+                /* never assigned (cid 0 is "no thread"): matches nothing */
+                search_expr_new(parent, SEOP_FALSE);
+            }
 
             base->client_behavior_mask |= CB_OBJECTID;
         }

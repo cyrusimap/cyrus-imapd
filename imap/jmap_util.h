@@ -203,12 +203,27 @@ extern void jmap_set_mailboxid(struct conversations_state *cstate,
                                const mbentry_t *mbentry, char *mboxid);
 
 /**
+ * ACCOUNTID of mailboxes that no user owns.  An ACL identifier, so never
+ * a userid, which keeps it distinct from every user's ACCOUNTID.
+ */
+#define OBJECTID_SHARED_ACCOUNTID "anyone"
+
+/**
+ * Fill the OBJECTID+ ACCOUNTID of a mailbox: its owner's userid, or
+ * OBJECTID_SHARED_ACCOUNTID for a shared mailbox.
+ *
+ * @param mboxname   internal name of the mailbox
+ * @param accountid  receives the ACCOUNTID
+ */
+extern void jmap_mailbox_accountid(const char *mboxname,
+                                   struct buf *accountid);
+
+/**
  * Fill the OBJECTID identifiers of a mailbox from its mbentry.
  *
  * @param mbentry    the mailbox
  * @param mailboxid  receives the MAILBOXID
- * @param accountid  receives the ACCOUNTID, or is left empty for a mailbox
- *                   with no owning user (a shared mailbox)
+ * @param accountid  receives the ACCOUNTID, as jmap_mailbox_accountid()
  *
  * Opens the owner's conversations db if it isn't already open.  Every
  * place that reports a mailbox's identifiers must use this, so that LIST,

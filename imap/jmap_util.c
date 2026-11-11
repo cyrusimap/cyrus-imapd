@@ -1439,16 +1439,25 @@ EXPORTED void jmap_set_mailboxid(struct conversations_state *cstate,
             JMAP_MAX_MAILBOXID_SIZE);
 }
 
+EXPORTED void jmap_mailbox_accountid(const char *mboxname,
+                                    struct buf *accountid)
+{
+    /* userid as ACCOUNTID - see prot_print_objectids() */
+    char *userid = mboxname_to_userid(mboxname);
+
+    buf_setcstr(accountid, userid ? userid : OBJECTID_SHARED_ACCOUNTID);
+    free(userid);
+}
+
 EXPORTED void jmap_get_mailbox_objectids(const mbentry_t *mbentry,
                                          struct buf *mailboxid,
                                          struct buf *accountid)
 {
-    /* userid as ACCOUNTID - see prot_print_objectids() */
     char *userid = mboxname_to_userid(mbentry->name);
 
-    buf_reset(accountid);
+    jmap_mailbox_accountid(mbentry->name, accountid);
     if (!userid) {
-        /* shared mailbox: no ACCOUNTID, uniqueid as MAILBOXID */
+        /* shared mailbox: uniqueid as MAILBOXID */
         buf_setcstr(mailboxid, mbentry->uniqueid);
         return;
     }
@@ -1470,7 +1479,6 @@ EXPORTED void jmap_get_mailbox_objectids(const mbentry_t *mbentry,
     if (mine) {
         conversations_abort(&mine);
     }
-    buf_setcstr(accountid, userid);
     free(userid);
 }
 

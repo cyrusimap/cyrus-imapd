@@ -814,9 +814,9 @@ EXPORTED modseq_t index_highestmodseq(struct index_state *state)
     return state->highestmodseq;
 }
 
-/* Callers pass the mailbox owner's userid as ACCOUNTID.  That is not yet a
- * legal ObjectID: the draft allows only 1*255 of a-z A-Z 0-9 _ - , so any
- * userid carrying a domain or a dot needs mapping to something else first.
+/* Callers pass ACCOUNTID from jmap_mailbox_accountid(): the owner's userid.
+ * That is not yet a legal ObjectID: the draft allows only 1*255 of a-z A-Z
+ * 0-9 _ - , so any userid carrying a domain or a dot needs mapping first.
  */
 EXPORTED void prot_print_objectids(struct protstream *pout,
                                    bool compound, const char *sep,
@@ -866,11 +866,11 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
                 state->highestmodseq);
 
     /* RFC 8474 / draft-ietf-mailmaint-imap-objectid-bis */
-    /* userid as ACCOUNTID - see prot_print_objectids() */
-    char *accountid = mboxname_to_userid(state->mboxname);
+    struct buf accountid = BUF_INITIALIZER;
+    jmap_mailbox_accountid(state->mboxname, &accountid);
     prot_print_objectids(state->out, !!(client_capa & ENABLED_OBJECTIDPLUS),
-                         "*", state->mailboxid, accountid);
-    free(accountid);
+                         "*", state->mailboxid, buf_cstring(&accountid));
+    buf_free(&accountid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
