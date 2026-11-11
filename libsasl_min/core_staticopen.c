@@ -5,6 +5,8 @@
 #include <config.h>
 
 #include "libsasl_min/core_saslint.h"
+
+#include "libsasl_min/canonuser_internal.h"
 #include "libsasl_min/mech_anonymous.h"
 #include "libsasl_min/mech_external.h"
 #include "libsasl_min/mech_plain.h"
@@ -31,7 +33,7 @@ static const size_t n_auxprop_plugins = sizeof(auxprop_plugins)
 
 static const struct plugin canonuser_plugins[] =
 {
-    /* none by default */
+    { "INTERNAL",   { .canonuser_init_fn = internal_canonuser_init } },
 };
 static const size_t n_canonuser_plugins = sizeof(canonuser_plugins)
                                           / sizeof(canonuser_plugins[0]);

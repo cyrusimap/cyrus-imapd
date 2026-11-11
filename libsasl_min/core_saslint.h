@@ -463,11 +463,6 @@ extern int _sasl_auxprop_lookup(sasl_server_params_t *sparams,
  * canonusr.c
  */
 void _sasl_canonuser_free(void);
-extern int internal_canonuser_init(const sasl_utils_t *utils,
-                                   int max_version,
-                                   int *out_version,
-                                   sasl_canonuser_plug_t **plug,
-                                   const char *plugname);
 extern int _sasl_canon_user(sasl_conn_t *conn,
                             const char *user,
                             unsigned ulen,
