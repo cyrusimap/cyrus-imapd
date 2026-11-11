@@ -366,6 +366,10 @@ if (my $overrides = $opt->define) {
 }
 
 push @names, map { split /\s+/, $_ } @ARGV;
+if (grep { m/_slow$/ } @names) {
+    # slow tests requested by name, don't skip them!
+    $skip_slow = 0;
+}
 
 my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
 map { $cassini->override(@$_); } @cassini_overrides;
@@ -392,6 +396,10 @@ if ($want_rerun) {
     }
 
     if (scalar @failed) {
+        if (grep { m/_slow$/ } @failed) {
+            # slow tests failed, make sure we don't skip them on rerun!
+            $skip_slow = 0;
+        }
         if ($want_rerun > 1) {
             # rerun whole suites for failed tests
             @failed = uniq sort map { s/\..*$//r } @failed;
