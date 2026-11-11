@@ -8480,7 +8480,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         struct mboxevent *mboxevent = NULL;
         uint32_t uidvalidity = mbentry ? mbentry->uidvalidity : 0;
 
-        construct_hash_table(&sharedmboxes_by_username, 64, 0);
+        construct_hash_table(&sharedmboxes_by_username, 0, 0);
 
         /* don't send rename notification if we only change the partition */
         if (strcmp(oldmailboxname, newmailboxname))

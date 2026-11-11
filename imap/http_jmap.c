@@ -733,7 +733,7 @@ static int jmap_download(struct transaction_t *txn)
 
     /* Initialize ACL mailbox cache for findblob */
     hash_table mbstates = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mbstates, 64, 0);
+    construct_hash_table(&mbstates, 0, 0);
     req.mbstates = &mbstates;
 
     blobid = xstrndup(blobbase, bloblen);

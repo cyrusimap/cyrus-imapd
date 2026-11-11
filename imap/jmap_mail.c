@@ -8232,7 +8232,7 @@ static void _email_keywords_init(struct email_keywords *keywords,
                                  struct seen *seendb,
                                  hash_table *seenseq_by_mbox_id)
 {
-    construct_hash_table(&keywords->counts, 64, 0);
+    construct_hash_table(&keywords->counts, 0, 0);
     keywords->userid = userid;
     keywords->seendb = seendb;
     keywords->seenseq_by_mbox_id = seenseq_by_mbox_id;
@@ -8763,8 +8763,7 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
             if (*headersptr) return 0;
         }
         else {
-            msg->_headers_by_part_id = xzmalloc(sizeof(hash_table));
-            construct_hash_table(msg->_headers_by_part_id, 64, 0);
+            msg->_headers_by_part_id = malloc_hash_table(0);
         }
     }
 

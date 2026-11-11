@@ -609,9 +609,9 @@ HIDDEN int jmap_api(struct transaction_t *txn,
     }
 
     /* Set up request-internal state */
-    construct_hash_table(&capabilities_by_accountid, 8, 0);
-    construct_hash_table(&inmemory_blobs, 64, 0);
-    construct_hash_table(&mbstates, 64, 0);
+    construct_hash_table(&capabilities_by_accountid, 0, 0);
+    construct_hash_table(&inmemory_blobs, 0, 0);
+    construct_hash_table(&mbstates, 0, 0);
     construct_hash_table(&created_ids, num_created_ids+1, 0);
 
     /* Parse client-supplied creation ids */
@@ -1032,7 +1032,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
 
     /* Determine account capabilities */
     hash_table mboxrights = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mboxrights, 64, 0);
+    construct_hash_table(&mboxrights, 0, 0);
     json_t *jaccount;
     const char *accountid;
     json_object_foreach(accounts, accountid, jaccount) {
@@ -3459,7 +3459,7 @@ static int set_upload_rights(const char *accountid)
     struct shared_rock srock = { &user_access, accountid, mailbox_name(mbox) };
 
     /* build the sum of the shared rights for each each user */
-    construct_hash_table(&user_access, 64, 0);
+    construct_hash_table(&user_access, 0, 0);
     mboxlist_usermboxtree(accountid, NULL, &sharedrights_cb, &srock, 0);
 
     /* create the ACL for the upload folder */
@@ -3497,7 +3497,7 @@ HIDDEN int jmap_set_sharewith(struct mailbox *mbox,
 
     if (json_is_null(shareWith)) overwrite = 1;
 
-    construct_hash_table(&user_access, 64, 0);
+    construct_hash_table(&user_access, 0, 0);
 
     /* parse the existing ACL and calculate the types of shares */
     char *nextid = NULL;

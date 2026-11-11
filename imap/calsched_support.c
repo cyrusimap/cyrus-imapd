@@ -198,17 +198,14 @@ EXPORTED void sched_address_cache_begin(void)
 {
     if (addrid_cache) return;
 
-    addrid_cache = xzmalloc(sizeof(hash_table));
-    construct_hash_table(addrid_cache, 64, 0);
+    addrid_cache = malloc_hash_table(0);
 }
 
 EXPORTED void sched_address_cache_end(void)
 {
     if (!addrid_cache) return;
 
-    free_hash_table(addrid_cache, &free);
-    free(addrid_cache);
-    addrid_cache = NULL;
+    release_hash_table(&addrid_cache, &free);
 }
 
 static char *sched_address_userid(const char *addr)
