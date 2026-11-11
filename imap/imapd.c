@@ -4723,6 +4723,55 @@ struct select_objectid {
     char *accountid;    /* ACCOUNTID for scoping, or NULL */
 };
 
+/* The mailbox an OBJECTID parameter names, or NULL to select by name.
+ * Only a mailbox that SELECT by name would open matches, so the outcome
+ * never reveals whether identifiers the client can't use exist. */
+static mbentry_t *select_by_objectid(const struct select_objectid *objid,
+                                     int allowdeleted)
+{
+    if (!objid->mailboxid) return NULL;
+
+    /* without ACCOUNTID, the personal namespace's account */
+    const char *accountid = objid->accountid ? objid->accountid : imapd_userid;
+    mbentry_t *mbentry = NULL;
+
+    if (mboxlist_lookup_by_jmapid(accountid, objid->mailboxid,
+                                  &mbentry, NULL) &&
+        mboxlist_lookup_by_uniqueid(objid->mailboxid, &mbentry, NULL)) {
+        return NULL;
+    }
+
+    bool match = !(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE));
+
+    if (match) {
+        /* must be the identifiers this server reports for the mailbox */
+        struct buf mailboxid = BUF_INITIALIZER;
+        struct buf found_accountid = BUF_INITIALIZER;
+
+        jmap_get_mailbox_objectids(mbentry, &mailboxid, &found_accountid);
+        match = !strcmp(buf_cstring(&mailboxid), objid->mailboxid) &&
+                !strcmp(buf_cstring(&found_accountid), accountid);
+        buf_free(&mailboxid);
+        buf_free(&found_accountid);
+    }
+
+    if (match && mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL &&
+        !imapd_userisadmin && !imapd_want_dav()) {
+        match = false;
+    }
+    if (match && !imapd_userisadmin && !allowdeleted &&
+        mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        match = false;
+    }
+    if (match &&
+        !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ)) {
+        match = false;
+    }
+
+    if (!match) mboxlist_entry_free(&mbentry);
+    return mbentry;
+}
+
 static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                                struct index_init *init,
                                struct select_objectid *objid)
@@ -4939,37 +4988,15 @@ static void cmd_select(char *tag, char *cmd, char *name)
         name = normalize_mboxname(name, NULL);
     }
 
-    /* ID-based mailbox selection: try to find mailbox by MAILBOXID,
-     * optionally scoped by ACCOUNTID */
     char *intname = NULL;
-    if (objid.mailboxid) {
-        if (mboxlist_lookup_by_jmapid(imapd_userid, objid.mailboxid,
-                                      &mbentry, NULL) == 0
-            || mboxlist_lookup_by_uniqueid(objid.mailboxid,
-                                           &mbentry, NULL) == 0) {
-            int accountid_ok = 1;
-            if (objid.accountid) {
-                char *found_userid = mboxname_to_userid(mbentry->name);
-                if (found_userid) {
-                    accountid_ok = !strcmp(found_userid, objid.accountid);
-                    free(found_userid);
-                }
-                else {
-                    accountid_ok = 0;
-                }
-            }
-            if (accountid_ok) {
-                intname = xstrdup(mbentry->name);
-            }
-            else {
-                mboxlist_entry_free(&mbentry);
-            }
-        }
-    }
+    mbentry = select_by_objectid(&objid, allowdeleted);
     free(objid.mailboxid);
     free(objid.accountid);
 
-    if (!mbentry) {
+    if (mbentry) {
+        intname = xstrdup(mbentry->name);
+    }
+    else {
         intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
         r = mlookup(tag, name, intname, &mbentry);
         if (r == IMAP_MAILBOX_MOVED) {
@@ -7535,10 +7562,11 @@ localcreate:
         list_data(&listargs);
     }
 
-    /* userid as ACCOUNTID - see prot_print_objectids() */
-    const char *userid = mbname_userid(mbname);
+    struct buf accountid = BUF_INITIALIZER;
+    jmap_mailbox_accountid(mbname_intname(mbname), &accountid);
     prot_print_objectids(imapd_out, !!(client_capa & CAPA_OBJECTIDPLUS),
-                         tag, mailboxid, userid);
+                         tag, mailboxid, buf_cstring(&accountid));
+    buf_free(&accountid);
 
     imapd_check(NULL, 0);
 
@@ -8495,14 +8523,14 @@ respond:
             int r2 = mboxlist_lookup(newmailboxname, &renamedmbentry, NULL);
             if (!r2 && renamedmbentry) {
                 char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
-                /* userid as ACCOUNTID - see prot_print_objectids() */
-                char *userid = mboxname_to_userid(newmailboxname);
+                struct buf accountid = BUF_INITIALIZER;
+                jmap_mailbox_accountid(newmailboxname, &accountid);
                 struct conversations_state *cstate =
                     conversations_get_user(imapd_userid);
                 jmap_set_mailboxid(cstate, renamedmbentry, mailboxid);
                 prot_print_objectids(imapd_out, true /*compound*/,
-                                     tag, mailboxid, userid);
-                free(userid);
+                                     tag, mailboxid, buf_cstring(&accountid));
+                buf_free(&accountid);
                 mboxlist_entry_free(&renamedmbentry);
             }
             else {
@@ -13530,10 +13558,8 @@ static void list_objectid_item(const mbentry_t *mbentry, struct buf *item)
     struct buf accountid = BUF_INITIALIZER;
     jmap_get_mailbox_objectids(mbentry, &mailboxid, &accountid);
 
-    if (buf_len(&accountid)) {
-        buf_printf(item, "ACCOUNTID %s ", buf_cstring(&accountid));
-    }
-    buf_printf(item, "MAILBOXID %s", buf_cstring(&mailboxid));
+    buf_printf(item, "ACCOUNTID %s MAILBOXID %s",
+               buf_cstring(&accountid), buf_cstring(&mailboxid));
     buf_free(&mailboxid);
     buf_free(&accountid);
 }
