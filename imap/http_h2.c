@@ -819,9 +819,8 @@ static nghttp2_ssize data_source_read_cb(nghttp2_session *sess __attribute__((un
 
 static int resp_body_chunk(struct transaction_t *txn,
                            const char *data, unsigned datalen,
-                           int last_chunk, MD5_CTX *md5ctx)
+                           int last_chunk)
 {
-    static unsigned char md5[MD5_DIGEST_LENGTH];
     struct http2_context *ctx = (struct http2_context *) txn->conn->sess_ctx;
     struct http2_stream *strm = (struct http2_stream *) txn->strm_ctx;
 
@@ -852,15 +851,6 @@ static int resp_body_chunk(struct transaction_t *txn,
                             buf_base(logbuf), buf_len(logbuf));
         WRITEV_ADD_TO_IOVEC(iov, niov, data, datalen);
         retry_writev(txn->conn->logfd, iov, niov);
-    }
-
-    if (txn->flags.te && (txn->flags.trailer & TRAILER_CMD5)) {
-        if (!last_chunk) {
-            if (datalen) MD5Update(md5ctx, data, datalen);
-        }
-        else {
-            MD5Final(md5, md5ctx);
-        }
     }
 
     /* Our own copy -- see struct http2_stream's body comment for why we
@@ -920,7 +910,9 @@ static int resp_body_chunk(struct transaction_t *txn,
 
     if (last_chunk && (txn->flags.trailer & ~TRAILER_PROXY)) {
         begin_resp_headers(txn, 0);
-        if (txn->flags.trailer & TRAILER_CMD5) content_md5_hdr(txn, md5);
+        if (txn->flags.trailer & (TRAILER_DIGEST | TRAILER_UNENCODED)) {
+            digest_hdrs(txn);
+        }
         if ((txn->flags.trailer & TRAILER_CTAG) && txn->resp_body.ctag) {
             simple_hdr(txn, "CTag", "%s", txn->resp_body.ctag);
         }
