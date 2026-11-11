@@ -76,12 +76,14 @@ sub reason_to_skip
         headers => [ 'content-type' => 'text/calendar' ],
         body    => $ical,
     );
-    # $res->{status}, $res->{headers} (hashref), $res->{body}
+    # $res->{status}, $res->{headers} (hashref), $res->{body},
+    # $res->{trailers} (hashref)
 
 Performs a single HTTP/2 request over cleartext on a new connection to the
 instance's C<http> service, and returns the response as a hashref with
 C<status> (the C<:status> pseudo-header, an integer), C<headers> (a hashref of
-the remaining response headers), and C<body> (the response body).
+the remaining response headers), C<body> (the response body), and C<trailers>
+(a hashref of the response trailer fields, empty if there were none).
 
 Options:
 
@@ -108,6 +110,12 @@ the body is delimited by end-of-stream, as HTTP/2 allows.
 
 HTTP Basic credentials to send.  Default to the C<cassandane> test user; pass
 C<< username => undef >> for no auth.
+
+=item C<initial_window>
+
+the client's SETTINGS_INITIAL_WINDOW_SIZE, which limits how much response data
+the server may send on the stream before the client acknowledges it.  A small
+value forces the server to hold back response data under flow control.
 
 =item C<timeout>
 
@@ -145,10 +153,15 @@ sub http2_request
     $req_log .= "$_->[0]: $_->[1]\n" for pairs @req_headers;
     wire_sent("$host:$port", $req_log . "\n" . ($args{body} // ''));
 
-    my $res = { status => undef, headers => {}, body => '' };
+    my $res = { status => undef, headers => {}, body => '', trailers => {} };
     my $done;
 
-    my $client = Protocol::HTTP2::Client->new;
+    my %settings;
+    $settings{ Protocol::HTTP2::Constants::SETTINGS_INITIAL_WINDOW_SIZE() }
+        = $args{initial_window}
+        if defined $args{initial_window};
+
+    my $client = Protocol::HTTP2::Client->new(settings => \%settings);
     $client->request(
         ':scheme'    => 'http',
         ':authority' => "$host:$port",
@@ -156,6 +169,13 @@ sub http2_request
         ':path'      => $path,
         headers      => \@req_headers,
         (defined $args{body} ? (data => $args{body}) : ()),
+        on_headers   => sub {
+            my ($block) = @_;
+            my %h = @$block;
+            # A block without :status is the trailer section
+            $res->{trailers} = \%h unless exists $h{':status'};
+            return 1;
+        },
         on_done      => sub {
             my ($resp_headers, $resp_body) = @_;
             my @h = @{ $resp_headers // [] };
@@ -203,7 +223,9 @@ sub http2_request
         my $res_log = 'HTTP/2 ' . ($res->{status} // '(no :status)') . "\n";
         $res_log .= "$_: $res->{headers}{$_}\n"
             for sort keys %{ $res->{headers} };
-        wire_recv("$host:$port", $res_log . "\n" . $res->{body});
+        my $trailer_log = join '',
+            map { "$_: $res->{trailers}{$_}\n" } sort keys %{ $res->{trailers} };
+        wire_recv("$host:$port", $res_log . "\n" . $res->{body} . $trailer_log);
     }
 
     # We die only when the peer never produced a terminal response event: a

@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+use Digest::MD5 qw(md5_base64);
+
+# A chunked response's trailers must follow all of its body, even when flow
+# control holds part of the body back.  With httpcontentmd5 enabled, GET of an
+# addressbook is a chunked response with a Content-MD5 trailer; a small
+# client window keeps most of that body queued at the server.
+sub test_trailer_after_held_back_body
+    :needs_dependency_nghttp2 :NoStartInstances
+    ($self)
+{
+    $self->config_set(httpcontentmd5 => 'yes',
+                      httpmodules => 'caldav carddav');
+    $self->_start_instances();
+    $self->_setup_http_service_objects();
+
+    my $carddav = $self->{carddav};
+    for my $i (1..20) {
+        my $card = "BEGIN:VCARD\r\nVERSION:3.0\r\nUID:card-$i\r\n"
+                 . "FN:Person $i\r\nN:$i;Person;;;\r\n"
+                 . "NOTE:" . ('x' x 200) . "\r\nEND:VCARD\r\n";
+        $carddav->Request('PUT', "Default/card-$i.vcf", $card,
+                          'Content-Type' => 'text/vcard');
+    }
+
+    xlog $self, "GET the addressbook over HTTP/2 with a 1 KiB window";
+    my $res = $self->http2_request(
+        method         => 'GET',
+        path           => '/dav/addressbooks/user/cassandane/Default/',
+        initial_window => 1024,
+    );
+    $self->assert_num_equals(200, $res->{status});
+    $self->assert(length $res->{body} > 1024);
+
+    my $ncards = () = $res->{body} =~ /^END:VCARD\r$/mg;
+    $self->assert_num_equals(20, $ncards);
+
+    $self->assert_cmp_deeply(
+        { 'content-md5' => md5_base64($res->{body}) . '==' },
+        $res->{trailers});
+}
