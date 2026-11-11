@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+use IO::Socket::IP;
+use MIME::Base64 qw(encode_base64);
+
+# The shared #sieve mailbox of global scripts replicates like a user's,
+# and on the replica, once it serves, a shared mailbox's sieve annotation
+# runs its script.
+sub test_sieve_replication_global
+    :needs_component_sieve :want_service_sieve :want_deliver :NoAltNameSpace
+    :NoReplicaonly
+    ($self)
+{
+    xlog $self, "store a global script on the master over ManageSieve";
+    my $srv = $self->{instance}->get_service('sieve');
+    my $sock = IO::Socket::IP->new(PeerHost => $srv->host(),
+                                   PeerPort => $srv->port())
+        or die "Can't connect to timsieved: $@";
+    my sub command ($cmd) {
+        $sock->print($cmd);
+        my $res = '';
+        while (defined(my $line = $sock->getline())) {
+            $res .= $line;
+            last if $line =~ m/^(OK|NO|BYE)\b/;
+        }
+        return $res;
+    }
+
+    command('');    # greeting
+    my $plain = encode_base64("\0admin\0secret", '');
+    $self->assert_matches(qr/^OK/m,
+                          command("AUTHENTICATE \"PLAIN\" \"$plain\"\r\n"));
+
+    my $script = qq{require "imap4flags";\r\naddflag "\\\\flagged";\r\n};
+    my $slen = length($script);
+    $self->assert_matches(qr/^OK/m,
+                          command("PUTSCRIPT \"gscript\" {$slen+}\r\n$script\r\n"));
+    $sock->close();
+
+    xlog $self, "replicate the #sieve mailbox";
+    $self->run_replication(mailbox => '#sieve');
+
+    my $replicatalk = $self->{replica_adminstore}->get_client();
+    my $acl = $replicatalk->getacl('#sieve');
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_cmp_deeply([], $acl);
+
+    xlog $self, "a shared mailbox on the replica runs the replicated script";
+    my $mboxname = 'shared-mailbox';
+    $replicatalk->create($mboxname);
+    $replicatalk->setacl($mboxname, anyone => 'lrswp');
+    $replicatalk->setmetadata($mboxname,
+                              '/shared/vendor/cmu/cyrus-imapd/sieve', 'gscript');
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+
+    $self->{replica}->deliver($self->{gen}->generate(subject => "Test Message"),
+                              users => [ "" ], folder => $mboxname);
+
+    $replicatalk->examine($mboxname);
+    my $res = $replicatalk->fetch('1:*', '(FLAGS)');
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ flags => superbagof('\\Flagged') }) },
+        $res);
+}
