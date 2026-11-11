@@ -3852,16 +3852,15 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
         sepchar = ' ';
     }
     if ((fetchitems & FETCH_THREADID)) {
-        char threadid[JMAP_THREADID_SIZE];
-
         if (!record.cid) {
-            strcpy(threadid, "NIL");
+            prot_printf(state->out, "%cTHREADID NIL", sepchar);
         }
         else {
-            jmap_set_threadid(convstate, record.cid, threadid);
-        }
+            char threadid[JMAP_THREADID_SIZE];
 
-        prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
+            jmap_set_threadid(convstate, record.cid, threadid);
+            prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
+        }
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {

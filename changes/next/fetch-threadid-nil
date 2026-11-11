@@ -1,0 +1,27 @@
+Description:
+
+FETCH THREADID now returns ``THREADID NIL`` for a message that has no
+conversation, such as every message on a server without ``conversations:
+yes``, as RFC 8474 requires.  It used to return ``THREADID (NIL)``, which a
+client following the grammar reads as the thread id "NIL", shared by every
+such message.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
