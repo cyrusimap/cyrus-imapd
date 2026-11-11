@@ -1,0 +1,29 @@
+Description:
+
+JMAP now has Identity/set (RFC 8621 Section 6.3), answering as the stub
+Identity it serves allows: the user's one Identity cannot be created,
+changed or destroyed.  A create is forbidden; an update that changes a
+mutable property is forbidden, one that changes an immutable or server-set
+property is invalidProperties, and one that changes nothing succeeds; a
+destroy is forbidden (its mayDelete is false); any other id is notFound.
+Until now Identity/set was an unknownMethod error.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

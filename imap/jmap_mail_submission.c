@@ -45,6 +45,7 @@ static int jmap_emailsubmission_query(jmap_req_t *req);
 static int jmap_emailsubmission_querychanges(jmap_req_t *req);
 static int jmap_identity_get(jmap_req_t *req);
 static int jmap_identity_changes(jmap_req_t *req);
+static int jmap_identity_set(jmap_req_t *req);
 
 // clang-format off
 static jmap_method_t jmap_emailsubmission_methods_standard[] = {
@@ -89,6 +90,12 @@ static jmap_method_t jmap_emailsubmission_methods_standard[] = {
         JMAP_URN_SUBMISSION,
         &jmap_identity_changes,
         /*flags*/0
+    },
+    {
+        "Identity/set",
+        JMAP_URN_SUBMISSION,
+        &jmap_identity_set,
+        JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -2732,5 +2739,136 @@ static int jmap_identity_changes(jmap_req_t *req)
 done:
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
+    return 0;
+}
+
+/* Identity/set method
+ *
+ * The Cyrus Identity is a stub: one Identity, the user's own, and nothing
+ * about it can be changed (its state is always "0").  So this is a /set
+ * that refuses every change, the way RFC 8620 Section 5.3 says to:
+ *  - create: forbidden (RFC 8621 Section 6.3 lets a server not offer it)
+ *  - update of the Identity: an immutable or server-set property changed
+ *    is invalidProperties; any other change is forbidden; an update that
+ *    changes nothing (values as they already are) succeeds
+ *  - destroy of the Identity: forbidden, as its mayDelete says
+ *  - any other id: notFound
+ */
+
+/* The Identity as Identity/get gives it, with RFC 8621 Section 6's
+ * defaults for the properties it leaves out */
+static json_t *_identity_current(jmap_req_t *req)
+{
+    return json_pack("{s:s s:s s:s s:n s:n s:s s:s s:b}",
+                     "id", req->userid,
+                     "name", "",
+                     "email", strchr(req->userid, '@') ? req->userid : "",
+                     "replyTo",
+                     "bcc",
+                     "textSignature", "",
+                     "htmlSignature", "",
+                     "mayDelete", 0);
+}
+
+/* Whether two Identity objects are the same, a null member being the
+ * same as an absent one */
+static int _identity_same(json_t *a, json_t *b)
+{
+    json_t *x = json_deep_copy(a), *y = json_deep_copy(b);
+    const char *key;
+    json_t *val;
+    void *tmp;
+    json_object_foreach_safe(x, tmp, key, val) {
+        if (json_is_null(val)) json_object_del(x, key);
+    }
+    json_object_foreach_safe(y, tmp, key, val) {
+        if (json_is_null(val)) json_object_del(y, key);
+    }
+    int same = json_equal(x, y);
+    json_decref(x);
+    json_decref(y);
+    return same;
+}
+
+static int jmap_identity_set(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    struct jmap_set set = JMAP_SET_INITIALIZER;
+    json_t *err = NULL;
+    const char *id;
+    json_t *arg;
+    size_t i;
+
+    jmap_set_parse(req, &parser, &identity_props, NULL, NULL, &set, &err);
+    if (err) {
+        jmap_error(req, err);
+        goto done;
+    }
+
+    set.old_state = xstrdup("0");
+    if (set.if_in_state && strcmp(set.if_in_state, set.old_state)) {
+        jmap_error(req, json_pack("{s:s}", "type", "stateMismatch"));
+        goto done;
+    }
+
+    json_object_foreach(set.create, id, arg) {
+        json_object_set_new(set.not_created, id,
+                json_pack("{s:s s:s}", "type", "forbidden",
+                          "description",
+                          "Identities cannot be created on this server"));
+    }
+
+    json_object_foreach(set.update, id, arg) {
+        if (strcmp(id, req->userid)) {
+            json_object_set_new(set.not_updated, id,
+                                json_pack("{s:s}", "type", "notFound"));
+            continue;
+        }
+
+        json_t *current = _identity_current(req);
+        json_t *readonly = json_object_get(set.update_readonly, id);
+        json_t *set_err = readonly ?
+            jmap_set_check_readonly(readonly, current) : NULL;
+        if (!set_err) {
+            json_t *invalid = json_array();
+            json_t *patched = jmap_patchobject_apply(current, arg, invalid, 0);
+            if (!patched) {
+                set_err = json_pack("{s:s s:O}", "type", "invalidPatch",
+                                    "properties", invalid);
+            }
+            else if (!_identity_same(patched, current)) {
+                set_err = json_pack("{s:s s:s}", "type", "forbidden",
+                                    "description",
+                                    "Identities cannot be changed on this server");
+            }
+            json_decref(patched);
+            json_decref(invalid);
+        }
+        json_decref(current);
+
+        if (set_err) {
+            json_object_set_new(set.not_updated, id, set_err);
+        }
+        else {
+            json_object_set_new(set.updated, id, json_null());
+        }
+    }
+
+    json_array_foreach(set.destroy, i, arg) {
+        const char *did = json_string_value(arg);
+        json_object_set_new(set.not_destroyed, did,
+                strcmp(did, req->userid) ?
+                    json_pack("{s:s}", "type", "notFound") :
+                    json_pack("{s:s s:s}", "type", "forbidden",
+                              "description",
+                              "This Identity cannot be destroyed (mayDelete)"));
+    }
+
+    set.new_state = xstrdup("0");
+    jmap_ok(req, jmap_set_reply(&set));
+
+done:
+    jmap_parser_fini(&parser);
+    jmap_set_fini(&set);
     return 0;
 }
