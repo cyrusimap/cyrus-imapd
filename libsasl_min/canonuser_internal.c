@@ -16,13 +16,14 @@
 #endif
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 
-static int _canonuser_internal(const sasl_utils_t *utils,
-                               const char *user,
-                               unsigned ulen,
-                               unsigned flags __attribute__((unused)),
-                               char *out_user,
-                               unsigned out_umax,
-                               unsigned *out_ulen)
+/* not part of public API, but visible for testing */
+EXPORTED int _canonuser_internal(const sasl_utils_t *utils,
+                                 const char *user,
+                                 unsigned ulen,
+                                 unsigned flags __attribute__((unused)),
+                                 char *out_user,
+                                 unsigned out_umax,
+                                 unsigned *out_ulen)
 {
     unsigned i;
     char *in_buf, *userin;

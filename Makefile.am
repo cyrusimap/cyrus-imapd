@@ -678,11 +678,13 @@ cunit_TESTS = \
     cunit/crc32.testc \
     cunit/dlist.testc \
     cunit/duplicate.testc \
+    cunit/dynarray.testc \
     cunit/getxstring.testc \
     cunit/glob.testc \
     cunit/guid.testc \
     cunit/hash.testc \
     cunit/hashset.testc \
+    cunit/ical_support.testc \
     cunit/imapurl.testc \
     cunit/imparse.testc \
     cunit/index_file.testc \
@@ -712,19 +714,8 @@ cunit_TESTS = \
     cunit/signals.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
-    cunit/sqldb.testc \
-    cunit/xsyslog_ev.testc
-
-if SIEVE
-cunit_TESTS += cunit/sieve.testc
-endif
-
-if HAVE_GUESSTZ
-cunit_TESTS += cunit/guesstz.testc
-endif # HAVE_GUESSTZ
-
-cunit_TESTS += \
     cunit/spool.testc \
+    cunit/sqldb.testc \
     cunit/squat.testc \
     cunit/strarray.testc \
     cunit/strconcat.testc \
@@ -732,11 +723,22 @@ cunit_TESTS += \
     cunit/stristr.testc \
     cunit/times.testc \
     cunit/tok.testc \
-    cunit/dynarray.testc \
     cunit/util.testc \
-    cunit/ical_support.testc \
     cunit/xsha1.testc \
+    cunit/xsyslog_ev.testc \
     cunit/zeroskip.testc
+
+if HAVE_GUESSTZ
+cunit_TESTS += cunit/guesstz.testc
+endif # HAVE_GUESSTZ
+
+if USE_INTERNAL_SASL
+cunit_TESTS += cunit/libsasl_min.testc
+endif # USE_INTERNAL_SASL
+
+if SIEVE
+cunit_TESTS += cunit/sieve.testc
+endif # SIEVE
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
