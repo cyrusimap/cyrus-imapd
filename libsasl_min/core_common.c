@@ -660,8 +660,6 @@ EXPORTED int _sasl_conn_init(sasl_conn_t *conn,
 
 EXPORTED int _sasl_common_init(sasl_global_callbacks_t *global_callbacks)
 {
-    int result;
-
     /* The last specified global callback always wins */
     if (sasl_global_utils != NULL) {
         sasl_utils_t *global_utils = (sasl_utils_t *) sasl_global_utils;
@@ -680,12 +678,6 @@ EXPORTED int _sasl_common_init(sasl_global_callbacks_t *global_callbacks)
         if (sasl_global_utils == NULL) {
             return SASL_NOMEM;
         }
-    }
-
-    /* Init the canon_user plugin */
-    result = sasl_canonuser_add_plugin("INTERNAL", internal_canonuser_init);
-    if (result != SASL_OK) {
-        return result;
     }
 
     if (!free_mutex) {
