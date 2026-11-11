@@ -47,6 +47,29 @@ sub test_tzlist($self)
     $self->assert_cmp_deeply([], $result->{timezones},
                              'a missing timezone is not an error');
 
+    $result = $self->tzlist(pattern => '*');
+    $self->assert_cmp_deeply({
+          title => 'Invalid pattern value',
+          type => 'urn:ietf:params:tzdist:error:invalid-pattern',
+          status => 400,
+      }, $result, 'pattern of * is invalid');
+
+    $result = $self->tzlist(pattern => "");
+    $self->assert_cmp_deeply({
+          title => 'Missing pattern value',
+          type => 'urn:ietf:params:tzdist:error:invalid-pattern',
+          status => 400,
+      }, $result, 'empty pattern is an error');
+
+    $result = $self->tzlist(
+        pattern => 'America/New_York', pattern => 'America/New_York'
+    );
+    $self->assert_cmp_deeply({
+        title => 'Multiple pattern parameters',
+        type => 'urn:ietf:params:tzdist:error:invalid-pattern',
+        status => 400,
+    }, $result, 'double pattern is an error');
+
 
     $result = $self->tzlist(changedsince => $synctoken);
     $self->assert_str_equals($synctoken, $result->{synctoken});
@@ -57,4 +80,20 @@ sub test_tzlist($self)
     $self->assert_str_equals($synctoken, $result->{synctoken});
     $self->assert_cmp_deeply(bag(@$all), $result->{timezones},
                              'unrecognised changedsince hence all returned');
+
+    $result = $self->tzlist(
+        changedsince => $synctoken, changedsince => $synctoken
+    );
+    $self->assert_cmp_deeply({
+        title => 'Multiple changedsince parameters',
+        type => 'urn:ietf:params:tzdist:error:invalid-changedsince',
+        status => 400,
+    }, $result, 'double changedsince is an error');
+
+    $result = $self->tzlist(perl => 'rules');
+    $self->assert_cmp_deeply({
+          title => "Request URI doesn't map to a known action",
+          type => 'urn:ietf:params:tzdist:error:invalid-action',
+          status => 400,
+      }, $result, 'unknown query parameter is an error');
 }
