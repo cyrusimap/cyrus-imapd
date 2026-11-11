@@ -6,6 +6,7 @@
 #define JMAP_UTIL_H
 
 #include <jansson.h>
+#include <stdbool.h>
 
 #include "caldav_db.h"
 #include "carddav_db.h"
@@ -42,6 +43,19 @@ extern json_t* jmap_patchobject_apply(json_t *val, json_t *patch,
  * any erroneous path in patch is appended as JSON string */
 extern void jmap_patchobject_applym(json_t *dst, json_t *patch,
                                     json_t *invalid, unsigned flags);
+
+/**
+ * Check a PatchObject for one path being a prefix of another.
+ *
+ * RFC 8620 section 5.3 rejects such a patch with invalidPatch.
+ *
+ * Runs in O(B log N) for N paths totalling B bytes.
+ *
+ * @param patch  the PatchObject, keyed by JSON Pointer paths
+ * @return true if some path is another path followed by '/', e.g. "a"
+ *         and "a/b"; "a" and "a!x" don't overlap
+ */
+extern bool jmap_patch_has_prefix_overlap(json_t *patch);
 
 /* Create a patch-object that transforms src into dst. */
 extern json_t *jmap_patchobject_create(json_t *src, json_t *dst, unsigned flags);

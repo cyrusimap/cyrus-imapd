@@ -11,5 +11,5 @@ sub test_calendarprincipal_changes
         ['Principal/changes', {
         }, 'R1']
     ]);
-    $self->assert_str_equals('cannotCalculateChanges', $res->[0][1]{type});
+    $self->assert_str_equals('invalidArguments', $res->[0][1]{type});
 }
