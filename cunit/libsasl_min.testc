@@ -34,16 +34,16 @@ static void test_client_canonuser_internal(void)
     } tests[] = {
         { NULL,             0, SASL_BADPARAM, "",           0 },
         { "",               0, SASL_FAIL,     "",           0 },
-//         { "strlen",         0, SASL_OK,       "strlen",     6 },
+        { "strlen",         0, SASL_OK,       "strlen",     6 },
         { "    ",           0, SASL_FAIL,     "",           0 },
-//         { "    ",           4, SASL_FAIL,     "",           0 },
+        { "    ",           4, SASL_FAIL,     "",           0 },
         { "  trim",         6, SASL_OK,       "trim",       4 },
         { "trim  ",         6, SASL_OK,       "trim",       4 },
         { "  trim  ",       8, SASL_OK,       "trim",       4 },
         { "truncate",       5, SASL_OK,       "trunc",      5 },
         { "foo@bar",        7, SASL_OK,       "foo@bar",    7 },
         { "admin",          5, SASL_OK,       "admin",      5 },
-//         { "thisistoolong", 13, SASL_BUFOVER,  "",           0 },
+        { "thisistoolong", 13, SASL_BUFOVER,  "",           0 },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     sasl_conn_t *conn = NULL;
@@ -91,15 +91,15 @@ static void test_server_canonuser_internal(void)
     } tests[] = {
         { NULL,             0, SASL_BADPARAM, "",              0 },
         { "",               0, SASL_FAIL,     "",              0 },
-//         { "strlen",         0, SASL_OK,       "strlen@realm", 12 },
+        { "strlen",         0, SASL_OK,       "strlen@realm", 12 },
         { "    ",           0, SASL_FAIL,     "",              0 },
-//         { "    ",           4, SASL_FAIL,     "",              0 },
+        { "    ",           4, SASL_FAIL,     "",              0 },
         { "  trim",         6, SASL_OK,       "trim@realm",   10 },
         { "trim  ",         6, SASL_OK,       "trim@realm",   10 },
         { "  trim  ",       8, SASL_OK,       "trim@realm",   10 },
         { "truncate",       4, SASL_OK,       "trun@realm",   10 },
         { "foo@bar",        7, SASL_OK,       "foo@bar",       7 },
-//         { "thisistoolong", 13, SASL_BUFOVER,  "",              0 },
+        { "thisistoolong", 13, SASL_BUFOVER,  "",              0 },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     sasl_conn_t *conn = NULL;
@@ -147,16 +147,16 @@ static void test_server_canonuser_internal_norealm(void)
     } tests[] = {
         { NULL,             0, SASL_BADPARAM, "",        0 },
         { "",               0, SASL_FAIL,     "",        0 },
-//         { "strlen",         0, SASL_OK,       "strlen",  6 },
+        { "strlen",         0, SASL_OK,       "strlen",  6 },
         { "    ",           0, SASL_FAIL,     "",        0 },
-//         { "    ",           4, SASL_FAIL,     "",        0 },
+        { "    ",           4, SASL_FAIL,     "",        0 },
         { "  trim",         6, SASL_OK,       "trim",    4 },
         { "trim  ",         6, SASL_OK,       "trim",    4 },
         { "  trim  ",       8, SASL_OK,       "trim",    4 },
         { "truncate",       5, SASL_OK,       "trunc",   5 },
         { "foo@bar",        7, SASL_OK,       "foo@bar", 7 },
         { "admin",          5, SASL_OK,       "admin",   5 },
-//         { "thisistoolong", 13, SASL_BUFOVER,  "",        0 },
+        { "thisistoolong", 13, SASL_BUFOVER,  "",        0 },
     };
     const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
     sasl_conn_t *conn = NULL;

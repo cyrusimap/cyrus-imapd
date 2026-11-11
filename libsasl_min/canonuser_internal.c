@@ -11,11 +11,6 @@
 #include <ctype.h>
 #include <string.h>
 
-#ifdef MIN
-# undef MIN
-#endif
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-
 /* not part of public API, but visible for testing */
 EXPORTED int _canonuser_internal(const sasl_utils_t *utils,
                                  const char *user,
@@ -25,74 +20,79 @@ EXPORTED int _canonuser_internal(const sasl_utils_t *utils,
                                  unsigned out_umax,
                                  unsigned *out_ulen)
 {
-    unsigned i;
-    char *in_buf, *userin;
-    const char *begin_u;
-    unsigned u_apprealm = 0;
-    sasl_server_conn_t *sconn = NULL;
+    const char *append_realm = NULL;
+    char *canon = NULL;
+    int canon_len, r;
 
     if (!utils || !user) {
         return SASL_BADPARAM;
     }
 
-    in_buf = sasl_ALLOC((ulen + 2) * sizeof(char));
-    if (!in_buf) {
-        return SASL_NOMEM;
+    /* by SASL API, user can be unterminated and its length determined by ulen.
+     * When ulen is zero, user must be null-terminated.
+     */
+    if (ulen == 0) ulen = strlen(user);
+
+    /* find first non-space */
+    while (ulen > 0 && isspace(user[0])) {
+        user ++;
+        ulen --;
     }
-
-    userin = in_buf;
-
-    memcpy(userin, user, ulen);
-    userin[ulen] = '\0';
-
-    /* Strip User ID */
-    for (i = 0; isspace((int) userin[i]) && i < ulen; i++)
-        ;
-    begin_u = &(userin[i]);
-    if (i > 0) {
-        ulen -= i;
-    }
-
-    for (; ulen > 0 && isspace((int) begin_u[ulen - 1]); ulen--)
-        ;
-    if (begin_u == &(userin[ulen])) {
-        sasl_FREE(in_buf);
+    if (ulen == 0) {
         utils->seterror(utils->conn, 0, "All-whitespace username.");
         return SASL_FAIL;
     }
 
+    /* find last non-space */
+    while (ulen > 0 && isspace(user[ulen - 1]))
+        ulen --;
+
+    /* do we need to append a realm? */
     if (utils->conn && utils->conn->type == SASL_CONN_SERVER) {
-        sconn = (sasl_server_conn_t *) utils->conn;
+        const sasl_server_conn_t *sconn =
+            (const sasl_server_conn_t *) utils->conn;
+
+        if (sconn->user_realm && !memchr(user, '@', ulen))
+            append_realm = sconn->user_realm;
     }
 
-    /* Need to append realm if necessary (see sasl.h) */
-    if (sconn && sconn->user_realm && !strchr(user, '@')) {
-        u_apprealm = (unsigned) strlen(sconn->user_realm) + 1;
+    /* by SASL API, user and out_user memory may overlap, so we need to build
+     * the output in a temporary buffer, and copy it into place afterwards
+     */
+    canon_len = _sasl_mprintf(&canon, "%.*s%s%s",
+                                      (int) ulen, user,
+                                      append_realm ? "@" : "",
+                                      append_realm ? append_realm : "");
+
+    if (canon_len <= 0) {
+        /* empty output, out of memory, or a conversion error */
+        r = canon_len ? canon_len : SASL_FAIL;
+        memset(out_user, 0, out_umax);
+        canon_len = 0;
+        goto done;
     }
 
-    /* Now Copy */
-    memcpy(out_user, begin_u, MIN(ulen, out_umax));
-    if (sconn && u_apprealm) {
-        if (ulen >= out_umax) {
-            return SASL_BUFOVER;
-        }
-        out_user[ulen] = '@';
-        memcpy(&(out_user[ulen + 1]),
-               sconn->user_realm,
-               MIN(u_apprealm - 1, out_umax - ulen - 1));
-    }
-    out_user[MIN(ulen + u_apprealm, out_umax)] = '\0';
-
-    if (ulen + u_apprealm > out_umax) {
-        return SASL_BUFOVER;
+    if ((unsigned) canon_len >= out_umax) {
+        /* canonicalised string is too long for output buffer */
+        r = SASL_BUFOVER;
+        memset(out_user, 0, out_umax);
+        canon_len = 0;
+        goto done;
     }
 
-    if (out_ulen) {
-        *out_ulen = MIN(ulen + u_apprealm, out_umax);
-    }
+    /* Using strncpy here specifically for its behaviour of filling the rest of
+     * the buffer with null bytes, hence the dsize parameter is the size of the
+     * buffer, not the size of the source.
+     * We know canon is null-terminated and will fit without truncation.
+     */
+    strncpy(out_user, canon, out_umax);
+    r = SASL_OK;
 
-    sasl_FREE(in_buf);
-    return SASL_OK;
+ done:
+    if (out_ulen)
+        *out_ulen = (unsigned) canon_len;
+    sasl_FREE(canon);
+    return r;
 }
 
 static int _cu_internal_server(void *glob_context __attribute__((unused)),
