@@ -4238,6 +4238,9 @@ static char *normalize_mboxname(char *name, struct listargs *listargs)
 {
     char *nfc_name = charset_utf8_normalize(name);
 
+    /* not UTF-8: leave it for mailbox name validation to reject */
+    if (!nfc_name) return name;
+
     if (strcmp(nfc_name, name)) {
         if (listargs) {
             /* Setup to emit LIST response with OLDNAME */
@@ -5811,7 +5814,8 @@ badannotation:
         condstore_enabled(fa->changedsince ? "FETCH CHANGEDSINCE" : "FETCH MODSEQ");
     }
 
-    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER|FETCH_MAILBOXES)) {
+    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER|FETCH_MAILBOXES|
+                          FETCH_ENVELOPE)) {
         fa->namespace = &imapd_namespace;
         fa->userid = imapd_userid;
     }

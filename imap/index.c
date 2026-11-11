@@ -3924,9 +3924,18 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     if (fetchitems & FETCH_ENVELOPE) {
         if (!mailbox_cacherecord(mailbox, &record)) {
+            const struct buf *env = cacheitem_buf(&record, CACHE_ENVELOPE);
+            struct buf ulabels = BUF_INITIALIZER;
+
             prot_printf(state->out, "%cENVELOPE ", sepchar);
             sepchar = ' ';
-            prot_putbuf(state->out, cacheitem_buf(&record, CACHE_ENVELOPE));
+            /* A client that accepts UTF-8 gets IDN hosts as U-labels */
+            if (fetchargs->namespace && fetchargs->namespace->isutf8 &&
+                message_envelope_ulabels(env, &ulabels)) {
+                env = &ulabels;
+            }
+            prot_putbuf(state->out, env);
+            buf_free(&ulabels);
         }
     }
     if (fetchitems & FETCH_BODYSTRUCTURE) {
