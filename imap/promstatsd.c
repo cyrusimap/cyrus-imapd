@@ -371,7 +371,7 @@ static int count_users_mailboxes(struct findall_data *data, void *rock)
     pdata = hash_lookup(data->mbentry->partition, h);
     if (!pdata) {
         pdata = xzmalloc(sizeof *pdata);
-        construct_hash_table(&pdata->shared, 10, 0); /* 10 shared namespaces probably enough */
+        construct_hash_table(&pdata->shared, 0, 0);
         hash_insert(data->mbentry->partition, pdata, h);
     }
 
@@ -456,7 +456,7 @@ static int count_quota_commitments(struct quota *quota, void *rock)
     hash_table seen = HASH_TABLE_INITIALIZER;
     int r;
 
-    construct_hash_table(&seen, 10, 0); /* XXX */
+    construct_hash_table(&seen, 0, 0);
     qrock->seen = &seen;
     qrock->quota = quota;
 
@@ -587,7 +587,7 @@ static void do_collate_usage_report(struct buf *buf)
     int64_t starttime;
 
     buf_reset(buf);
-    construct_hash_table(&h, 10, 0); /* 10 partitions is probably enough right */
+    construct_hash_table(&h, 0, 0); /* 10 partitions is probably enough right */
 
     starttime = now_ms();
     r = mboxlist_findall_withp(NULL /* admin namespace */,

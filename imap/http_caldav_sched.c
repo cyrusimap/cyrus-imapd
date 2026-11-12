@@ -855,7 +855,7 @@ int sched_busytime_query(struct transaction_t *txn,
     xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
     struct freebusy_filter calfilter = {0};
-    struct hash_table remote_table;
+    struct hash_table remote_table = HASH_TABLE_INITIALIZER;
     struct caldav_sched_param *remote = NULL;
 
     if (!calendarprefix) {
@@ -908,7 +908,7 @@ int sched_busytime_query(struct transaction_t *txn,
     fctx.ret = &ret;
 
     /* Create hash table for any remote attendee servers */
-    construct_hash_table(&remote_table, 10, 1);
+    construct_hash_table(&remote_table, 0, 0);
 
     /* Process each attendee */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);

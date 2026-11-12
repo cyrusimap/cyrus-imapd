@@ -2145,7 +2145,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     if (JNOTNULL(variables) && json_is_object(variables)) {
         jmap_parser_push(&parser, "variables");
 
-        construct_hash_table(&vars, 16, 0);
+        construct_hash_table(&vars, 0, 0);
 
         const char *key;
         json_t *value;

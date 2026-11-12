@@ -323,8 +323,7 @@ static int ehlo_cb(smtpclient_t *sm, void *rock __attribute__((unused)))
 
     /* Is this the first response line? */
     if (sm->have_exts == NULL) {
-        sm->have_exts = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(sm->have_exts, 16, 0);
+        sm->have_exts = malloc_hash_table(0);
         return 0;
     }
 

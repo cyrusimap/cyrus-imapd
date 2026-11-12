@@ -772,7 +772,7 @@ static int alpn_select_cb(SSL *ssl __attribute__((unused)),
     int r = SSL_TLSEXT_ERR_ALERT_FATAL;
 
     /* keys are protocols as cstrings, values are where we saw it */
-    construct_hash_table(&client_protos, 10, 1);
+    construct_hash_table(&client_protos, 0, 1);
 
     for (; inlen; inlen -= (in[0] + 1), in += in[0] + 1) {
         char proto[MAX_TLS_ALPN_ID + 1] = "";

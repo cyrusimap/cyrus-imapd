@@ -1351,7 +1351,7 @@ EXPORTED annotate_state_t *annotate_state_new(void)
 static void annotate_state_start(annotate_state_t *state)
 {
     construct_hash_table(&state->entry_table, 0, 0);
-    construct_hash_table(&state->server_table, 10, 1);
+    construct_hash_table(&state->server_table, 0, 0);
 }
 
 static void annotate_state_finish(annotate_state_t *state)

@@ -158,7 +158,7 @@ int main (int argc, char **argv)
                (verbose ? CYRUSINIT_PERROR : 0),
                CONFIG_NEED_PARTITION_DATA);
 
-    construct_hash_table(&xlist, 10, 0);
+    construct_hash_table(&xlist, 0, 0);
     config_foreachoverflowstring(xlist_lookup_cb, &xlist);
 
     if (hash_count(&xlist) < 1) {

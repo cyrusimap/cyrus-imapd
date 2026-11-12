@@ -14258,7 +14258,7 @@ static void list_data_remotesubscriptions(struct listargs *listargs)
     memset(&rock, 0, sizeof(struct list_rock));
     rock.listargs = listargs;
     rock.subs = strarray_new();
-    construct_hash_table(&rock.server_table, 10, 1);
+    construct_hash_table(&rock.server_table, 0, 0);
 
     proxy_gentag(mytag, sizeof(mytag));
 
@@ -14465,7 +14465,7 @@ static void list_data(struct listargs *listargs)
         else {
             if (config_mupdate_server) {
                 /* In case we proxy to backends due to select/return criteria */
-                construct_hash_table(&rock.server_table, 10, 1);
+                construct_hash_table(&rock.server_table, 0, 0);
             }
 
             /* XXX: is there a cheaper way to figure out \Subscribed? */

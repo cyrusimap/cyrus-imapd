@@ -466,7 +466,7 @@ static int jmap_quota_get(jmap_req_t *req)
     }
 
     qrock.inboxname = mboxname_user_mbox(req->accountid, NULL);
-    construct_hash_table(&qrock.quotas, 20, 0);
+    construct_hash_table(&qrock.quotas, 0, 0);
 
     /* Fetch quotaroots for the user */
     fetch_quotas(&qrock);
@@ -535,7 +535,7 @@ static int jmap_quota_changes(jmap_req_t *req)
     }
 
     qrock.inboxname = mboxname_user_mbox(req->accountid, NULL);
-    construct_hash_table(&qrock.quotas, 20, 0);
+    construct_hash_table(&qrock.quotas, 0, 0);
 
     /* Fetch quotaroots for the user */
     quota_foreach(qrock.inboxname,
@@ -788,7 +788,7 @@ static int jmap_quota_query(jmap_req_t *req)
         }
     }
     qrock.inboxname = mboxname_user_mbox(req->accountid, NULL);
-    construct_hash_table(&qrock.quotas, 20, 0);
+    construct_hash_table(&qrock.quotas, 0, 0);
 
     /* Fetch quotaroots for the user */
     fetch_quotas(&qrock);

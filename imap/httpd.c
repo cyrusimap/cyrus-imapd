@@ -2014,7 +2014,7 @@ EXPORTED int examine_request(struct transaction_t *txn, const char *uri)
     if (ret) return client_need_auth(txn, sasl_result);
 
     /* Parse any query parameters */
-    construct_hash_table(&txn->req_qparams, 10, 1);
+    construct_hash_table(&txn->req_qparams, 0, 1);
     query = URI_QUERY(txn->req_uri);
     if (query) parse_query_params(txn, query);
 

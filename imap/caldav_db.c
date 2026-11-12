@@ -1704,7 +1704,7 @@ EXPORTED int caldav_update_shareacls(const char *userid)
         NULL, NULL, NULL,
         HASH_TABLE_INITIALIZER
     };
-    construct_hash_table(&rock.user_access, 10, 0);
+    construct_hash_table(&rock.user_access, 0, 1);
     rock.principalname = caldav_mboxname(userid, NULL);
     rock.outboxname = caldav_mboxname(userid, SCHED_OUTBOX);
 
