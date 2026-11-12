@@ -5240,7 +5240,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         if (supports_referrals) {
-            imapd_refer(tag, mbentry->server, name);
+            imapd_refer(tag, mbentry->server, idname ? idname : name);
             goto done;
         }
 
