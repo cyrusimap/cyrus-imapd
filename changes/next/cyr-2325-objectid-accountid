@@ -8,6 +8,9 @@ OBJECTID as a STATUS attribute, FETCH item and LIST return option.  Once a
 client has activated the extension, every LIST response it did not ask for,
 such as a NOTIFY MailboxName event, carries the mailbox's identifiers too.
 
+SEARCH EMAILID now matches the compact EMAILIDs that FETCH reports for
+users with compact ids; it previously matched only the legacy form.
+
 
 Documentation:
 

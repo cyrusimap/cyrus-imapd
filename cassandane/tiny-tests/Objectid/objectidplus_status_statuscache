@@ -1,0 +1,20 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# STATUS (OBJECTID) answered from the status cache (on for tests with
+# "statuscache" in the name) carries the same identifiers as one
+# answered from the mailbox.
+#
+sub test_objectidplus_status_statuscache
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->create('testbox');
+
+    my $first = $talk->status('testbox', '(objectid messages)');
+    my $second = $talk->status('testbox', '(objectid messages)');
+    $self->assert_str_equals('cassandane', { @{$first->{objectid}} }->{ACCOUNTID});
+    $self->assert_cmp_deeply($first, $second);
+}

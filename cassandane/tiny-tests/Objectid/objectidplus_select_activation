@@ -2,19 +2,28 @@
 use Cassandane::Tiny;
 
 #
-# Test OBJECTID+ activation via SELECT (OBJECTID)
+# SELECT (OBJECTID) activates OBJECTID+, and the compound OBJECTID
+# response code replaces MAILBOXID from that SELECT on.
 #
 sub test_objectidplus_select_activation
-    :AltNamespace :min_version_3_1
+    :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
-
     $talk->create('foo');
 
-    # SELECT with OBJECTID parameter activates the extension
-    # The untagged OK should contain OBJECTID response code
+    $talk->select('foo');
+    $self->assert_not_null($talk->get_response_code('mailboxid'));
+    $self->assert_null($talk->get_response_code('objectid'));
+    $talk->unselect();
+    $talk->clear_response_code('mailboxid');
+
     $talk->select('foo', '(OBJECTID)');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($talk->get_response_code('enabled')->{'objectid+'});
+    $self->assert_null($talk->get_response_code('mailboxid'));
+    my $code = $talk->get_response_code('objectid');
+    my $status = $talk->status('foo', '(objectid)');
+    $self->assert_cmp_deeply({ @{$status->{objectid}} },
+                             { split ' ', $code =~ tr/()//dr });
 }

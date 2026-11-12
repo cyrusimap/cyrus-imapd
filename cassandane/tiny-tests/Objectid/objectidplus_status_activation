@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test OBJECTID+ implicit activation via STATUS OBJECTID
 #
 sub test_objectidplus_status_activation
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

@@ -6,7 +6,7 @@ use Cassandane::Tiny;
 # and that OBJECTID returns the compound format.
 #
 sub test_objectidplus_status_objectid_no_accountid
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

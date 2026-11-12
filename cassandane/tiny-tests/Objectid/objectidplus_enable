@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test OBJECTID+ activation via ENABLE
 #
 sub test_objectidplus_enable
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

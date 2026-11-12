@@ -306,7 +306,16 @@ extern int message_get_mailbox(message_t *m, const struct mailbox **);
 extern int message_get_uid(message_t *m, uint32_t *uidp);
 extern int message_get_cid(message_t *m, conversation_id_t *cidp);
 extern int message_get_guid(message_t *m, const struct message_guid **guidp);
+
+/**
+ * Format the EMAILID of a message in a mailbox, as FETCH reports it.
+ *
+ * @param emailid  receives the id, at least JMAP_MAX_EMAILID_SIZE bytes
+ */
+extern int message_get_emailid(message_t *m, char *emailid);
+
 extern int message_get_internaldate(message_t *m, time_t *);
+extern int message_get_internaldate_ts(message_t *m, struct timespec *);
 extern int message_get_spamscore(message_t *m, uint32_t *scorep);
 extern int message_get_savedate(message_t *m, time_t *);
 extern int message_get_sentdate(message_t *m, time_t *);

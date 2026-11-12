@@ -7,7 +7,7 @@ use Cassandane::Tiny;
 # fetched via individual items or compound OBJECTID.
 #
 sub test_objectidplus_threadid_consistency
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

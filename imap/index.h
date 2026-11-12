@@ -343,6 +343,14 @@ extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
 
 extern int index_want_attachextract(const char *type, const char *subtype);
 
+/**
+ * Print a mailbox's identifiers: the RFC 8474 MAILBOXID form, or the
+ * OBJECTID+ compound form when 'compound' is set.
+ *
+ * @param sep  a tag or "*" to print a whole OK response carrying the
+ *             response code, or a separator (" " or "(") to print the
+ *             item inside a STATUS response
+ */
 extern void prot_print_objectids(struct protstream *pout,
                                  bool compound, const char *sep,
                                  const char *mailboxid, const char *accountid);

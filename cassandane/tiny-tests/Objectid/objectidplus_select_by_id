@@ -2,35 +2,42 @@
 use Cassandane::Tiny;
 
 #
-# Test SELECT by OBJECTID (MAILBOXID id ACCOUNTID id) - ID-based
-# mailbox selection after rename
+# SELECT (OBJECTID (...)) selects the mailbox with those identifiers,
+# whatever its name now is, with the keys in any order.
 #
 sub test_objectidplus_select_by_id
-    :AltNamespace :min_version_3_1
+    :AltNamespace
+    ($self)
 {
-    my ($self) = @_;
-
     my $talk = $self->{store}->get_client();
 
     $talk->create('original');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-
-    # get the MAILBOXID
-    my $status = $talk->status('original', "(mailboxid)");
-    my $mailboxid = $status->{mailboxid}[0];
+    my $mailboxid = $talk->status('original', '(mailboxid)')->{mailboxid}[0];
     $self->assert_not_null($mailboxid);
 
-    # rename the mailbox
     $talk->rename('original', 'renamed');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    # select by the old name with OBJECTID (MAILBOXID id ACCOUNTID id)
-    # should find the renamed mailbox by its MAILBOXID
-    $talk->select('original',
-        "(OBJECTID (MAILBOXID $mailboxid ACCOUNTID cassandane))");
-    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $want = { MAILBOXID => $mailboxid, ACCOUNTID => 'cassandane' };
+    for my $ids ("MAILBOXID $mailboxid ACCOUNTID cassandane",
+                 "ACCOUNTID cassandane MAILBOXID $mailboxid",
+                 "MAILBOXID $mailboxid",
+                 "MAILBOXID $mailboxid X-FUTURE-KEY abc")
+    {
+        xlog $self, "select by ($ids)";
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('original', "(OBJECTID ($ids))");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        my $code = $talk->get_response_code('objectid');
+        $self->assert_cmp_deeply($want, { split ' ', $code =~ tr/()//dr });
+    }
 
-    # verify the selected mailbox has the right MAILBOXID
-    my $status2 = $talk->status('renamed', "(mailboxid)");
-    $self->assert_str_equals($mailboxid, $status2->{mailboxid}[0]);
+    xlog $self, "an ACCOUNTID that doesn't own the mailbox matches nothing";
+    $talk->unselect();
+    $talk->clear_response_code('objectid');
+    $talk->select('original',
+                  "(OBJECTID (MAILBOXID $mailboxid ACCOUNTID other))");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
 }

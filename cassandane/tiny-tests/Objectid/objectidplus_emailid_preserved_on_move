@@ -6,7 +6,7 @@ use Cassandane::Tiny;
 # the same account (same ACCOUNTID)
 #
 sub test_objectidplus_emailid_preserved_on_move
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

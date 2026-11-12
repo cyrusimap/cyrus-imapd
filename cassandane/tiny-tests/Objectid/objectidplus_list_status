@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test LIST-STATUS with OBJECTID
 #
 sub test_objectidplus_list_status
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

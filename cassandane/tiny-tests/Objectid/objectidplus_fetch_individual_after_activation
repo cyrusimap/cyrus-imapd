@@ -6,7 +6,7 @@ use Cassandane::Tiny;
 # in RFC 8474 format after OBJECTID+ has been activated
 #
 sub test_objectidplus_fetch_individual_after_activation
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

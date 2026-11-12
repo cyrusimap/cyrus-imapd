@@ -4891,6 +4891,11 @@ static void objectidplus_enabled(const char *cmd __attribute__((unused)))
         client_capa |= ENABLED_OBJECTIDPLUS;
         client_behavior_mask |= CB_OBJECTID;
         prot_printf(imapd_out, "* ENABLED OBJECTID+\r\n");
+
+        /* backends connected from now on get it from imap_postauth() */
+        for (int i = 0; i < ptrarray_size(&backend_cached); i++) {
+            proxy_enable(ptrarray_nth(&backend_cached, i), ENABLED_OBJECTIDPLUS);
+        }
     }
 }
 
@@ -4899,6 +4904,11 @@ struct select_objectid {
     char *mailboxid;    /* MAILBOXID for ID-based selection, or NULL */
     char *accountid;    /* ACCOUNTID for scoping, or NULL */
 };
+
+static bool is_objectid(const char *s)
+{
+    return jmap_is_valid_id(s) && strlen(s) <= 255;
+}
 
 /* The mailbox an OBJECTID parameter names, or NULL to select by name.
  * Only a mailbox that SELECT by name would open matches, so the outcome
@@ -4947,6 +4957,57 @@ static mbentry_t *select_by_objectid(const struct select_objectid *objid,
 
     if (!match) mboxlist_entry_free(&mbentry);
     return mbentry;
+}
+
+/* Parse the key-value pairs of a SELECT (OBJECTID (...)) parameter, whose
+ * opening paren is consumed.  Returns the closing paren, or EOF if the
+ * list is malformed.  An empty list sets nothing. */
+static int parse_select_objectid(struct select_objectid *objid)
+{
+    static struct buf key, val;
+    int c;
+
+    c = prot_getc(imapd_in);
+    if (c == ')') {
+        return c;
+    }
+    prot_ungetc(c, imapd_in);
+
+    do {
+        c = getword(imapd_in, &key);
+        if (c != ' ' || !imparse_isatom(key.s)) {
+            return EOF;
+        }
+        c = getword(imapd_in, &val);
+
+        char **dst = NULL;
+        if (!strcasecmp(key.s, "MAILBOXID")) {
+            if (!is_objectid(val.s)) {
+                return EOF;
+            }
+            dst = &objid->mailboxid;
+        }
+        else if (!strcasecmp(key.s, "ACCOUNTID")) {
+            /* our ACCOUNTIDs aren't all ObjectIDs yet, see
+             * jmap_mailbox_accountid() */
+            if (!val.s[0]) {
+                return EOF;
+            }
+            dst = &objid->accountid;
+        }
+        else if (!is_objectid(val.s)) {
+            return EOF;
+        }
+
+        if (dst) {
+            if (*dst) {
+                return EOF;
+            }
+            *dst = xstrdup(val.s);
+        }
+    } while (c == ' ');
+
+    return c == ')' ? c : EOF;
 }
 
 static int parse_select_params(char *tag, char *cmd, int allowdeleted,
@@ -5021,39 +5082,17 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
             }
             else if (!strcmp(arg.s, "OBJECTID")) {
                 objectidplus_enabled("SELECT (OBJECTID)");
-                /* check for optional (MAILBOXID id ACCOUNTID id) */
                 if (c == ' ') {
                     c = prot_getc(imapd_in);
                     if (c == '(') {
-                        /* parse key-value pairs */
-                        for (;;) {
-                            c = getword(imapd_in, &arg);
-                            if (c != ' ') break;
-                            if (!arg.s[0]) break;
-                            c = getword(imapd_in, &parm1);
-                            if (c != ' ') break;
-                            ucase(arg.s);
-                            if (!strcmp(arg.s, "MAILBOXID")) {
-                                free(objid->mailboxid);
-                                objid->mailboxid = buf_release(&parm1);
-                            }
-                            else if (!strcmp(arg.s, "ACCOUNTID")) {
-                                free(objid->accountid);
-                                objid->accountid = buf_release(&parm1);
-                            }
-                            /* ignore unrecognised keys per spec */
-                        }
+                        c = parse_select_objectid(objid);
                         if (c != ')') {
-                            prot_printf(imapd_out,
-                                "%s BAD Invalid OBJECTID parameter in %s\r\n",
-                                tag, cmd);
-                            eatline(imapd_in, c);
-                            return r;
+                            goto badobjectid;
                         }
                         c = prot_getc(imapd_in);
                     }
                     else {
-                        /* not a '(' — put it back, it's the next param */
+                        /* no identifiers, so this is the next parameter */
                         prot_ungetc(c, imapd_in);
                         c = ' ';
                     }
@@ -5099,6 +5138,12 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
 
  badqresync:
     prot_printf(imapd_out, "%s BAD Invalid QRESYNC parameter list in %s\r\n",
+                tag, cmd);
+    eatline(imapd_in, c);
+    return r;
+
+ badobjectid:
+    prot_printf(imapd_out, "%s BAD Invalid OBJECTID parameter in %s\r\n",
                 tag, cmd);
     eatline(imapd_in, c);
     return r;
@@ -5162,7 +5207,18 @@ static void cmd_select(char *tag, char *cmd, char *name)
     }
 
     char *intname = NULL;
+    char *idname = NULL;
     mbentry = select_by_objectid(&objid, allowdeleted);
+    if (mbentry) {
+        idname =
+            mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
+        if (client_capa & ENABLED_IMAP4REV2) {
+            /* LIST the mailbox we found, not the name we were given */
+            strarray_truncate(&listargs.pat, 0);
+            strarray_append(&listargs.pat, idname);
+            listargs.denormalized = NULL;
+        }
+    }
     free(objid.mailboxid);
     free(objid.accountid);
 
@@ -5199,8 +5255,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
         }
 
         /* Send SELECT command to backend */
+        const char *bename = idname ? idname : origname;
         prot_printf(backend_current->out, "%s %s {%zu+}\r\n%s",
-                    tag, cmd, strlen(origname), origname);
+                    tag, cmd, strlen(bename), bename);
         if (v->uidvalidity) {
             prot_printf(backend_current->out, " (QRESYNC (%u " MODSEQ_FMT,
                         v->uidvalidity, v->modseq);
@@ -5318,6 +5375,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     strarray_fini(&listargs.pat);
     if (name != origname) free(name);
     free(intname);
+    free(idname);
 }
 
 /*
@@ -8582,14 +8640,17 @@ respond:
             mbentry_t *renamedmbentry = NULL;
             int r2 = mboxlist_lookup(newmailboxname, &renamedmbentry, NULL);
             if (!r2 && renamedmbentry) {
-                char mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+                struct buf mailboxid = BUF_INITIALIZER;
                 struct buf accountid = BUF_INITIALIZER;
-                jmap_mailbox_accountid(newmailboxname, &accountid);
-                struct conversations_state *cstate =
-                    conversations_get_user(imapd_userid);
-                jmap_set_mailboxid(cstate, renamedmbentry, mailboxid);
-                prot_print_objectids(imapd_out, true /*compound*/,
-                                     tag, mailboxid, buf_cstring(&accountid));
+                jmap_get_mailbox_objectids(renamedmbentry,
+                                           &mailboxid,
+                                           &accountid);
+                prot_print_objectids(imapd_out,
+                                     true /*compound*/,
+                                     tag,
+                                     buf_cstring(&mailboxid),
+                                     buf_cstring(&accountid));
+                buf_free(&mailboxid);
                 buf_free(&accountid);
                 mboxlist_entry_free(&renamedmbentry);
             }
@@ -13596,8 +13657,8 @@ static void list_objectid_item(const mbentry_t *mbentry, struct buf *item)
     struct buf accountid = BUF_INITIALIZER;
     jmap_get_mailbox_objectids(mbentry, &mailboxid, &accountid);
 
-    buf_printf(item, "ACCOUNTID %s MAILBOXID %s",
-               buf_cstring(&accountid), buf_cstring(&mailboxid));
+    buf_printf(item, "MAILBOXID %s ACCOUNTID %s",
+               buf_cstring(&mailboxid), buf_cstring(&accountid));
     buf_free(&mailboxid);
     buf_free(&accountid);
 }

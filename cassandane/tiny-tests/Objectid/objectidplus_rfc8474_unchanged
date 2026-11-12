@@ -9,7 +9,7 @@ use Cassandane::Tiny;
 # STATUS MAILBOXID should work.
 #
 sub test_objectidplus_rfc8474_unchanged
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

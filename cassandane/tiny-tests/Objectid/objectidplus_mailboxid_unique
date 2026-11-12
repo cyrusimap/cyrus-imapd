@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test that different mailboxes get different MAILBOXIDs
 #
 sub test_objectidplus_mailboxid_unique
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 

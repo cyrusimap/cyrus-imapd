@@ -831,9 +831,10 @@ EXPORTED void prot_print_objectids(struct protstream *pout,
 
     if (compound) {
         /* draft-ietf-mailmaint-imap-objectid-bis */
-        prot_puts(pout, "OBJECTID (");
-        if (accountid) prot_printf(pout, "ACCOUNTID %s ", accountid);
-        prot_printf(pout, "MAILBOXID %s)", mailboxid);
+        prot_printf(pout,
+                    "OBJECTID (MAILBOXID %s ACCOUNTID %s)",
+                    mailboxid,
+                    accountid);
     }
     else {
         /* RFC 8474 */

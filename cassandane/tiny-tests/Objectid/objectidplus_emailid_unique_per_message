@@ -5,7 +5,7 @@ use Cassandane::Tiny;
 # Test that different messages get different EMAILIDs
 #
 sub test_objectidplus_emailid_unique_per_message
-    :AltNamespace :min_version_3_1
+    :AltNamespace
 {
     my ($self) = @_;
 
