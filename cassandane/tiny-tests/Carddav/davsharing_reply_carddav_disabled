@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_davsharing_reply_carddav_disabled
+    :NoVirtDomains
+    ($self)
+{
+    my $instance = $self->{instance};
+    my $CalDAV = $self->{caldav};
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.manifold");
+    $admintalk->setacl("user.manifold", admin => 'lrswipkxtecdan');
+    $admintalk->setacl("user.manifold", manifold => 'lrswipkxtecdn');
+
+    my $service = $instance->get_service("http");
+    my $mantalk = Net::CardDAVTalk->new(
+        user => "manifold",
+        password => 'pass',
+        host => $service->host(),
+        port => $service->port(),
+        scheme => 'http',
+        url => '/',
+        expandurl => 1,
+    );
+
+    my $invite = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:share-resource xmlns:D="DAV:">
+  <D:sharee>
+    <D:href>mailto:cassandane\@example.com</D:href>
+    <D:share-access>
+      <D:read />
+    </D:share-access>
+  </D:sharee>
+</D:share-resource>
+EOF
+
+    my $reply = <<EOF;
+<?xml version="1.0" encoding="utf-8" ?>
+<D:invite-reply xmlns:D="DAV:">
+  <D:invite-accepted />
+</D:invite-reply>
+EOF
+
+    xlog $self, "share an addressbook with cassandane";
+    my $abook = $mantalk->NewAddressBook('Shared', name => 'Shared');
+    $mantalk->Request('POST', "$abook/", $invite,
+                      'Content-Type' => 'application/davsharing+xml');
+
+    my ($adds) = $CalDAV->SyncEventLinks("/dav/notifications/user/cassandane");
+    $self->assert_num_equals(1, scalar keys %$adds);
+    my $notification = (keys %$adds)[0];
+
+    xlog $self, "restart with only CalDAV in httpmodules";
+    $instance->stop();
+    $instance->{re_use_dir} = 1;
+    $instance->{config}->set(httpmodules => 'caldav');
+    $instance->{config}->generate($instance->_imapd_conf());
+    $instance->start();
+
+    my $res = $CalDAV->{ua}->request('POST',
+        $CalDAV->request_url($notification), {
+            content => $reply,
+            headers => {
+                'Content-Type' => 'application/davsharing+xml',
+                'Authorization' => $CalDAV->auth_header(),
+            },
+        });
+    $self->assert_num_equals(404, $res->{status});
+
+    my $talk = $self->{store}->get_client();
+    my $subs = $talk->lsub('', '*');
+    $self->assert(!grep { $_->[2] =~ /#addressbooks/ } @$subs);
+}
