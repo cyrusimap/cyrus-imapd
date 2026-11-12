@@ -1,0 +1,121 @@
+#!perl
+use Cassandane::Tiny;
+
+# Email/set can't take a scheduled email out of the scheduled mailbox, in
+# either the patch or the whole-object form of mailboxIds: only its
+# EmailSubmission's onSend does that, once it's sent.
+sub test_emailsubmission_scheduled_send_no_move_out
+    :needs_component_calalarmd :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my @using = @{ $jmap->DefaultUsing() };
+    push @using, 'https://cyrusimap.org/ns/jmap/mail';
+    $jmap->DefaultUsing(\@using);
+
+    my $res = $jmap->CallMethods([
+        [ 'Identity/get', {}, 'R0' ],
+        [ 'Mailbox/set', {
+            create => {
+                1 => { name => 'Drafts', role => 'drafts' },
+                2 => { name => 'Scheduled', role => 'scheduled' },
+                3 => { name => 'Sent', role => 'sent' },
+                4 => { name => 'Trash', role => 'trash' },
+            },
+        }, 'R1' ],
+    ]);
+    my $identityid = $res->[0][1]{list}[0]{id};
+    my ($draftsid, $schedid, $sentid, $trashid) =
+        map { $res->[1][1]{created}{$_}{id} } 1 .. 4;
+
+    $res = $jmap->CallMethods([
+        [ 'Email/set', {
+            create => {
+                m1 => {
+                    mailboxIds => { $draftsid => JSON::true },
+                    keywords => { '$draft' => JSON::true },
+                    from => [{ email => 'cassandane@local' }],
+                    to => [{ email => 'foo@local' }],
+                    subject => 'scheduled',
+                },
+            },
+        }, 'R1' ],
+    ]);
+    my $emailid = $res->[0][1]{created}{m1}{id};
+
+    xlog $self, "Schedule the email, moving it to the scheduled mailbox";
+    $res = $jmap->CallMethods([
+        [ 'EmailSubmission/set', {
+            create => {
+                1 => {
+                    identityId => $identityid,
+                    emailId => $emailid,
+                    envelope => {
+                        mailFrom => {
+                            email => 'from@localhost',
+                            parameters => { holdfor => '30' },
+                        },
+                        rcptTo => [{ email => 'rcpt1@localhost' }],
+                    },
+                    onSend => { moveToMailboxId => $sentid },
+                },
+            },
+            onSuccessUpdateEmail => {
+                '#1' => {
+                    "mailboxIds/$draftsid" => JSON::null,
+                    "mailboxIds/$schedid" => JSON::true,
+                    'keywords/$draft' => JSON::null,
+                },
+            },
+        }, 'R1' ],
+    ]);
+    my $subid = $res->[0][1]{created}{1}{id};
+    $self->assert_str_equals('pending', $res->[0][1]{created}{1}{undoStatus});
+
+    my $forbidden = { $emailid => { type => 'forbidden' } };
+
+    xlog $self, "Can't move it to Trash with a mailboxIds patch";
+    $res = $jmap->CallMethods([
+        [ 'Email/set', {
+            update => {
+                $emailid => {
+                    "mailboxIds/$schedid" => JSON::null,
+                    "mailboxIds/$trashid" => JSON::true,
+                },
+            },
+        }, 'R1' ],
+    ]);
+    $self->assert_cmp_deeply($forbidden, $res->[0][1]{notUpdated});
+
+    xlog $self, "Can't move it to Trash with a whole mailboxIds object";
+    $res = $jmap->CallMethods([
+        [ 'Email/set', {
+            update => {
+                $emailid => { mailboxIds => { $trashid => JSON::true } },
+            },
+        }, 'R1' ],
+        [ 'Email/get', {
+            ids => [$emailid],
+            properties => ['mailboxIds'],
+        }, 'R2' ],
+    ]);
+    $self->assert_cmp_deeply($forbidden, $res->[0][1]{notUpdated});
+    $self->assert_cmp_deeply({ $schedid => JSON::true },
+                             $res->[1][1]{list}[0]{mailboxIds});
+
+    xlog $self, "Sending still moves it to Sent";
+    $self->{instance}->run_command({ cyrus => 1 }, 'calalarmd',
+                                   '-t' => DateTime->now()->epoch() + 60);
+
+    $res = $jmap->CallMethods([
+        [ 'EmailSubmission/get', { ids => [$subid] }, 'R1' ],
+        [ 'Email/get', {
+            ids => [$emailid],
+            properties => ['mailboxIds'],
+        }, 'R2' ],
+    ]);
+    $self->assert_str_equals('final', $res->[0][1]{list}[0]{undoStatus});
+    $self->assert_cmp_deeply({ $sentid => JSON::true },
+                             $res->[1][1]{list}[0]{mailboxIds});
+}
