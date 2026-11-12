@@ -65,14 +65,18 @@ series will be 3.8 (and then master will become 3.9).
      to be, as a `.0-alpha0` -- that is, if it used to be `3.7.something`,
      it is now `3.9.0-alpha0`.
    - (these are all lies right now, but they will become true as we go)
-   - find `html_theme_options` and update the option that configures which
-     branch to show for the build status badge to be this branch, not "master"
    - Also add a suitable entry to the `extlinks` table near the bottom of the
      file.
 
 5. Update `docsrc/index.rst` to state that this is the stable version, not
    the development one.  It's easiest to just copy and update the text from the
-   previous stable version of this file.
+   previous stable version of this file, or, copy/paste this over what's there:
+
+.. code-block:: none
+
+    * This is the documentation for version |release| of Cyrus IMAP: **stable** branch.
+    * The latest development version |imap_latest_development_version| is at :cyrus-dev:`/`.
+
 6. Add release notes infrastructure:
 
    a. Make the directories for the new series:
@@ -91,9 +95,15 @@ series will be 3.8 (and then master will become 3.9).
       to copy the release notes file from the previous major release, delete
       all the bullet points (leaving just the headings), and fix all the
       numbers.
+   e. Add stub release notes for the new dev version too. Copy an example
+      from, say, docsrc/download/release-notes/3.13/x/3.13.0-alpha0.rst, and
+      then adjust the version numbers as appropriate.
 
 7. Update `README.md`:
 
+   - Modify the 'stable' badge at the top to replace all references to the
+     previous series with the new series. That is, all "3.12" would become
+     "3.14".
    - It will be claiming to be the development version, but this is now (or
      will be) the stable version, so update that.  If in doubt, mimic what
      the old stable branch's copy says.  This is another set of lies that will
