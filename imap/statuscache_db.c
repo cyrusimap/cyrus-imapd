@@ -425,8 +425,9 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
         strncpy(static_uniqueid, uniqueid, UUID_STR_LEN-1);
         sdata->uniqueid = static_uniqueid;
     }
-    jmap_get_mailbox_objectids(mailbox_mbentry(mailbox),
-                               &static_mailboxid, &static_accountid);
+    jmap_get_open_mailbox_objectids(mailbox,
+                                    &static_mailboxid,
+                                    &static_accountid);
     sdata->mailboxid = buf_cstring(&static_mailboxid);
     sdata->accountid = buf_cstring(&static_accountid);
 

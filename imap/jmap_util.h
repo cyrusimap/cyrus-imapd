@@ -219,19 +219,51 @@ extern void jmap_mailbox_accountid(const char *mboxname,
                                    struct buf *accountid);
 
 /**
+ * The conversations db that holds a user's ids, for formatting them.
+ *
+ * Returns a db this process already has open for the user, or else opens
+ * it shared into *cachep, first aborting whatever *cachep held.  Never
+ * creates a db, so a user without one gets NULL and legacy ids.
+ *
+ * @param userid  the owner, or NULL for a mailbox no user owns
+ * @param cachep  the caller's cache; conversations_abort() it when done
+ */
+extern struct conversations_state *jmap_owner_cstate(
+    const char *userid,
+    struct conversations_state **cachep);
+
+/**
+ * The owner's conversations db for an open mailbox: the mailbox's own
+ * cstate, or for DELETED.* and submission mailboxes, which have none,
+ * jmap_owner_cstate() of the owner.
+ */
+extern struct conversations_state *jmap_mailbox_owner_cstate(
+    struct mailbox *mailbox,
+    struct conversations_state **cachep);
+
+/**
  * Fill the OBJECTID identifiers of a mailbox from its mbentry.
  *
+ * Every place that reports a mailbox's identifiers must use this or
+ * jmap_get_open_mailbox_objectids(), so that all of them agree.
+ *
  * @param mbentry    the mailbox
+ * @param cachep     NULL, or a cache for jmap_owner_cstate() to reuse
+ *                   across calls; the caller aborts it when done
  * @param mailboxid  receives the MAILBOXID
  * @param accountid  receives the ACCOUNTID, as jmap_mailbox_accountid()
- *
- * Opens the owner's conversations db if it isn't already open.  Every
- * place that reports a mailbox's identifiers must use this, so that LIST,
- * STATUS and the response codes agree.
  */
 extern void jmap_get_mailbox_objectids(const mbentry_t *mbentry,
+                                       struct conversations_state **cachep,
                                        struct buf *mailboxid,
                                        struct buf *accountid);
+
+/**
+ * jmap_get_mailbox_objectids() for a mailbox that is open.
+ */
+extern void jmap_get_open_mailbox_objectids(struct mailbox *mailbox,
+                                            struct buf *mailboxid,
+                                            struct buf *accountid);
 
 #define JMAP_LEGACY_THREADID_PREFIX 'T'
 #define JMAP_THREADID_PREFIX 'A'

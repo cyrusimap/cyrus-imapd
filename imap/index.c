@@ -274,15 +274,17 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 {
     int r;
     struct index_state *state = xzmalloc(sizeof(struct index_state));
-    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-
     state->mailbox = mailbox;
     state->mboxname = xstrdup(mailbox_name(mailbox));
     state->owner = mboxname_to_userid(state->mboxname);
     state->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     state->mailboxid = xzmalloc(JMAP_MAX_MAILBOXID_SIZE);
 
-    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), state->mailboxid);
+    struct conversations_state *owner_cstate = NULL;
+    jmap_set_mailboxid(jmap_mailbox_owner_cstate(mailbox, &owner_cstate),
+                       mailbox_mbentry(mailbox),
+                       state->mailboxid);
+    conversations_abort(&owner_cstate);
 
     if (init) {
         state->authstate = init->authstate;

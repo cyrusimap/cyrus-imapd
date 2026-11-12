@@ -2052,7 +2052,13 @@ static void search_emailid_internalise(struct index_state *state,
     struct search_emailid_internal *internal = xzmalloc(sizeof(*internal));
     const char *id = v->s;
 
-    if (USER_COMPACT_EMAILIDS(mailbox_get_cstate(state->mailbox))) {
+    /* the owner's id form, as FETCH reports them */
+    struct conversations_state *owner_cstate = NULL;
+    bool compact = USER_COMPACT_EMAILIDS(
+        jmap_mailbox_owner_cstate(state->mailbox, &owner_cstate));
+    conversations_abort(&owner_cstate);
+
+    if (compact) {
         if (id[0] == JMAP_EMAILID_PREFIX && strlen(id) == JMAP_EMAILID_SIZE - 1)
         {
             struct buf buf = BUF_INITIALIZER;

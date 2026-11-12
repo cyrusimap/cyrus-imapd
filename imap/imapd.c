@@ -624,6 +624,9 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
 
+/* Owner conversations db reused while one command reports identifiers */
+static struct conversations_state *objectid_cstate = NULL;
+
 void shut_down(int code) __attribute__((noreturn));
 
 static int imapd_canon_user(sasl_conn_t *conn, void *context,
@@ -1659,6 +1662,7 @@ static void cmdloop(void)
 
         /* Release any held index */
         index_release(imapd_index);
+        conversations_abort(&objectid_cstate);
 
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
@@ -4935,7 +4939,8 @@ static mbentry_t *select_by_objectid(const struct select_objectid *objid,
         struct buf mailboxid = BUF_INITIALIZER;
         struct buf found_accountid = BUF_INITIALIZER;
 
-        jmap_get_mailbox_objectids(mbentry, &mailboxid, &found_accountid);
+        /* no cache: SELECT goes on to open this db itself */
+        jmap_get_mailbox_objectids(mbentry, NULL, &mailboxid, &found_accountid);
         match = !strcmp(buf_cstring(&mailboxid), objid->mailboxid) &&
                 !strcmp(buf_cstring(&found_accountid), accountid);
         buf_free(&mailboxid);
@@ -6122,6 +6127,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     char mytime[100];
     unsigned flags = FETCH_ALLOW_MODIFIERS;
     struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
+    char *owner = NULL;
 
     if (proxy_selected(tag, cmd, true, "%s", sequence)) return;
 
@@ -6168,14 +6174,16 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
                      !imapd_index->examining &&
                      (imapd_index->myrights & ACL_SETSEEN));
 
-    if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
+    /* ids come from the mailbox owner's db, which this never creates */
+    owner = mboxname_to_userid(index_mboxname(imapd_index));
+    if (owner && config_getswitch(IMAPOPT_CONVERSATIONS) &&
         (fetchargs.fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
                                  FETCH_EMAILID | FETCH_THREADID |
                                  FETCH_OBJECTID))) {
-        r = conversations_open_user(imapd_userid, readonly, &convstate);
-        if (r) {
+        r = conversations_open_user_existing(owner, readonly, &convstate);
+        if (r && r != IMAP_MAILBOX_NONEXISTENT) {
             xsyslog_ev(LOG_WARNING, "imap.conversations.open.failed",
-                       lf_s("u.username", imapd_userid), lf_err("error", r));
+                       lf_s("u.username", owner), lf_err("error", r));
             goto freeargs;
         }
     }
@@ -6200,6 +6208,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
  freeargs:
     conversations_commit(&convstate);
+    free(owner);
     fetchargs_fini(&fetchargs);
 }
 
@@ -7670,7 +7679,11 @@ localcreate:
                        lf_s("u.username", imapd_userid), lf_err("error", r));
         }
     }
-    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), mailboxid);
+    struct conversations_state *owner_cstate = NULL;
+    jmap_set_mailboxid(jmap_mailbox_owner_cstate(mailbox, &owner_cstate),
+                       mailbox_mbentry(mailbox),
+                       mailboxid);
+    conversations_abort(&owner_cstate);
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -8645,6 +8658,7 @@ respond:
                 struct buf mailboxid = BUF_INITIALIZER;
                 struct buf accountid = BUF_INITIALIZER;
                 jmap_get_mailbox_objectids(renamedmbentry,
+                                           &objectid_cstate,
                                            &mailboxid,
                                            &accountid);
                 prot_print_objectids(imapd_out,
@@ -13662,7 +13676,10 @@ static void list_objectid_item(const mbentry_t *mbentry, struct buf *item)
 
     struct buf mailboxid = BUF_INITIALIZER;
     struct buf accountid = BUF_INITIALIZER;
-    jmap_get_mailbox_objectids(mbentry, &mailboxid, &accountid);
+    jmap_get_mailbox_objectids(mbentry,
+                               &objectid_cstate,
+                               &mailboxid,
+                               &accountid);
 
     buf_printf(item, "MAILBOXID %s ACCOUNTID %s",
                buf_cstring(&mailboxid), buf_cstring(&accountid));
@@ -15919,20 +15936,23 @@ static void push_updates(int idling)
                 struct fetchargs *fa = &notify_event_groups->selected.fetchargs;
                 struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
 
-                /* Open conv.db if we need it */
-                if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
+                /* Open the owner's conv.db, if it has one and we need it */
+                char *owner = mboxname_to_userid(index_mboxname(imapd_index));
+                if (owner && config_getswitch(IMAPOPT_CONVERSATIONS) &&
                     (fa->fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
                                        FETCH_EMAILID | FETCH_THREADID |
                                        FETCH_OBJECTID))) {
-                    int r = conversations_open_user(imapd_userid, 1/*shared*/,
-                                                    &convstate);
-                    if (r) {
+                    int r = conversations_open_user_existing(owner,
+                                                             1 /*shared*/,
+                                                             &convstate);
+                    if (r && r != IMAP_MAILBOX_NONEXISTENT) {
                         xsyslog_ev(LOG_WARNING,
                                    "imap.conversations.open.failed",
-                                   lf_s("u.username", imapd_userid),
+                                   lf_s("u.username", owner),
                                    lf_err("error", r));
                     }
                 }
+                free(owner);
 
                 index_fetch(imapd_index, uidset ? uidset : "*",
                             1/*usinguid*/, 1/*readonly*/, convstate, fa, NULL);
