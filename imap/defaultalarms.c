@@ -840,7 +840,7 @@ HIDDEN void defaultalarms_migrate39(const mbentry_t *mbentry,
     const message_t *msg;
     while ((msg = mailbox_iter_step(mit))) {
         hash_table peruser = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&peruser, 32, 0);
+        construct_hash_table(&peruser, 0, 0);
         const struct index_record *record = msg_record(msg);
         annotatemore_findall_mailbox(mbox, record->uid, PER_USER_CAL_DATA,
                 0, migrate39_find_peruser_cb, &peruser, ANNOTATE_TOMBSTONES);

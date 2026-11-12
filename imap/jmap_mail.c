@@ -617,7 +617,7 @@ static struct header_prop *_header_parseprop(const char *s)
     static hash_table allowed_header_forms = HASH_TABLE_INITIALIZER;
     if (!hash_constructed(&allowed_header_forms)) {
         /* TODO initialize with all headers in RFC 5322 and RFC 2369 */
-        construct_hash_table(&allowed_header_forms, 32, 0);
+        construct_hash_table(&allowed_header_forms, 27, 0);
         hash_insert("bcc",
                 (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
                 &allowed_header_forms);
@@ -8463,8 +8463,8 @@ static void _email_parse_wantheaders(json_t *jprops,
 static void _email_init_default_props(hash_table *props)
 {
     /* Initialize process-owned default property list */
-    construct_hash_table(props, 32, 0);
     if (props == &_email_get_default_bodyprops) {
+        construct_hash_table(props, 10, 0);
         hash_insert("blobId",      (void*)1, props);
         hash_insert("charset",     (void*)1, props);
         hash_insert("cid",         (void*)1, props);
@@ -8477,6 +8477,7 @@ static void _email_init_default_props(hash_table *props)
         hash_insert("type",        (void*)1, props);
     }
     else {
+        construct_hash_table(props, 17, 0);
         hash_insert("attachments",   (void*)1, props);
         hash_insert("bcc",           (void*)1, props);
         hash_insert("bodyValues",    (void*)1, props);
@@ -9865,7 +9866,7 @@ static int _email_get_bodies(jmap_req_t *req,
 
             if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
                 if (!hash_constructed(&icsbody_by_partid)) {
-                    construct_hash_table(&icsbody_by_partid, 32, 0);
+                    construct_hash_table(&icsbody_by_partid, 0, 0);
                 }
                 hash_insert(part->part_id, part, &icsbody_by_partid);
             }
