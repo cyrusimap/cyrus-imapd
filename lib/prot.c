@@ -1270,8 +1270,8 @@ EXPORTED int prot_write(struct protstream *s, const char *buf, size_t len)
         buf += s->cnt;
         len -= s->cnt;
         s->ptr += s->cnt;
-        s->cnt = 0;
         s->bytes_out += s->cnt;
+        s->cnt = 0;
         if (prot_flush_internal(s,0) == EOF) return EOF;
     }
     memcpy(s->ptr, buf, len);

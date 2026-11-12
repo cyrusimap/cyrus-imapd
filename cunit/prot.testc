@@ -133,6 +133,44 @@ static void test_printstring(void)
     EPILOG;
 }
 
+static void test_bytes_out(void)
+{
+    PROLOG;
+    struct protstream *p;
+    size_t big = 3 * PROT_BUFSIZE + 17;
+    char *data = xmalloc(big);
+    uint64_t expected = 0;
+
+    memset(data, 'x', big);
+
+    p = prot_new(_fd, 1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(p);
+
+    BEGIN;
+    /* small writes, staying within the buffer */
+    prot_write(p, data, 10);
+    prot_putc('y', p);
+    expected += 11;
+    CU_ASSERT_EQUAL(prot_bytes_out(p), expected);
+
+    /* writes that fill and flush the buffer, more than once */
+    prot_write(p, data, big);
+    expected += big;
+    CU_ASSERT_EQUAL(prot_bytes_out(p), expected);
+
+    prot_write(p, data, PROT_BUFSIZE);
+    expected += PROT_BUFSIZE;
+    CU_ASSERT_EQUAL(prot_bytes_out(p), expected);
+
+    prot_flush(p);
+    CU_ASSERT_EQUAL(prot_bytes_out(p), expected);
+    CU_ASSERT_EQUAL(lseek(_fd, 0, SEEK_END), (off_t) expected);
+
+    free(data);
+    prot_free(p);
+    EPILOG;
+}
+
 static void test_printmap(void)
 {
     PROLOG;
