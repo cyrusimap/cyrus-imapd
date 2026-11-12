@@ -145,6 +145,28 @@ struct backend *proxy_inbox_backend(void)
    even though it is in 95% of the cases, a good idea...
 */
 
+/* A backend activates OBJECTID+ itself when it parses a command the
+ * frontend passed on unparsed, so the frontend follows its ENABLED. */
+static void note_backend_enabled(struct backend *s, const char *line)
+{
+    if ((client_capa & ENABLED_OBJECTIDPLUS) ||
+        strncasecmp(line, "* ENABLED ", 10)) {
+        return;
+    }
+
+    strarray_t *caps = strarray_split(line + 10, " \r\n", STRARRAY_TRIM);
+    if (strarray_find_case(caps, "OBJECTID+", 0) >= 0) {
+        client_capa |= ENABLED_OBJECTIDPLUS;
+        for (int i = 0; i < ptrarray_size(&backend_cached); i++) {
+            struct backend *be = ptrarray_nth(&backend_cached, i);
+            if (be != s) {
+                proxy_enable(be, ENABLED_OBJECTIDPLUS);
+            }
+        }
+    }
+    strarray_free(caps);
+}
+
 static int pipe_response(struct backend *s, const char *tag, int include_last,
                          unsigned flags)
 {
@@ -184,6 +206,10 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
         }
 
         sl = strlen(buf);
+
+        if (!cont && buf[0] == '*') {
+            note_backend_enabled(s, buf);
+        }
 
         if (tag) {
             /* Check for the tagged line */
