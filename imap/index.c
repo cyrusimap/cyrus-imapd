@@ -816,37 +816,41 @@ EXPORTED modseq_t index_highestmodseq(struct index_state *state)
     return state->highestmodseq;
 }
 
-/* Callers pass ACCOUNTID from jmap_mailbox_accountid(): the owner's userid.
- * That is not yet a legal ObjectID: the draft allows only 1*255 of a-z A-Z
- * 0-9 _ - , so any userid carrying a domain or a dot needs mapping first.
- */
-EXPORTED void prot_print_objectids(struct protstream *pout,
-                                   bool compound, const char *sep,
-                                   const char *mailboxid, const char *accountid)
+EXPORTED void index_objectid_pairs(struct buf *buf,
+                                   const char *mailboxid,
+                                   const char *accountid)
 {
-    /* SP and ( are separators for STATUS items and not legal tag chars */
-    bool is_ok_resp = !strspn(sep, " (");
+    buf_printf(buf, "MAILBOXID %s ACCOUNTID %s", mailboxid, accountid);
+}
 
-    prot_puts(pout, sep);
-
-    if (is_ok_resp) prot_puts(pout, " OK [");
-
+EXPORTED void index_objectid_code(struct buf *buf,
+                                  bool compound,
+                                  const char *mailboxid,
+                                  const char *accountid)
+{
     if (compound) {
         /* draft-ietf-mailmaint-imap-objectid-bis */
-        prot_printf(pout,
-                    "OBJECTID (MAILBOXID %s ACCOUNTID %s)",
-                    mailboxid,
-                    accountid);
+        buf_appendcstr(buf, "OBJECTID (");
+        index_objectid_pairs(buf, mailboxid, accountid);
+        buf_putc(buf, ')');
     }
     else {
         /* RFC 8474 */
-        prot_printf(pout, "MAILBOXID (%s)", mailboxid);
+        buf_printf(buf, "MAILBOXID (%s)", mailboxid);
     }
+}
 
-    if (is_ok_resp) {
-        prot_printf(pout, "] %s\r\n",
-                    *sep == '*' ? "Ok" : error_message(IMAP_OK_COMPLETED));
-    }
+EXPORTED void index_print_objectid_ok(struct protstream *pout,
+                                      const char *tag,
+                                      const char *text,
+                                      bool compound,
+                                      const char *mailboxid,
+                                      const char *accountid)
+{
+    struct buf code = BUF_INITIALIZER;
+    index_objectid_code(&code, compound, mailboxid, accountid);
+    prot_printf(pout, "%s OK [%s] %s\r\n", tag, buf_cstring(&code), text);
+    buf_free(&code);
 }
 
 EXPORTED void index_select(struct index_state *state, struct index_init *init)
@@ -871,8 +875,12 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     /* RFC 8474 / draft-ietf-mailmaint-imap-objectid-bis */
     struct buf accountid = BUF_INITIALIZER;
     jmap_mailbox_accountid(state->mboxname, &accountid);
-    prot_print_objectids(state->out, !!(client_capa & ENABLED_OBJECTIDPLUS),
-                         "*", state->mailboxid, buf_cstring(&accountid));
+    index_print_objectid_ok(state->out,
+                            "*",
+                            "Ok",
+                            !!(client_capa & ENABLED_OBJECTIDPLUS),
+                            state->mailboxid,
+                            buf_cstring(&accountid));
     buf_free(&accountid);
 
     /* RFC 4467 */

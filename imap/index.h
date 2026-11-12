@@ -344,15 +344,33 @@ extern int insert_into_mailbox_allowed(struct mailbox *mailbox);
 extern int index_want_attachextract(const char *type, const char *subtype);
 
 /**
- * Print a mailbox's identifiers: the RFC 8474 MAILBOXID form, or the
- * OBJECTID+ compound form when 'compound' is set.
- *
- * @param sep  a tag or "*" to print a whole OK response carrying the
- *             response code, or a separator (" " or "(") to print the
- *             item inside a STATUS response
+ * Append a mailbox's identifiers as OBJECTID+ key-value pairs,
+ * "MAILBOXID m ACCOUNTID a", without the enclosing parentheses.
  */
-extern void prot_print_objectids(struct protstream *pout,
-                                 bool compound, const char *sep,
-                                 const char *mailboxid, const char *accountid);
+extern void index_objectid_pairs(struct buf *buf,
+                                 const char *mailboxid,
+                                 const char *accountid);
+
+/**
+ * Append a mailbox's identifiers as a response code or STATUS item: the
+ * OBJECTID+ compound "OBJECTID (...)" when 'compound' is set, else RFC
+ * 8474's "MAILBOXID (m)".
+ */
+extern void index_objectid_code(struct buf *buf,
+                                bool compound,
+                                const char *mailboxid,
+                                const char *accountid);
+
+/**
+ * Print "tag OK [code] text", the code being index_objectid_code().
+ *
+ * @param tag   the command's tag, or "*" for an untagged OK
+ */
+extern void index_print_objectid_ok(struct protstream *pout,
+                                    const char *tag,
+                                    const char *text,
+                                    bool compound,
+                                    const char *mailboxid,
+                                    const char *accountid);
 
 #endif /* INDEX_H */

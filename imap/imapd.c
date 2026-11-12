@@ -6149,11 +6149,9 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior_mask |= CB_ANNOTATE;
 
-    if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID)) {
-        client_behavior_mask |= CB_OBJECTID;
-    }
-
-    if (fetchargs.fetchitems & FETCH_OBJECTID) {
+    if (fetchargs.fetchitems
+        & (FETCH_EMAILID | FETCH_THREADID | FETCH_OBJECTID))
+    {
         client_behavior_mask |= CB_OBJECTID;
     }
 
@@ -7734,8 +7732,12 @@ localcreate:
 
     struct buf accountid = BUF_INITIALIZER;
     jmap_mailbox_accountid(mbname_intname(mbname), &accountid);
-    prot_print_objectids(imapd_out, !!(client_capa & ENABLED_OBJECTIDPLUS),
-                         tag, mailboxid, buf_cstring(&accountid));
+    index_print_objectid_ok(imapd_out,
+                            tag,
+                            error_message(IMAP_OK_COMPLETED),
+                            !!(client_capa & ENABLED_OBJECTIDPLUS),
+                            mailboxid,
+                            buf_cstring(&accountid));
     buf_free(&accountid);
 
     imapd_check(NULL, 0);
@@ -8650,36 +8652,31 @@ respond:
             }
         }
 
-        if (client_capa & ENABLED_OBJECTIDPLUS) {
-            /* Re-read the mbentry after rename to get updated jmapid */
-            mbentry_t *renamedmbentry = NULL;
-            int r2 = mboxlist_lookup(newmailboxname, &renamedmbentry, NULL);
-            if (!r2 && renamedmbentry) {
-                struct buf mailboxid = BUF_INITIALIZER;
-                struct buf accountid = BUF_INITIALIZER;
-                jmap_get_mailbox_objectids(renamedmbentry,
-                                           &objectid_cstate,
-                                           &mailboxid,
-                                           &accountid);
-                prot_print_objectids(imapd_out,
-                                     true /*compound*/,
-                                     tag,
-                                     buf_cstring(&mailboxid),
-                                     buf_cstring(&accountid));
-                buf_free(&mailboxid);
-                buf_free(&accountid);
-                mboxlist_entry_free(&renamedmbentry);
-            }
-            else {
-                prot_printf(imapd_out, "%s OK %s\r\n", tag,
-                            error_message(IMAP_OK_COMPLETED));
-                mboxlist_entry_free(&renamedmbentry);
-            }
+        /* the renamed mbentry, for the identifiers it has now */
+        mbentry_t *renamedmbentry = NULL;
+        if ((client_capa & ENABLED_OBJECTIDPLUS)
+            && !mboxlist_lookup(newmailboxname, &renamedmbentry, NULL))
+        {
+            struct buf mailboxid = BUF_INITIALIZER;
+            struct buf accountid = BUF_INITIALIZER;
+            jmap_get_mailbox_objectids(renamedmbentry,
+                                       &objectid_cstate,
+                                       &mailboxid,
+                                       &accountid);
+            index_print_objectid_ok(imapd_out,
+                                    tag,
+                                    error_message(IMAP_OK_COMPLETED),
+                                    true /*compound*/,
+                                    buf_cstring(&mailboxid),
+                                    buf_cstring(&accountid));
+            buf_free(&mailboxid);
+            buf_free(&accountid);
         }
         else {
             prot_printf(imapd_out, "%s OK %s\r\n", tag,
                         error_message(IMAP_OK_COMPLETED));
         }
+        mboxlist_entry_free(&renamedmbentry);
     }
 
 done:
@@ -10114,9 +10111,13 @@ static int print_statusline(const char *extname, unsigned statusitems,
         sepchar = ' ';
     }
     if (statusitems & STATUS_OBJECTID) {         /* draft-ietf-mailmaint-imap-objectid-bis */
-        char sepstr[2] = { sepchar, '\0' };
-        prot_print_objectids(imapd_out, true /*compound*/,
-                             sepstr, sd->mailboxid, sd->accountid);
+        struct buf item = BUF_INITIALIZER;
+        index_objectid_code(&item,
+                            true /*compound*/,
+                            sd->mailboxid,
+                            sd->accountid);
+        prot_printf(imapd_out, "%c%s", sepchar, buf_cstring(&item));
+        buf_free(&item);
         sepchar = ' ';
     }
     if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
@@ -13681,8 +13682,9 @@ static void list_objectid_item(const mbentry_t *mbentry, struct buf *item)
                                &mailboxid,
                                &accountid);
 
-    buf_printf(item, "MAILBOXID %s ACCOUNTID %s",
-               buf_cstring(&mailboxid), buf_cstring(&accountid));
+    index_objectid_pairs(item,
+                         buf_cstring(&mailboxid),
+                         buf_cstring(&accountid));
     buf_free(&mailboxid);
     buf_free(&accountid);
 }

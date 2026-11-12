@@ -1441,7 +1441,8 @@ EXPORTED void jmap_set_mailboxid(struct conversations_state *cstate,
 
 static void _set_accountid(const char *userid, struct buf *accountid)
 {
-    /* userid as ACCOUNTID - see prot_print_objectids() */
+    /* Not yet a legal ObjectID for every userid: the draft allows only
+     * 1*255 of a-z A-Z 0-9 _ - , so a domain or a dot needs mapping. */
     buf_setcstr(accountid, userid ? userid : OBJECTID_SHARED_ACCOUNTID);
 }
 
