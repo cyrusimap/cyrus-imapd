@@ -13648,10 +13648,15 @@ done:
 
 /* Body of the OBJECTID extended data item for a LIST response.
  * Empty when no mailbox stands behind the name. */
+/* A mailbox's identifiers are visible to whoever can see the mailbox */
 static void list_objectid_item(const mbentry_t *mbentry, struct buf *item)
 {
     buf_reset(item);
     if (!mbentry || !mbentry->uniqueid) {
+        return;
+    }
+    if (!imapd_userisadmin &&
+        !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_LOOKUP)) {
         return;
     }
 

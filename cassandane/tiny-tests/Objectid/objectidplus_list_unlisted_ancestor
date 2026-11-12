@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# LIST shows a mailbox's identifiers only to a user who can look the
+# mailbox up: an ancestor listed only because a shared descendant is
+# visible gets the empty OBJECTID item.
+#
+sub test_objectidplus_list_unlisted_ancestor
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other");
+    $admintalk->create("user.other.a.b");
+    $admintalk->setacl("user.other.a.b", "cassandane", "lr");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $talk = $self->{store}->get_client();
+    my %items;
+    $talk->_imap_cmd('LIST', 0,
+                     { list => sub ($, $list) {
+                         $items{$list->[2]} = { @{$list->[3] // []} };
+                     } },
+                     '(VENDOR.FM-INCLUDE-NONEXISTENT)', '',
+                     'user.other.*', 'RETURN', '(OBJECTID)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_cmp_deeply([], $items{'user.other'}{OBJECTID});
+    my %ids = @{$items{'user.other.a.b'}{OBJECTID}};
+    $self->assert_str_equals('other', $ids{ACCOUNTID});
+    $self->assert_matches(qr/\S/, $ids{MAILBOXID});
+}
