@@ -41,6 +41,13 @@
 PROGRAMS=lemming gdbtramp crash syslog_probe
 LIBS=syslog.so
 
+# h3migrate needs ngtcp2, with its OpenSSL backend, and nghttp3.  Without
+# them it isn't built, and the HttpH3 tests that use it are skipped.
+H3_PKGS=libngtcp2 libngtcp2_crypto_ossl libnghttp3 openssl
+ifeq ($(shell pkg-config --exists $(H3_PKGS) 2>/dev/null && echo yes),yes)
+PROGRAMS+=h3migrate
+endif
+
 CC=gcc
 COPTFLAGS=-g -O0
 CWARNFLAGS=-Wall -Wextra
@@ -68,10 +75,14 @@ syslog_probe_OBJS=$(syslog_probe_SOURCE:.c=.o)
 syslog_probe: $(syslog_probe_OBJS)
 	$(LINK.c) -o $@ $(syslog_probe_OBJS)
 
+h3migrate: h3migrate.c
+	$(LINK.c) $(shell pkg-config --cflags $(H3_PKGS)) -o $@ h3migrate.c \
+	    $(shell pkg-config --libs $(H3_PKGS))
+
 syslog_SOURCE=syslog.c
 syslog_OBJS=$(syslog_SOURCE:.c=.o)
 syslog.so: $(syslog_OBJS)
 	$(LINK.c) -shared -o $@ $(syslog_OBJS) -ldl
 
 clean:
-	$(RM) $(PROGRAMS) $(LIBS) *.o
+	$(RM) $(PROGRAMS) h3migrate $(LIBS) *.o
