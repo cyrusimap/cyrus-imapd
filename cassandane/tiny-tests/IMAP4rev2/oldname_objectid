@@ -58,6 +58,18 @@ sub test_oldname_objectid
     %ext = @{$results[1][3]};
     $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
 
+    xlog $self, "SELECT with a denormalized name";
+    @results = ();
+    $talk->_imap_cmd('SELECT', 0, \%handlers, $o_denorm);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals($o_nfc, $results[0][2]);
+    %ext = @{$results[0][3]};
+    $self->assert_cmp_deeply([$o_denorm], $ext{OLDNAME});
+    $self->assert_cmp_deeply(\%ids, { @{$ext{OBJECTID}} });
+    $talk->unselect();
+
     xlog $self, "DELETE with a denormalized name";
     @results = ();
     $talk->_imap_cmd('DELETE', 0, \%handlers, $o_denorm);

@@ -5345,6 +5345,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     if (strarray_size(&listargs.pat)) {
         /* Emit LIST response, optionally with OLDNAME */
+        if (client_capa & ENABLED_OBJECTIDPLUS)
+            listargs.ret |= LIST_RET_OBJECTID;
         list_data(&listargs);
     }
 
@@ -5818,6 +5820,7 @@ badannotation:
         case 'O':
             if (!strcmp(fetchatt.s, "OBJECTID")) {
                 fa->fetchitems |= FETCH_OBJECTID;
+                objectidplus_enabled("FETCH OBJECTID");
             }
             else goto badatt;
             break;
@@ -6146,7 +6149,6 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     if (fetchargs.fetchitems & FETCH_OBJECTID) {
         client_behavior_mask |= CB_OBJECTID;
-        objectidplus_enabled("FETCH OBJECTID");
     }
 
     if (fetchargs.fetchitems & FETCH_PREVIEW)
