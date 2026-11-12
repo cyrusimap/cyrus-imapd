@@ -15963,7 +15963,7 @@ gotrecord:
         struct hash_table props = HASH_TABLE_INITIALIZER;
 
         getargs.props = &props;
-        construct_hash_table(&props, 1, 0);
+        construct_hash_table(&props, 1, 1);
         hash_insert("hasAttachment", (void*)1, getargs.props);
 
         _email_from_buf(req, &getargs, &content, NULL, &email);

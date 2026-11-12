@@ -741,7 +741,14 @@ static json_t *_card_check_readonly(jmap_req_t *req,
         .jmapcache = HASHU64_TABLE_INITIALIZER,
         .cid = BUF_INITIALIZER,
     };
-    construct_hashu64_table(&rock.jmapcache, 1, 0);
+    /* The hash table in the rock is used by jmap_card_get() to permit
+     * getcards_byid() to collect and return the set of records to pass to
+     * cachecard_cb().
+     * Here we don't need to do that, but we have no good way to avoid the
+     * hash_insert() in getcards_cb() below. Hence create a trivial hash to
+     * write our single ID into. Use a memory pool to avoid a second malloc()
+     */
+    construct_hashu64_table(&rock.jmapcache, 1, 1);
 
     json_t *err = NULL;
     int r = getcards_byid(&rock, id);

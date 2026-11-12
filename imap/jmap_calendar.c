@@ -9902,7 +9902,7 @@ static int principalfilter_init(json_t *jfilter, struct principalfilter *filter)
 {
     if (!jfilter) return 0;
 
-    construct_hash_table(&filter->props, 8, 0);
+    construct_hash_table(&filter->props, 0, 0);
     int r = xapian_dbw_openmem(&filter->dbw);
     if (r) return r;
     r = xapian_db_opendbw(filter->dbw, &filter->db);
@@ -10315,7 +10315,8 @@ static json_t *principal_check_readonly(jmap_req_t *req,
     }
 
     hash_table wantids = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&wantids, 2, 0);
+    /* Using a memory pool means that the hash_insert() doesn't also malloc() */
+    construct_hash_table(&wantids, 1, 1);
     hash_insert(id, (void *) 0x1, &wantids);
 
     SHA1_CTX sha1;
