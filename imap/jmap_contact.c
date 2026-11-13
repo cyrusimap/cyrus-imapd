@@ -2699,20 +2699,28 @@ static void setaddressbooks_create(struct jmap_req *req,
         .skip_hidden = 1,
     };
     r = getaddressbooks_cb(newmbentry, &grock);
-    if (!r) {
-        *record = json_incref(json_array_get(get.list, 0));
-        if (!*record) {
-            /* a sharee may not be able to read what it created */
-            char id[JMAP_MAX_ADDRBOOKID_SIZE];
-            jmap_set_addrbookid(req->cstate, newmbentry, id);
-            *record = json_pack(
-                "{s:s s:o}", "id", id, "myRights",
-                addressbookrights_to_jmap(
-                    jmap_myrights_mbentry(req, newmbentry)));
-        }
-        jmap_add_id(req, creation_id,
-                    json_string_value(json_object_get(*record, "id")));
+    if (r) {
+        /* the addressbook exists, so it is still created */
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.create.read.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
+        r = 0;
     }
+    *record = json_incref(json_array_get(get.list, 0));
+    if (!*record) {
+        /* a sharee may not be able to read what it created */
+        char id[JMAP_MAX_ADDRBOOKID_SIZE];
+        jmap_set_addrbookid(req->cstate, newmbentry, id);
+        *record = json_pack(
+            "{s:s s:o}",
+            "id",
+            id,
+            "myRights",
+            addressbookrights_to_jmap(jmap_myrights_mbentry(req, newmbentry)));
+    }
+    jmap_add_id(req,
+                creation_id,
+                json_string_value(json_object_get(*record, "id")));
     jmap_get_fini(&get);
     mboxlist_entry_free(&newmbentry);
 

@@ -55,7 +55,7 @@ EXPORTED const char *vcard_image_mediatype(const char *data, size_t size)
     for (sig = image_signatures; sig->mediatype; sig++) {
         int i;
         for (i = 0; i < 2 && sig->magic[i].len; i++) {
-            if (sig->magic[i].offset + sig->magic[i].len >= size
+            if (sig->magic[i].offset + sig->magic[i].len > size
                 || memcmp(data + sig->magic[i].offset,
                           sig->magic[i].data,
                           sig->magic[i].len))

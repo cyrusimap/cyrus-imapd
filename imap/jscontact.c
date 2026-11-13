@@ -3838,6 +3838,9 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
         jscontact_ctx_t *ctx = rrock->ctx;
         struct buf blob = BUF_INITIALIZER;
         const char *blob_prop = NULL;
+        /* the image type of the blob's content, if detected yet */
+        const char *sniffed_type = NULL;
+        bool have_sniffed_type = false;
 
         /* blobId supersedes uri */
         jprop = json_object_get(obj, "blobId");
@@ -3873,8 +3876,10 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             if (!buf_len(&blobtype)) {
                 const char *type = media_type;
                 if (!type) {
-                    type = vcard_image_mediatype(buf_base(&blob),
-                                                 buf_len(&blob));
+                    sniffed_type =
+                        vcard_image_mediatype(buf_base(&blob), buf_len(&blob));
+                    have_sniffed_type = true;
+                    type = sniffed_type;
                 }
                 if (type) buf_setcstr(&blobtype, type);
             }
@@ -3935,17 +3940,25 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             blob_prop = "uri";
 
             if (!media_type) {
-                media_type = xstrdupnull(vcard_image_mediatype(decbuf, size));
+                sniffed_type = vcard_image_mediatype(decbuf, size);
+                have_sniffed_type = true;
+                media_type = xstrdupnull(sniffed_type);
             }
         }
 
         if (blob_prop) {
-            if (pkind == VCARD_PHOTO_PROPERTY &&
-                strncasecmpsafe(media_type, "image/", 6) &&
-                !vcard_image_mediatype(buf_base(&blob), buf_len(&blob))) {
-                jmap_parser_invalid(parser, blob_prop);
-                buf_free(&blob);
-                goto fail;
+            if (pkind == VCARD_PHOTO_PROPERTY
+                && strncasecmpsafe(media_type, "image/", 6))
+            {
+                if (!have_sniffed_type) {
+                    sniffed_type =
+                        vcard_image_mediatype(buf_base(&blob), buf_len(&blob));
+                }
+                if (!sniffed_type) {
+                    jmap_parser_invalid(parser, blob_prop);
+                    buf_free(&blob);
+                    goto fail;
+                }
             }
 
             /* The media type is encoded in the data: URI */
