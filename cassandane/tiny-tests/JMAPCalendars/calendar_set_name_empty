@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: a calendar name must not be the empty string.
+sub test_calendar_set_name_empty
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $cal = $user->calendars->create({ name => 'good' });
+
+    my $res = $jmap->request([
+        [ 'Calendar/set' => { create => { bad => { name => '' } } } ],
+        [ 'Calendar/set' => { update => { $cal->id => { name => '' } } } ],
+    ]);
+
+    my $create = $res->sentence(0)->as_set;
+    $self->assert_cmp_deeply({
+        bad => {
+            type => 'invalidProperties',
+            properties => ['name'],
+        },
+    }, $create->create_errors);
+
+    my $update = $res->sentence(1)->as_set;
+    $self->assert_cmp_deeply({
+        $cal->id => {
+            type => 'invalidProperties',
+            properties => ['name'],
+        },
+    }, $update->update_errors);
+}
