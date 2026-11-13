@@ -280,7 +280,9 @@ static int myopen(const char *fname, int flags, struct dbengine **ret, struct tx
     assert(fname && ret);
 
     db->path = xstrdup(fname);
-    construct_hash_table(&db->txn.table, 200, 0);
+    /* commit 8ff2765534a19dac implies that a transaction will use about 100
+     * buckets */
+    construct_hash_table(&db->txn.table, 128, 0);
 
     /* strip any filename from the path */
     if ((p = strrchr(db->path, '/'))) *p = '\0';
