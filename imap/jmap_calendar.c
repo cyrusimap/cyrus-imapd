@@ -5856,7 +5856,6 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
     json_object_del(new_override, "recurrenceIdTimeZone");
     json_object_del(new_override, "recurrenceRule");
     json_object_del(new_override, "recurrenceOverrides");
-    json_object_del(new_override, "relatedTo");
     json_object_del(new_override, "organizerCalendarAddress");
     json_object_del(new_override, "uid");
     json_decref(new_instance);

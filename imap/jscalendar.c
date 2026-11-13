@@ -3223,7 +3223,6 @@ static void sanitize_override_patch(json_t *jpatch)
         "recurrenceIdTimeZone",
         "recurrenceOverrides",
         "recurrenceRule",
-        "relatedTo",
         "sentBy",
         "uid",
         NULL
@@ -4401,6 +4400,37 @@ static void validate_recurrencerule(jscal_ctx_t *ctx,
 static void validate_entry(jscal_ctx_t *ctx,
                            struct jmap_parser *parser, json_t *jentry);
 
+// draft-ietf-calext-jscalendarbis S3.3.4
+static bool is_forbidden_override_pointer(const char *ptr)
+{
+    static const char *const forbidden[] = { "@type",
+                                             "method",
+                                             "organizerCalendarAddress",
+                                             "privacy",
+                                             "prodId",
+                                             "recurrenceId",
+                                             "recurrenceIdTimeZone",
+                                             "sentBy",
+                                             "uid",
+                                             NULL };
+    for (int i = 0; forbidden[i]; i++) {
+        if (!strcmp(ptr, forbidden[i])) {
+            return true;
+        }
+    }
+
+    if (!strncmp(ptr, "participants/", 13)) {
+        const char *p = strchr(ptr + 13, '/');
+        if (p && !strcmp(p + 1, "calendarAddress")) {
+            return true;
+        }
+    }
+
+    size_t n = strcspn(ptr, "/");
+    return (n == 19 && !strncmp(ptr, "recurrenceOverrides", n))
+           || (n == 14 && !strncmp(ptr, "recurrenceRule", n));
+}
+
 static void validate_recurrenceoverrides(jscal_ctx_t *ctx,
                                          struct jmap_parser *parser,
                                          json_t *jentry,
@@ -4435,9 +4465,20 @@ static void validate_recurrenceoverrides(jscal_ctx_t *ctx,
             jmap_parser_invalid(parser, "excluded");
         }
         else if (!jexcl && json_object_size(jpatch)) {
-            // Apply the patch object to produce the recurrence override.
             json_t *jinvalid = json_array();
-            json_t *jovr = jmap_patchobject_apply(jmaster, jpatch, jinvalid, 0);
+            json_t *jovr = NULL;
+            const char *ptr;
+            json_t *jptrval;
+            json_object_foreach(jpatch, ptr, jptrval)
+            {
+                if (is_forbidden_override_pointer(ptr)) {
+                    json_array_append_new(jinvalid, json_string(ptr));
+                }
+            }
+            // Apply the patch object to produce the recurrence override.
+            if (!json_array_size(jinvalid)) {
+                jovr = jmap_patchobject_apply(jmaster, jpatch, jinvalid, 0);
+            }
             if (JNOTNULL(jovr) && !json_array_size(jinvalid)) {
                 // The patch-object is valid, let's validate if the resulting
                 // recurrence override is valid, too.
@@ -6496,7 +6537,6 @@ static void recuroverrides_from_ical(jscal_ctx_t *ctx,
         json_object_del(jpatch, "recurrenceIdTimeZone");
         json_object_del(jpatch, "recurrenceOverrides");
         json_object_del(jpatch, "recurrenceRule");
-        json_object_del(jpatch, "relatedTo");
         json_object_del(jpatch, "sentBy");
         json_object_del(jpatch, "uid");
         const char *recurid = localtime_from_icaltime(icalrecurid, &buf);

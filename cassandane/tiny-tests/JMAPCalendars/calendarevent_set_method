@@ -37,29 +37,31 @@ sub test_calendarevent_set_method
     $self->assert_cmp_deeply(['method'],
         $res->[0][1]{notCreated}{event}{properties});
 
-    xlog "method on override event is ignored"; # see RFC8984, section 4.3.5
+    xlog "method on override event is rejected";
+    my %event = (
+        version => '2.0',
+        calendarIds => {
+            $default_cal_id => JSON::true,
+        },
+        start => '2022-01-28T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+        title => 'event',
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants => {
+            someone => {
+                calendarAddress => 'mailto:someone@example.com',
+            },
+        },
+        recurrenceRule => {
+            frequency => 'daily',
+        },
+    );
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
-                event => {
-                    version => '2.0',
-                    calendarIds => {
-                        $default_cal_id => JSON::true,
-                    },
-                    start => '2022-01-28T09:00:00',
-                    timeZone => 'Etc/UTC',
-                    duration => 'PT1H',
-                    title => 'event',
-                    organizerCalendarAddress => 'mailto:cassandane@example.com',
-                    participants => {
-                        someone => {
-                            calendarAddress => 'mailto:someone@example.com',
-                        },
-                    },
-                    recurrenceRule => {
-                        frequency => 'daily',
-                    },
-
+                bad => {
+                    %event,
                     recurrenceOverrides => {
                         '2022-01-29T09:00:00' => {
                             title => 'override',
@@ -67,21 +69,16 @@ sub test_calendarevent_set_method
                         },
                     },
                 },
+                event => \%event,
             },
         }, 'R1'],
-        ['CalendarEvent/get', {
-            ids => ['#event'],
-            properties => ['title', 'method', 'recurrenceOverrides'],
-        }, 'R2'],
     ]);
+    $self->assert_cmp_deeply({
+        type => 'invalidProperties',
+        properties => ['recurrenceOverrides/2022-01-29T09:00:00/method'],
+    }, $res->[0][1]{notCreated}{bad});
     my $eventId = $res->[0][1]{created}{event}{id};
     $self->assert_not_null($eventId);
-    $self->assert_null($res->[1][1]{list}[0]{method});
-    $self->assert_cmp_deeply({
-        '2022-01-29T09:00:00' => {
-            title => 'override',
-        },
-    }, $res->[1][1]{list}[0]{recurrenceOverrides});
 
     xlog "can't set method in /update either";
     $res = $jmap->CallMethods([
