@@ -79,4 +79,15 @@ sub test_blob_lookup
     );
     $self->assert_str_equals('error', $res->[0][0]);
     $self->assert_str_equals('unknownDataType', $res->[0][1]{type});
+
+    xlog "A type whose capability is not in use is unknownDataType";
+    # RFC 9404 Section 4.3
+    $res = $jmap->CallMethods(
+        [['Blob/lookup', { ids => [$blobId], typeNames => ['Email'] }, 'R1']],
+        [ 'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:blob' ],
+    );
+    $self->assert_cmp_deeply(
+        [[ 'error', superhashof({ type => 'unknownDataType' }), 'R1' ]],
+        $res,
+    );
 }

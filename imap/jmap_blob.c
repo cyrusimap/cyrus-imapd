@@ -462,7 +462,26 @@ struct lookup_types {
     int unknown;
 };
 
-static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
+/* The capability that defines a data type Blob/lookup supports */
+static const char *_datatype_capability(uint32_t kind)
+{
+    switch (kind) {
+    case JMAP_TYPE_MAILBOX:
+    case JMAP_TYPE_THREAD:
+    case JMAP_TYPE_EMAIL:
+        return JMAP_URN_MAIL;
+    case JMAP_TYPE_ADDRESSBOOK:
+    case JMAP_TYPE_CONTACTCARD:
+        return JMAP_URN_CONTACTS;
+    case JMAP_TYPE_CALENDAR:
+    case JMAP_TYPE_CALENDAREVENT:
+        return JMAP_URN_CALENDARS;
+    default:
+        return NULL;
+    }
+}
+
+static int _parse_datatypes(jmap_req_t *req,
                             struct jmap_parser *parser,
                             const char *key,
                             json_t *arg,
@@ -484,12 +503,18 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
             const jmap_data_type_t *dtype =
                 val ? jmap_data_types_lookup(val, strlen(val)) : NULL;
 
-            if (dtype && (dtype->attributes & JMAP_TYPE_HAS_BLOB)) {
+            const char *capa =
+                dtype && (dtype->attributes & JMAP_TYPE_HAS_BLOB)
+                    ? _datatype_capability(dtype->kind)
+                    : NULL;
+
+            if (capa && jmap_is_using(req, capa)) {
                 types->datatypes |= dtype->kind;
             }
             else {
-                /* RFC 9404 S4.3: an unknown type name is an unknownDataType
-                 * error; the caller reports it */
+                /* RFC 9404 S4.3: an unknown type name, or one whose
+                 * capability isn't in use, is an unknownDataType error;
+                 * the caller reports it */
                 types->unknown = 1;
             }
         }
