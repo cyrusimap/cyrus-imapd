@@ -13,76 +13,13 @@ use File::Find;
 use base qw(Cassandane::Unit::TestSuite::Cyrus);
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
+use Cassandane::Util::JMAPTestSuiteSkips;
 
 my $basedir;
 my $binary;
 my $testdir;
 my $authortestdir;
 my %suppressed;
-
-# Tests for behaviour that has changed over time, where older releases
-# contain the older behaviour and can no longer pass the updated test.
-# The value is the first version number that is supposed to work.
-# Same as the :min_version annotations on native Cassandane tests, but
-# dot-separated.  See skip_before() below for implementation details.
-my %notbefore = (
-    't:Email:get:header-header-field-name' => '3.5',
-    't:Email:import:good-imports' => '3.8',
-    't:Email:import:one-fails-another-succeeds' => '3.8',
-    't:core:jmap-session-resource' => '3.13',
-    't:core:jmap-session-resource' => '3.13',
-);
-
-# Tests which JMAP-TestSuite will skip anyway when it detects it's
-# talking to Cyrus.
-my %notcyrus = map { $_ => 1 } (
-    't:Mailbox:get:no-existing-entities',
-    't:Mailbox:query:no-existing-entities',
-);
-
-# Tests for behaviour Cyrus differs on by design.  identityId is optional
-# (a redirect has none) and goes to the submission server unchecked.
-my %cyrusdiffers = map { $_ => 1 } (
-    't:EmailSubmission:set:missing-required',
-    't:EmailSubmission:set:unknown-references',
-);
-
-# Tests Cyrus fails with some JMAP-TestSuite version.  Remove an entry once
-# Cyrus passes it with every suite version in use.
-my %cyrusfails = map { $_ => 1 } (
-    't:AddressBook:set:create-defaults',
-    't:AddressBook:set:name-and-sort-order',
-    't:AddressBook:set:on-destroy-remove-contents-changes',
-    't:AddressBook:set:on-success-set-is-default-rules',
-    't:Blob:get:ranges',
-    't:Blob:lookup:capability-not-used',
-    't:Calendar:set:name',
-    't:CalendarEvent:get:recurrence-overrides-window',
-    't:CalendarEvent:get:synthetic-instance',
-    't:CalendarEvent:get:utc-start-end',
-    't:CalendarEvent:query:expand-recurrences-filter',
-    't:CalendarEvent:query:filter',
-    't:CalendarEvent:query:sort',
-    't:CalendarEvent:set:calendar-ids',
-    't:CalendarEvent:set:recurrence-overrides',
-    't:CalendarEvent:set:utc-start-end',
-    't:CalendarEventNotification:get:basic',
-    't:ContactCard:set:media',
-    't:ContactCard:set:members-and-type',
-    't:Email:foreign-account',    # older suites expect accountNotFound
-    't:Email:import:eai-headers',
-    't:EmailSubmission:get:basic',
-    't:EmailSubmission:query:filters-and-sorts',
-    't:EmailSubmission:set:generated-envelope',
-    't:EmailSubmission:set:immutable-properties',
-    't:EmailSubmission:set:implicit-email-set',
-    't:EmailSubmission:set:invalid-recipients',
-    't:EmailSubmission:set:no-recipients',
-    't:EmailSubmission:set:undo-status',
-    't:MDN:send:mdnsent',
-    't:ParticipantIdentity:get:basic',
-    't:Quota:changes:used',
-);
 
 sub cyrus_version_supports_jmap
 {
@@ -161,34 +98,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-# n.b. similar to _skip_version() in Cassandane::Unit::TestSuite
-sub skip_before
-{
-    my ($lim) = @_;
-
-    my ($lim_major, $lim_minor, $lim_revision, $lim_commits)
-        = map { 0 + $_ } split /\./, $lim;
-    return if not defined $lim_major;
-
-    my ($major, $minor, $revision, $commits) =
-        Cassandane::Instance->get_version();
-
-    return 1 if $major < $lim_major; # too old, skip!
-    return if $major > $lim_major;   # definitely new enough
-
-    return if not defined $lim_minor; # don't check deeper if caller doesn't care
-    return 1 if $minor < $lim_minor;
-    return if $minor > $lim_minor;
-
-    return if not defined $lim_revision;
-    return 1 if $revision < $lim_revision;
-
-    return if not defined $lim_commits;
-    return 1 if $commits < $lim_commits;
-
-    return;
-}
-
 sub find_tests
 {
     my ($dir) = @_;
@@ -203,13 +112,8 @@ sub find_tests
             return unless -f "$file.t";
             $file =~ s/^$basedir\/?//;
             $file =~ s{/}{:}g;
-            return if $notcyrus{$file};
-            return if $cyrusdiffers{$file};
-            return if $cyrusfails{$file};
+            return if jmaptestsuite_skips($file);
             return if $suppressed{$file};
-            if (exists $notbefore{$file} and skip_before($notbefore{$file})) {
-                return;
-            }
             push @tests, "test_$file";
         },
         $dir,
