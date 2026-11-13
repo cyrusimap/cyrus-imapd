@@ -2,8 +2,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#ifndef LIBSASL_MIN_ANONYMOUS_H
-#define LIBSASL_MIN_ANONYMOUS_H
+#ifndef LIBSASL_MIN_MECH_ANONYMOUS_H
+#define LIBSASL_MIN_MECH_ANONYMOUS_H
 
 #include "libsasl_min/saslplug.h"
 
@@ -19,5 +19,4 @@ extern int anonymous_client_plug_init(const sasl_utils_t *utils,
                                       sasl_client_plug_t **pluglist,
                                       int *plugcount);
 
-#endif /* LIBSASL_MIN_ANONYMOUS_H */
-
+#endif /* LIBSASL_MIN_MECH_ANONYMOUS_H */
