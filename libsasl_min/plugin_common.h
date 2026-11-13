@@ -93,7 +93,7 @@
                        __LINE__)
 #endif
 
-#ifndef LIBSASL_MIN_SASLINT_H
+#ifndef LIBSASL_MIN_CORE_SASLINT_H
 typedef struct buffer_info
 {
     char *data;
@@ -101,7 +101,7 @@ typedef struct buffer_info
     unsigned reallen; /* total length of buffer (>= curlen) */
 } buffer_info_t;
 
-#endif /* LIBSASL_MIN_SASLINT_H */
+#endif /* LIBSASL_MIN_CORE_SASLINT_H */
 
 #ifdef __cplusplus
 extern "C" {
