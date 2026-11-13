@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: a recurrenceOverrides window bound at midnight UTC still applies.
+sub test_calendarevent_get_recurrenceoverrides_midnight
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $event = $user->calendars->default->create_event({
+        title => 'event',
+        start => '2020-01-01T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily' },
+        recurrenceOverrides => {
+            '2020-01-02T09:00:00' => { title => 'override2' },
+            '2020-01-03T09:00:00' => { title => 'override3' },
+            '2020-01-04T09:00:00' => { title => 'override4' },
+        },
+    });
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/get' => {
+            ids => [ $event->id ],
+            properties => ['recurrenceOverrides'],
+            recurrenceOverridesAfter => '2020-01-03T00:00:00Z',
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [ $event->id ],
+            properties => ['recurrenceOverrides'],
+            recurrenceOverridesBefore => '2020-01-03T00:00:00Z',
+        } ],
+    ]);
+
+    my $after = $res->sentence(0)->assert_named('CalendarEvent/get')->arguments;
+    $self->assert_cmp_deeply(
+        ['2020-01-03T09:00:00', '2020-01-04T09:00:00'],
+        [ sort keys $after->{list}[0]{recurrenceOverrides}->%* ],
+    );
+
+    my $before = $res->sentence(1)->assert_named('CalendarEvent/get')->arguments;
+    $self->assert_cmp_deeply(
+        ['2020-01-02T09:00:00'],
+        [ sort keys $before->{list}[0]{recurrenceOverrides}->%* ],
+    );
+}

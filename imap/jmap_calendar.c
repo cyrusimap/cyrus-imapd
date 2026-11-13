@@ -3051,11 +3051,6 @@ struct jmapical_duration {
 
 #define JMAPICAL_DURATION_INITIALIZER { 0, 0, 0, 0, 0, 0, 0 }
 
-static int jmapical_datetime_has_zero_time(const struct jmapical_datetime *dt)
-{
-    return dt->hour == 0 && dt->minute == 0 && dt->second == 0 && dt->nano == 0;
-}
-
 static icaltimetype jmapical_datetime_to_icaltime(const struct jmapical_datetime *dt,
                                                   const icaltimezone* zone)
 {
@@ -3344,6 +3339,8 @@ struct getcalendarevents_rock {
     ptrarray_t malloced_fallbacktzs;
     struct jmapical_datetime overrides_before;
     struct jmapical_datetime overrides_after;
+    bool have_overrides_before;
+    bool have_overrides_after;
     int reduce_participants;
     int is_sharee;
     hashu64_table cache_jsevents;
@@ -4422,8 +4419,7 @@ gotevent:
     }
 
     /* Process recurrenceOverrides[Before,After] */
-    if (!jmapical_datetime_has_zero_time(&rock->overrides_before) ||
-        !jmapical_datetime_has_zero_time(&rock->overrides_after)) {
+    if (rock->have_overrides_before || rock->have_overrides_after) {
 
         json_t *joverrides = json_object_get(jsevent, "recurrenceOverrides");
 
@@ -4450,12 +4446,12 @@ gotevent:
                     icalrid = icaltime_convert_to_zone(icalrid, utc);
                     jmapical_datetime_from_icaltime(icalrid, &ridt);
                 }
-                if (!jmapical_datetime_has_zero_time(&rock->overrides_before) &&
+                if (rock->have_overrides_before &&
                         jmapical_datetime_compare(&ridt, &rock->overrides_before) >= 0) {
                     /* Remove override */
                     json_object_del(joverrides, rid);
                 }
-                if (!jmapical_datetime_has_zero_time(&rock->overrides_after) &&
+                if (rock->have_overrides_after &&
                         jmapical_datetime_compare(&ridt, &rock->overrides_after) < 0) {
                     /* Remove override */
                     json_object_del(joverrides, rid);
@@ -4568,6 +4564,7 @@ static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
         const char *s = json_string_value(val);
         if (!s) return 0;
         if (jmapical_utcdatetime_from_string(s, &rock->overrides_after) == 0) {
+            rock->have_overrides_after = true;
             return 1;
         }
     }
@@ -4575,6 +4572,7 @@ static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
         const char *s = json_string_value(val);
         if (!s) return 0;
         if (jmapical_utcdatetime_from_string(s, &rock->overrides_before) == 0) {
+            rock->have_overrides_before = true;
             return 1;
         }
     }
