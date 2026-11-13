@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: Blob/get returns the bytes of the requested range, and
+# isTruncated only when the range runs past the end (RFC 9404 S4.2).
+sub test_blob_get_range
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $blobId = $jmap->upload({
+        accountId => $jmap->fallback_account_id,
+        type => 'text/plain',
+        blob => \'0123456789',
+    })->blob_id;
+    $self->assert_not_null($blobId);
+    $blobId = "$blobId";
+
+    my $get = sub ($range) {
+        my $res = $jmap->request({
+            using => [
+                'urn:ietf:params:jmap:core',
+                'urn:ietf:params:jmap:blob',
+            ],
+            methodCalls => [
+                ['Blob/get', {
+                    ids => [$blobId],
+                    properties => ['data:asText'],
+                    %$range,
+                }],
+            ],
+        });
+        return $res->single_sentence('Blob/get')->arguments->{list};
+    };
+
+    $self->assert_cmp_deeply(
+        [{ id => $blobId, 'data:asText' => '' }],
+        $get->({ length => 0 }),
+    );
+    $self->assert_cmp_deeply(
+        [{ id => $blobId, 'data:asText' => '' }],
+        $get->({ offset => 4, length => 0 }),
+    );
+    $self->assert_cmp_deeply(
+        [{ id => $blobId, 'data:asText' => '456' }],
+        $get->({ offset => 4, length => 3 }),
+    );
+    $self->assert_cmp_deeply(
+        [{ id => $blobId, 'data:asText' => '89', isTruncated => JSON::true }],
+        $get->({ offset => 8, length => 3 }),
+    );
+}

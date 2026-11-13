@@ -283,6 +283,7 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
 struct blob_range {
     size_t offset;
     size_t length;
+    bool has_length;
 };
 
 static int _parse_range(jmap_req_t *req __attribute__((unused)),
@@ -307,8 +308,11 @@ static int _parse_range(jmap_req_t *req __attribute__((unused)),
         long long val = -1;
         if (json_is_integer(arg)) val = json_integer_value(arg);
 
-        if (val <= 0) jmap_parser_invalid(parser, "length");
-        else rangep->length = val;
+        if (val < 0) jmap_parser_invalid(parser, "length");
+        else {
+            rangep->length = val;
+            rangep->has_length = true;
+        }
 
         return 1;
     }
@@ -325,7 +329,7 @@ static int jmap_blob_get(jmap_req_t *req)
     size_t i;
 
     /* Parse request */
-    struct blob_range range = { 0, 0 };
+    struct blob_range range = { 0 };
     jmap_get_parse(req, &parser, &blob_props, /*allow_null_ids*/0,
                    &_parse_range, &range, &get, &err);
     if (err) {
@@ -357,7 +361,7 @@ static int jmap_blob_get(jmap_req_t *req)
                     len = 0;
                 }
             }
-            if (range.length) {
+            if (range.has_length) {
                 if (len >= range.length) len = range.length;
                 else is_truncated = 1;
             }
