@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcStart with a null timeZone sets the calendar's timeZone,
+# and the response reports it although the client set timeZone.
+sub test_calendarevent_set_utcstart_null_timezone
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $cal = $user->calendars->default;
+    $cal->update({ timeZone => 'America/New_York' });
+    my $floatingId = $cal->create_event({
+        title => 'floating',
+        start => '2024-05-01T09:00:00',
+        timeZone => undef,
+        duration => 'PT1H',
+    })->id;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => { $cal->id => JSON::true },
+                    title => 'event',
+                    utcStart => '2024-05-01T13:00:00Z',
+                    timeZone => undef,
+                    duration => 'PT1H',
+                },
+            },
+            update => {
+                $floatingId => {
+                    utcStart => '2024-05-01T14:00:00Z',
+                    timeZone => undef,
+                },
+            },
+        } ],
+    ]);
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+    $self->assert_cmp_deeply(superhashof({
+        start => '2024-05-01T09:00:00',
+        timeZone => 'America/New_York',
+    }), $set->created->{event});
+    $self->assert_cmp_deeply(superhashof({
+        start => '2024-05-01T10:00:00',
+        timeZone => 'America/New_York',
+    }), $set->updated->{$floatingId});
+}

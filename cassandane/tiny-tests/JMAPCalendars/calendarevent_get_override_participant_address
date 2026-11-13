@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: an override whose ATTENDEE keeps a participant's id but not its
+# address reads back as a separate participant, so the event can be set
+# back as it was read.
+sub test_calendarevent_get_override_participant_address
+    ($self)
+{
+    my $caldav = $self->{caldav};
+    my $jmap = $self->default_user->jmap;
+
+    my $ical = <<'ICS';
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Example//EN
+BEGIN:VEVENT
+UID:override-participant-address
+DTSTAMP:20240101T000000Z
+DTSTART:20240501T090000Z
+DURATION:PT1H
+RRULE:FREQ=DAILY;COUNT=3
+SUMMARY:event
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=p1:mailto:p1@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:override-participant-address
+DTSTAMP:20240101T000000Z
+RECURRENCE-ID:20240502T090000Z
+DTSTART:20240502T090000Z
+DURATION:PT1H
+SUMMARY:event
+ORGANIZER:mailto:cassandane@example.com
+ATTENDEE;X-JMAP-ID=p1:mailto:other@example.com
+END:VEVENT
+END:VCALENDAR
+ICS
+    $ical =~ s/\r?\n/\r\n/gs;
+    $caldav->Request('PUT', 'Default/override.ics', $ical,
+        'Content-Type' => 'text/calendar');
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/query' => {}, 'q' ],
+        [ 'CalendarEvent/get' => {
+            '#ids' => {
+                resultOf => 'q',
+                name => 'CalendarEvent/query',
+                path => '/ids',
+            },
+        } ],
+    ]);
+    my $event = $res->sentence_named('CalendarEvent/get')
+        ->arguments->{list}[0];
+    my $override = $event->{recurrenceOverrides}{'2024-05-02T09:00:00'};
+    $self->assert_cmp_deeply(
+        superhashof({ 'participants/p1' => undef }),
+        $override,
+    );
+
+    my %replace = map { $_ => $event->{$_} } grep {
+        !/^(id|blobId|debugBlobId|isOrigin|utcStart|utcEnd|x-href)$/
+    } keys %$event;
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            update => { $event->{id} => \%replace },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ "$event->{id}" ],
+        [ keys $res->single_sentence('CalendarEvent/set')->as_set
+            ->updated->%* ],
+    );
+}

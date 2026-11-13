@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcStart gives an event the IANA name of a calendar time zone
+# that was set by its Windows name.
+sub test_calendarevent_set_utcstart_windows_timezone
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $cal = $user->calendars->default;
+    $cal->update({ timeZone => 'W. Europe Standard Time' });
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => { $cal->id => JSON::true },
+                    title => 'event',
+                    utcStart => '2024-05-01T07:00:00Z',
+                    duration => 'PT1H',
+                },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(superhashof({
+        start => '2024-05-01T09:00:00',
+        timeZone => 'Europe/Berlin',
+    }), $res->single_sentence('CalendarEvent/set')->as_set
+        ->created->{event});
+}

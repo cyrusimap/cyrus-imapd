@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcEnd alone on a floating event reads its start in Etc/UTC, as
+# CalendarEvent/get reports it by default, and the event stays floating.
+sub test_calendarevent_set_utcend_floating
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $cal = $user->calendars->default;
+    $cal->update({ timeZone => 'America/New_York' });
+    my $id = $cal->create_event({
+        title => 'floating',
+        start => '2024-05-01T10:00:00',
+        timeZone => undef,
+        duration => 'PT1H',
+    })->id;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            update => { $id => { utcEnd => '2024-05-01T12:00:00Z' } },
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [ $id ],
+            properties => ['start', 'duration', 'timeZone', 'utcEnd'],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => superhashof({ duration => 'PT2H' }) },
+        $res->sentence_named('CalendarEvent/set')->as_set->updated,
+    );
+    my $list = $res->sentence_named('CalendarEvent/get')->arguments->{list};
+    $self->assert_cmp_deeply([ superhashof({
+        start => '2024-05-01T10:00:00',
+        duration => 'PT2H',
+        utcEnd => '2024-05-01T12:00:00Z',
+    }) ], $list);
+    $self->assert_null($list->[0]{timeZone});
+}

@@ -66,6 +66,39 @@ sub test_calendarevent_set_recurrenceoverrides_forbidden
         } keys %forbidden
     }, $res->single_sentence('CalendarEvent/set')->as_set->create_errors);
 
+    # Invariant: replacing the participant changes its calendarAddress too.
+    my $other = {
+        calendarAddress => 'mailto:other@example.com',
+        roles => { attendee => JSON::true },
+    };
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                part => {
+                    %event,
+                    recurrenceOverrides => {
+                        $rid => { 'participants/p1' => $other },
+                    },
+                },
+                parts => {
+                    %event,
+                    recurrenceOverrides => {
+                        $rid => { participants => { p1 => $other } },
+                    },
+                },
+            },
+        } ],
+    ]);
+    my $err = {
+        type => 'invalidProperties',
+        properties =>
+            ["recurrenceOverrides/$rid/participants/p1/calendarAddress"],
+    };
+    $self->assert_cmp_deeply(
+        { part => $err, parts => $err },
+        $res->single_sentence('CalendarEvent/set')->as_set->create_errors,
+    );
+
     # Invariant: relatedTo may be patched.
     my $relatedTo = {
         other => {

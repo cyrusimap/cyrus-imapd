@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: a utcEnd equal to the start reports the duration it resets.
+sub test_calendarevent_set_utcend_zero_duration
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $id = $user->calendars->default->create_event({
+        title => 'event',
+        start => '2024-05-01T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+    })->id;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            update => { $id => { utcEnd => '2024-05-01T09:00:00Z' } },
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [ $id ],
+            properties => ['duration'],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $id => superhashof({ duration => 'PT0S' }) },
+        $res->sentence_named('CalendarEvent/set')->as_set->updated,
+    );
+    # the default duration may be left out
+    my $list = $res->sentence_named('CalendarEvent/get')->arguments->{list};
+    $self->assert_str_equals('PT0S', $list->[0]{duration} // 'PT0S');
+}

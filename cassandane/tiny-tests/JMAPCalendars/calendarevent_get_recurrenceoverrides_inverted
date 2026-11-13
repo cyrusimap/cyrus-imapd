@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: an override that is both at or after recurrenceOverridesBefore
+# and before recurrenceOverridesAfter is left out.
+sub test_calendarevent_get_recurrenceoverrides_inverted
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $event = $user->calendars->default->create_event({
+        title => 'event',
+        start => '2020-01-01T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily' },
+        recurrenceOverrides => {
+            '2020-01-02T09:00:00' => { title => 'override2' },
+            '2020-01-03T09:00:00' => { title => 'override3' },
+            '2020-01-04T09:00:00' => { title => 'override4' },
+        },
+    });
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/get' => {
+            ids => [ $event->id ],
+            properties => ['recurrenceOverrides'],
+            recurrenceOverridesAfter => '2020-01-04T00:00:00Z',
+            recurrenceOverridesBefore => '2020-01-03T00:00:00Z',
+        } ],
+    ]);
+    my $list = $res->single_sentence('CalendarEvent/get')->arguments->{list};
+    $self->assert_cmp_deeply(
+        [],
+        [ keys(($list->[0]{recurrenceOverrides} // {})->%*) ],
+    );
+}
