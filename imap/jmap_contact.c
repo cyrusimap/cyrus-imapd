@@ -2599,6 +2599,7 @@ done:
 
 static void setaddressbooks_create(struct jmap_req *req,
                                    const char *creation_id,
+                                   const char *default_addrbookname,
                                    json_t *arg,
                                    json_t **record,
                                    json_t **err)
@@ -2673,23 +2674,46 @@ static void setaddressbooks_create(struct jmap_req *req,
         goto done;
     }
 
-    /* Report addressbook as created. */
-    char id[JMAP_MAX_ADDRBOOKID_SIZE];
-    jmap_set_addrbookid(req->cstate, newmbentry, id);
-    *record = json_pack("{s:s s:o}", "id", id,
-                        "myRights",
-                        addressbookrights_to_jmap(jmap_myrights_mbentry(req,
-                                                                        newmbentry)));
-    jmap_add_id(req, creation_id, id);
-
-    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
-        json_object_set_new(*record, "mailboxUniqueId",
-                        json_string(newmbentry->uniqueid));
-        char *xhref = jmap_xhref(mboxname, NULL);
-        json_object_set_new(*record, "cyrusimap.org:href", json_string(xhref));
-        free(xhref);
+    /* Report the server-set properties and those the client left to
+     * their defaults, as AddressBook/get returns them (RFC 8620 S5.3) */
+    static const char *const reported_props[] = {
+        "id",       "description", "sortOrder", "isDefault", "isSubscribed",
+        "myRights", "shareWith",   NULL
+    };
+    struct jmap_get get = { .props = xzmalloc(sizeof(hash_table)),
+                            .list = json_array() };
+    construct_hash_table(get.props, 16, 0);
+    for (const char *const *prop = reported_props; *prop; prop++) {
+        if (!json_object_get(arg, *prop)) {
+            hash_insert(*prop, (void *) 1, get.props);
+        }
     }
-
+    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
+        hash_insert("mailboxUniqueId", (void *) 1, get.props);
+        hash_insert("cyrusimap.org:href", (void *) 1, get.props);
+    }
+    struct getaddressbooks_rock grock = {
+        .req = req,
+        .get = &get,
+        .default_addrbookname = default_addrbookname,
+        .skip_hidden = 1,
+    };
+    r = getaddressbooks_cb(newmbentry, &grock);
+    if (!r) {
+        *record = json_incref(json_array_get(get.list, 0));
+        if (!*record) {
+            /* a sharee may not be able to read what it created */
+            char id[JMAP_MAX_ADDRBOOKID_SIZE];
+            jmap_set_addrbookid(req->cstate, newmbentry, id);
+            *record = json_pack(
+                "{s:s s:o}", "id", id, "myRights",
+                addressbookrights_to_jmap(
+                    jmap_myrights_mbentry(req, newmbentry)));
+        }
+        jmap_add_id(req, creation_id,
+                    json_string_value(json_object_get(*record, "id")));
+    }
+    jmap_get_fini(&get);
     mboxlist_entry_free(&newmbentry);
 
 done:
@@ -2931,7 +2955,8 @@ static int jmap_addressbook_set(struct jmap_req *req)
             continue;
         }
         json_t *record = NULL, *err = NULL;
-        setaddressbooks_create(req, key, arg, &record, &err);
+        setaddressbooks_create(req, key, default_addrbookname, arg, &record,
+                               &err);
         if (!err) {
             json_object_set_new(set.created, key, record);
         }
