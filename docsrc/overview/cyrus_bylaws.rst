@@ -10,11 +10,11 @@ I. The Cyrus Governance Board
 -----------------------------
 
 The Cyrus Governance Board is responsible for the overall direction of the
-Cyrus project. Members of the board are nominated by the Cyrus community at
-large. Following nomination, a vote must be called by a current member of the
-board. A nominated member must be elected by a simple 2/3 majority vote of the
-current Board. There is no upper limit to the number of members of the Board.
-An existing member may be removed from the board by resigning, or by a
+Cyrus IMAP project. Members of the board are nominated by the Cyrus community
+at large. Following nomination, a vote must be called by a current member of
+the board. A nominated member must be elected by a simple 2/3 majority vote of
+the current Board. There is no upper limit to the number of members of the
+Board. An existing member may be removed from the board by resigning, or by a
 unanimous vote of the remaining members of the board.
 
 The Board is comprised of:
@@ -27,7 +27,7 @@ II. The Cyrus Core Developers Group
 -----------------------------------
 
 The Cyrus Core Developers Group is responsible for the technical guidance of
-the Cyrus project. Members are nominated by the Cyrus developer community.
+the Cyrus IMAP project. Members are nominated by the Cyrus developer community.
 Following nomination, a vote must be called by a current Core Developer. A
 nominated member must be elected by a simple 2/3 majority of the current Core
 Developers Group, then confirmed by a simple 2/3 majority of the Governance
