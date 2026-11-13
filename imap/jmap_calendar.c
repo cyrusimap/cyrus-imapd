@@ -3341,6 +3341,7 @@ struct getcalendarevents_rock {
     struct jmapical_datetime overrides_after;
     bool have_overrides_before;
     bool have_overrides_after;
+    icaltimezone *utctz;
     int reduce_participants;
     int is_sharee;
     hashu64_table cache_jsevents;
@@ -4388,6 +4389,12 @@ static int getcalendarevents_cb(void *vrock, struct caldav_jscal *jscal)
 
 gotevent:
 
+    /* Cached utcStart and utcEnd use the calendar time zone */
+    if (rock->utctz && (jmap_wantprop(props, "utcStart") ||
+                        jmap_wantprop(props, "utcEnd"))) {
+        getcalendarevents_get_utctimes(jsevent, rock->utctz);
+    }
+
     /* Add JMAP-only fields. */
     if (jmap_wantprop(rock->get->props, "x-href")) {
         char *xhref = jmap_xhref(rock->mbentry->name, cdata->dav.resource);
@@ -4519,7 +4526,7 @@ gotevent:
         if (!jscal->ical_recurid[0]) {
             /* Expand instances, if requested */
             r = getcalendarevents_getinstances(jsevent, cdata, rock->ical,
-                    floatingtz, rock);
+                    rock->utctz ? rock->utctz : floatingtz, rock);
             if (r) goto done;
         }
     }
@@ -4585,6 +4592,11 @@ static int getcalendarevents_parse_args(jmap_req_t *req __attribute__((unused)),
             rock->reduce_participants = json_boolean_value(val);
             return 1;
         }
+    }
+    else if (!strcmp(arg, "timeZone")) {
+        const char *s = json_string_value(val);
+        if (s) rock->utctz = icaltimezone_get_cyrus_timezone_from_tzid(s);
+        return rock->utctz != NULL;
     }
 
     return 0;
