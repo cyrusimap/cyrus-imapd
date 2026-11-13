@@ -3869,6 +3869,16 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
                 goto fail;
             }
 
+            /* An uploaded blob has no type of its own */
+            if (!buf_len(&blobtype)) {
+                const char *type = media_type;
+                if (!type) {
+                    type = vcard_image_mediatype(buf_base(&blob),
+                                                 buf_len(&blob));
+                }
+                if (type) buf_setcstr(&blobtype, type);
+            }
+
             buf_printf(&buf, "data:%s;base64,", buf_lcase(&blobtype));
 
             const char *base = buf_base(&blob);
@@ -3887,8 +3897,12 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             buf_truncate(&buf, buf_len(&buf) + len64);
             uri = buf_cstring(&buf);
 
-            if (!media_type) media_type = buf_release(&blobtype);
-            else buf_free(&blobtype);
+            if (!media_type && buf_len(&blobtype)) {
+                media_type = buf_release(&blobtype);
+            }
+            else {
+                buf_free(&blobtype);
+            }
             have_blob = true;
 
             json_object_del(obj, "blobId");
@@ -3919,6 +3933,10 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
                                     ENCODING_BASE64, &decbuf, &size);
             buf_initm(&blob, decbuf, size);
             have_blob = true;
+
+            if (!media_type) {
+                media_type = xstrdupnull(vcard_image_mediatype(decbuf, size));
+            }
         }
 
         if (have_blob) {

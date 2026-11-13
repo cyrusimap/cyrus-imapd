@@ -34,6 +34,15 @@ extern size_t vcard_prop_decode_value(vcardproperty *prop,
                                         char **content_type,
                                         struct message_guid *guid);
 
+/**
+ * Detect the image type of some data from its content.
+ *
+ * @param data the data
+ * @param size the length of data
+ * @return the image media type, or NULL if it isn't a recognised image
+ */
+extern const char *vcard_image_mediatype(const char *data, size_t size);
+
 extern const char *vcardproperty_get_xparam_value(vcardproperty *prop,
                                                   const char *name);
 
