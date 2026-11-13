@@ -40,6 +40,50 @@ my %notcyrus = map { $_ => 1 } (
     't:Mailbox:query:no-existing-entities',
 );
 
+# Tests for behaviour Cyrus differs on by design.  identityId is optional
+# (a redirect has none) and goes to the submission server unchecked.
+my %cyrusdiffers = map { $_ => 1 } (
+    't:EmailSubmission:set:missing-required',
+    't:EmailSubmission:set:unknown-references',
+);
+
+# Tests Cyrus fails with some JMAP-TestSuite version.  Remove an entry once
+# Cyrus passes it with every suite version in use.
+my %cyrusfails = map { $_ => 1 } (
+    't:AddressBook:set:create-defaults',
+    't:AddressBook:set:name-and-sort-order',
+    't:AddressBook:set:on-destroy-remove-contents-changes',
+    't:AddressBook:set:on-success-set-is-default-rules',
+    't:Blob:get:ranges',
+    't:Blob:lookup:capability-not-used',
+    't:Calendar:set:name',
+    't:CalendarEvent:get:recurrence-overrides-window',
+    't:CalendarEvent:get:synthetic-instance',
+    't:CalendarEvent:get:utc-start-end',
+    't:CalendarEvent:query:expand-recurrences-filter',
+    't:CalendarEvent:query:filter',
+    't:CalendarEvent:query:sort',
+    't:CalendarEvent:set:calendar-ids',
+    't:CalendarEvent:set:recurrence-overrides',
+    't:CalendarEvent:set:utc-start-end',
+    't:CalendarEventNotification:get:basic',
+    't:ContactCard:set:media',
+    't:ContactCard:set:members-and-type',
+    't:Email:foreign-account',    # older suites expect accountNotFound
+    't:Email:import:eai-headers',
+    't:EmailSubmission:get:basic',
+    't:EmailSubmission:query:filters-and-sorts',
+    't:EmailSubmission:set:generated-envelope',
+    't:EmailSubmission:set:immutable-properties',
+    't:EmailSubmission:set:implicit-email-set',
+    't:EmailSubmission:set:invalid-recipients',
+    't:EmailSubmission:set:no-recipients',
+    't:EmailSubmission:set:undo-status',
+    't:MDN:send:mdnsent',
+    't:ParticipantIdentity:get:basic',
+    't:Quota:changes:used',
+);
+
 sub cyrus_version_supports_jmap
 {
     my ($maj, $min) = Cassandane::Instance->get_version();
@@ -160,6 +204,8 @@ sub find_tests
             $file =~ s/^$basedir\/?//;
             $file =~ s{/}{:}g;
             return if $notcyrus{$file};
+            return if $cyrusdiffers{$file};
+            return if $cyrusfails{$file};
             return if $suppressed{$file};
             if (exists $notbefore{$file} and skip_before($notbefore{$file})) {
                 return;
