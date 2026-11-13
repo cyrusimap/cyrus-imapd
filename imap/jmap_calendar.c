@@ -12224,6 +12224,7 @@ static int jmap_calendareventnotification_get(struct jmap_req *req)
             jmap_error(req, jmap_server_error(r));
             goto done;
         }
+        json_array_extend(get.not_found, get.ids);
     }
 
     struct buf buf = BUF_INITIALIZER;
