@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcStart must not be set together with start, even if they agree.
+sub test_calendarevent_set_utcstart_with_start
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my %event = (
+        version => '2.0',
+        calendarIds => { $user->calendars->default->id => JSON::true },
+        title => 'event',
+        start => '2024-05-01T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+    );
+    my $id = $user->calendarevents->create({ %event })->id;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                bad => { %event, utcStart => '2024-05-01T09:00:00Z' },
+            },
+            update => {
+                $id => {
+                    start => '2024-05-01T10:00:00',
+                    utcStart => '2024-05-01T10:00:00Z',
+                },
+            },
+        } ],
+    ]);
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+    $self->assert_cmp_deeply({
+        bad => {
+            type => 'invalidProperties',
+            properties => ['utcStart'],
+        },
+    }, $set->create_errors);
+    $self->assert_cmp_deeply({
+        $id => {
+            type => 'invalidProperties',
+            properties => ['utcStart'],
+        },
+    }, $set->update_errors);
+}

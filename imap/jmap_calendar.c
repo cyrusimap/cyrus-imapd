@@ -4992,14 +4992,11 @@ static void setcalendarevents_set_utctimes(json_t *event,
     }
 
     /* Set start */
-    json_t *jstart = json_object_get(event, "start");
-    jmapical_localdatetime_as_string(&startdt, &buf);
-    if (json_is_string(jstart)) {
-        if (strcmp(json_string_value(jstart), buf_cstring(&buf))) {
-            json_array_append_new(invalid, json_string("utcStart"));
-        }
+    if (JNOTNULL(json_object_get(event, "start"))) {
+        json_array_append_new(invalid, json_string("utcStart"));
     }
-    else if (!jstart) {
+    else {
+        jmapical_localdatetime_as_string(&startdt, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
     }
 
