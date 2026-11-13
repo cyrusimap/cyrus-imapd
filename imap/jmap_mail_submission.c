@@ -812,18 +812,15 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* Lookup the message */
     uint32_t uid = 0;
     r = jmap_email_find(req, NULL, msgid, &mboxname, &uid, NULL);
-    if (r) {
-        if (r == IMAP_NOTFOUND) {
-            *set_err = json_pack("{s:s}", "type", "emailNotFound");
-        }
+    if (r == IMAP_NOTFOUND ||
+        (!r && !jmap_hasrights(req, mboxname, JACL_READITEMS))) {
+        /* an Email the user may not read is not found either */
+        *set_err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                             "properties", "emailId");
+        r = 0;
         goto done;
     }
-
-    /* Check ACL */
-    if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
-        *set_err = json_pack("{s:s}", "type", "emailNotFound");
-        goto done;
-    }
+    if (r) goto done;
 
     /* Open the mailboxes */
     r = mailbox_open_iwl(mboxname, &mbox);
