@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: a submission whose envelope, supplied or generated, has no
+# recipients is rejected with noRecipients (RFC 8621 S7.5).
+sub test_emailsubmission_set_no_recipients
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $identityid = $jmap->request([
+        [ 'Identity/get' => {} ],
+    ])->single_sentence('Identity/get')->arguments->{list}[0]{id};
+    $self->assert_not_null($identityid);
+
+    # The Email factory always sets To, so create the draft directly.
+    my $emailid = $jmap->request([
+        [ 'Email/set' => {
+            create => {
+                draft => {
+                    subject => 'no recipients',
+                    from => [{ email => 'from@localhost' }],
+                    keywords => { '$draft' => JSON::true },
+                    mailboxIds => {
+                        $user->mailboxes->inbox->id => JSON::true,
+                    },
+                    textBody => [{ partId => '1' }],
+                    bodyValues => { '1' => { value => 'body' } },
+                },
+            },
+        } ],
+    ])->single_sentence('Email/set')->as_set->created_id('draft');
+    $self->assert_not_null($emailid);
+
+    my $set = $jmap->request([
+        [ 'EmailSubmission/set' => {
+            create => {
+                generated => {
+                    identityId => $identityid,
+                    emailId => $emailid,
+                },
+                supplied => {
+                    identityId => $identityid,
+                    emailId => $emailid,
+                    envelope => {
+                        mailFrom => { email => 'from@localhost' },
+                        rcptTo => [],
+                    },
+                },
+            },
+        } ],
+    ])->single_sentence('EmailSubmission/set')->as_set;
+    $self->assert_cmp_deeply({
+        generated => superhashof({ type => 'noRecipients' }),
+        supplied => superhashof({ type => 'noRecipients' }),
+    }, $set->create_errors);
+    $self->assert_null($set->arguments->{created});
+}

@@ -381,8 +381,9 @@ static void _emailsubmission_envelope_parse(json_t *envelope,
     else {
         jmap_parser_invalid(parser, "mailFrom");
     }
+    /* an empty rcptTo is noRecipients, checked later */
     json_t *rcpt = json_object_get(envelope, "rcptTo");
-    if (json_array_size(rcpt)) {
+    if (json_is_array(rcpt)) {
         size_t i;
         json_t *addr;
         json_array_foreach(rcpt, i, addr) {
