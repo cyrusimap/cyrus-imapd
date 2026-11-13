@@ -80,7 +80,8 @@ EOF
     $self->assert_str_equals('2019-11-30T23:30:00Z', $event->{utcStart});
     $self->assert_str_equals('2019-12-01T05:30:00Z', $event->{utcEnd});
 
-    # Assert event updates.
+    # Setting utcStart on a floating event sets its timeZone. The custom
+    # calendar time zone isn't a known zone, so that's Etc/UTC.
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             update => {
@@ -94,12 +95,15 @@ EOF
             properties => ['start', 'utcStart', 'utcEnd', 'timeZone', 'duration'],
         }, 'R2']
     ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId1});
+    $self->assert_cmp_deeply(superhashof({
+        start => '2019-12-01T06:30:00',
+        timeZone => 'Etc/UTC',
+    }), $res->[0][1]{updated}{$eventId1});
 
     $event = $res->[1][1]{list}[0];
-    $self->assert_str_equals('2019-11-30T22:30:00', $event->{start});
-    $self->assert_str_equals('2019-11-30T22:30:00Z', $event->{utcStart});
-    $self->assert_str_equals('2019-12-01T04:30:00Z', $event->{utcEnd});
-    $self->assert_null($event->{timeZone});
+    $self->assert_str_equals('2019-12-01T06:30:00', $event->{start});
+    $self->assert_str_equals('2019-12-01T06:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-01T12:30:00Z', $event->{utcEnd});
+    $self->assert_str_equals('Etc/UTC', $event->{timeZone});
     $self->assert_str_equals('PT6H', $event->{duration});
 }

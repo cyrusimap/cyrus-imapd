@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcStart on a floating event sets the calendar's timeZone, and
+# the response reports it.
+sub test_calendarevent_set_utcstart_calendar_timezone
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $cal = $user->calendars->default;
+    $cal->update({ timeZone => 'America/New_York' });
+    my $floatingId = $cal->create_event({
+        title => 'floating',
+        start => '2024-05-01T09:00:00',
+        timeZone => undef,
+        duration => 'PT1H',
+    })->id;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => { $cal->id => JSON::true },
+                    title => 'event',
+                    utcStart => '2024-05-01T13:00:00Z',
+                    duration => 'PT1H',
+                },
+            },
+            update => {
+                $floatingId => { utcStart => '2024-05-01T14:00:00Z' },
+            },
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => ['#event', $floatingId],
+            properties => ['start', 'timeZone'],
+        } ],
+    ]);
+    my $set = $res->sentence_named('CalendarEvent/set')->as_set;
+    $self->assert_cmp_deeply(superhashof({
+        start => '2024-05-01T09:00:00',
+        timeZone => 'America/New_York',
+    }), $set->created->{event});
+    $self->assert_cmp_deeply(superhashof({
+        start => '2024-05-01T10:00:00',
+        timeZone => 'America/New_York',
+    }), $set->updated->{$floatingId});
+
+    my $eventId = $set->created_id('event');
+    my $list = $res->sentence_named('CalendarEvent/get')->arguments->{list};
+    $self->assert_cmp_deeply({
+        $eventId => superhashof({
+            start => '2024-05-01T09:00:00',
+            timeZone => 'America/New_York',
+        }),
+        $floatingId => superhashof({
+            start => '2024-05-01T10:00:00',
+            timeZone => 'America/New_York',
+        }),
+    }, { map { $_->{id} => $_ } @$list });
+}
