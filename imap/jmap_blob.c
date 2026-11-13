@@ -352,7 +352,7 @@ static int jmap_blob_get(jmap_req_t *req)
             size_t len = buf_len(&ctx.blob);
 
             if (range.offset) {
-                if (range.offset < len) {
+                if (range.offset <= len) {
                     base += range.offset;
                     len -= range.offset;
                 }

@@ -49,4 +49,12 @@ sub test_blob_get_range
         [{ id => $blobId, 'data:asText' => '89', isTruncated => JSON::true }],
         $get->({ offset => 8, length => 3 }),
     );
+    $self->assert_cmp_deeply(
+        [{ id => $blobId, 'data:asText' => '' }],
+        $get->({ offset => 10 }),
+    );
+    $self->assert_cmp_deeply(
+        [{ id => $blobId, 'data:asText' => '', isTruncated => JSON::true }],
+        $get->({ offset => 11 }),
+    );
 }
