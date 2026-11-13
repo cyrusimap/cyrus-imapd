@@ -25,6 +25,7 @@ sub test_misc_creationids
                     '@type' => 'Card',
                      version => '1.0',
                      name => { full => "group1" },
+                     kind => 'group',
                      members => { $uid => JSON::true }
                 }
             }}, "R2"],

@@ -4904,8 +4904,15 @@ static void jscard_to_vcard(jscontact_ctx_t *ctx,
                               VCARD_TEXT_VALUE);
         }
         else if (!strcmp(mykey, "members")) {
-            _jsmultikey_to_card(parser, jval, mykey, card,
-                                VCARD_MEMBER_PROPERTY);
+            /* RFC 9553 S2.1.6: only a group may have members */
+            if (strcasecmpsafe("group",
+                               json_string_value(json_object_get(arg, "kind")))) {
+                jmap_parser_invalid(parser, "members");
+            }
+            else {
+                _jsmultikey_to_card(parser, jval, mykey, card,
+                                    VCARD_MEMBER_PROPERTY);
+            }
         }
         else if (!strcmp(mykey, "prodId")) {
             jssimple_to_vcard(parser, mykey, l10n.lang,
