@@ -1,0 +1,58 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcEnd sets the duration from start, with or without utcStart.
+sub test_calendarevent_set_utcend_without_utcstart
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => {
+                        $user->calendars->default->id => JSON::true,
+                    },
+                    title => 'event',
+                    start => '2024-05-01T09:00:00',
+                    timeZone => 'America/New_York',
+                    utcEnd => '2024-05-01T14:30:00Z',
+                },
+            },
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => ['#event'],
+            properties => ['start', 'timeZone', 'duration'],
+        } ],
+    ]);
+    my $id = $res->sentence_named('CalendarEvent/set')->as_set
+        ->created_id('event');
+    $self->assert_not_null($id);
+    $self->assert_cmp_deeply([ superhashof({
+        start => '2024-05-01T09:00:00',
+        timeZone => 'America/New_York',
+        duration => 'PT1H30M',
+    }) ], $res->sentence_named('CalendarEvent/get')->arguments->{list});
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            update => {
+                $id => { utcEnd => '2024-05-01T15:00:00Z' },
+            },
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [$id],
+            properties => ['start', 'timeZone', 'duration'],
+        } ],
+    ]);
+    $self->assert_cmp_deeply([ "$id" ],
+        [ $res->sentence_named('CalendarEvent/set')->as_set->updated_ids ]);
+    $self->assert_cmp_deeply([ superhashof({
+        start => '2024-05-01T09:00:00',
+        timeZone => 'America/New_York',
+        duration => 'PT2H',
+    }) ], $res->sentence_named('CalendarEvent/get')->arguments->{list});
+}

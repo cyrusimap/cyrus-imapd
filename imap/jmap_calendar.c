@@ -4940,79 +4940,98 @@ static void setcalendarevents_set_utctimes(json_t *event,
                                            json_t *invalid)
 {
     struct jmapical_datetime startdt = JMAPICAL_DATETIME_INITIALIZER;
+    struct jmapical_datetime enddt = JMAPICAL_DATETIME_INITIALIZER;
     struct jmapical_duration dur = JMAPICAL_DURATION_INITIALIZER;
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
     icaltimezone *tz = NULL;
     struct buf buf = BUF_INITIALIZER;
+    bool have_utcstart = false;
+    bool have_utcend = false;
+
+    json_t *jutcStart = json_object_get(event, "utcStart");
+    json_t *jutcEnd = json_object_get(event, "utcEnd");
+    json_t *jstart = json_object_get(event, "start");
 
     /* Validate utcStart */
-    json_t *jutcStart = json_object_get(event, "utcStart");
-    if (json_is_string(jutcStart)) {
-        if (jmapical_utcdatetime_from_string(json_string_value(jutcStart), &startdt) == -1) {
+    if (JNOTNULL(jutcStart)) {
+        const char *s = json_string_value(jutcStart);
+        if (!s || jmapical_utcdatetime_from_string(s, &startdt) == -1
+            || JNOTNULL(jstart))
+        {
             json_array_append_new(invalid, json_string("utcStart"));
+            goto done;
         }
-    }
-    else json_array_append_new(invalid, json_string("utcStart")); // must be set
-
-    /* Validate utcEnd and determine duration */
-    json_t *jutcEnd = json_object_get(event, "utcEnd");
-    if (json_is_string(jutcEnd)) {
-        struct jmapical_datetime enddt = JMAPICAL_DATETIME_INITIALIZER;
-        if (jmapical_utcdatetime_from_string(json_string_value(jutcEnd), &enddt) >= 0) {
-            jmapical_duration_between_utctime(&startdt, &enddt, &dur);
-            if (dur.is_neg) {
-                json_array_append_new(invalid, json_string("utcEnd"));
-            }
-        }
-        else json_array_append_new(invalid, json_string("utcEnd"));
-    }
-    else if (JNOTNULL(jutcEnd)) {
-        json_array_append_new(invalid, json_string("utcEnd"));
+        have_utcstart = true;
     }
 
-    /* Return early for bogus values */
-    if (json_array_size(invalid)) goto done;
+    /* Validate utcEnd */
+    if (JNOTNULL(jutcEnd)) {
+        const char *s = json_string_value(jutcEnd);
+        if (!s || jmapical_utcdatetime_from_string(s, &enddt) == -1
+            || JNOTNULL(json_object_get(event, "duration")))
+        {
+            json_array_append_new(invalid, json_string("utcEnd"));
+        }
+        else {
+            have_utcend = true;
+        }
+    }
 
     /* Determine timeZone */
     json_t *jtimeZone = json_object_get(event, "timeZone");
     if (json_is_string(jtimeZone)) {
         const char *tzid = json_string_value(jtimeZone);
         tz = icaltimezone_get_cyrus_timezone_from_tzid(tzid);
-        if (!tz) goto done; /* bogus timeZone */
-    }
-    else if (!jtimeZone || json_is_null(jtimeZone)) {
-        tz = fallbacktz ? fallbacktz : icaltimezone_get_utc_timezone();
-    }
-
-    /* Convert UTC start to local start */
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    if (tz != utc) {
-        icaltimetype startical = jmapical_datetime_to_icaltime(&startdt, utc);
-        startical = icaltime_convert_to_zone(startical, tz);
-        jmapical_datetime_from_icaltime(startical, &startdt);
-    }
-
-    /* Set start */
-    if (JNOTNULL(json_object_get(event, "start"))) {
-        json_array_append_new(invalid, json_string("utcStart"));
+        if (!tz) {
+            goto done; /* bogus timeZone */
+        }
     }
     else {
-        jmapical_localdatetime_as_string(&startdt, &buf);
+        tz = fallbacktz ? fallbacktz : utc;
+    }
+
+    if (have_utcstart) {
+        /* Set start from UTC start */
+        struct jmapical_datetime localdt = startdt;
+        if (tz != utc) {
+            icaltimetype startical =
+                jmapical_datetime_to_icaltime(&localdt, utc);
+            startical = icaltime_convert_to_zone(startical, tz);
+            jmapical_datetime_from_icaltime(startical, &localdt);
+        }
+        jmapical_localdatetime_as_string(&localdt, &buf);
         json_object_set_new(event, "start", json_string(buf_cstring(&buf)));
+    }
+    else {
+        /* a missing start is reported later */
+        const char *s = json_string_value(jstart);
+        if (!s || jmapical_localdatetime_from_string(s, &startdt) == -1) {
+            goto done;
+        }
+        if (tz != utc) {
+            icaltimetype startical =
+                jmapical_datetime_to_icaltime(&startdt, tz);
+            startical = icaltime_convert_to_zone(startical, utc);
+            jmapical_datetime_from_icaltime(startical, &startdt);
+        }
     }
 
     /* Set duration */
-    if (JNOTNULL(jutcEnd)) {
-        if (JNOTNULL(json_object_get(event, "duration"))) {
+    if (have_utcend) {
+        jmapical_duration_between_utctime(&startdt, &enddt, &dur);
+        if (dur.is_neg) {
             json_array_append_new(invalid, json_string("utcEnd"));
         }
         else if (!jmapical_duration_has_zero_time(&dur)) {
             jmapical_duration_as_string(&dur, &buf);
-            json_object_set_new(event, "duration", json_string(buf_cstring(&buf)));
+            json_object_set_new(event,
+                                "duration",
+                                json_string(buf_cstring(&buf)));
         }
     }
 
     /* Set timeZone */
-    if (!fallbacktz && (!jtimeZone || json_is_null(jtimeZone))) {
+    if (have_utcstart && !fallbacktz && JNULL(jtimeZone)) {
         json_object_set_new(event, "timeZone", json_string("Etc/UTC"));
     }
 
@@ -5778,7 +5797,8 @@ static void updateevent_apply_patch_override(struct jmap_caleventid *eid,
 
     /* Handle UTC time updates */
     if (json_object_get(event_patch, "utcStart") || json_object_get(event_patch, "utcEnd")) {
-        if (!json_object_get(event_patch, "start")) {
+        if (json_object_get(event_patch, "utcStart") &&
+            !json_object_get(event_patch, "start")) {
             json_object_del(new_instance, "start");
         }
         if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
@@ -6010,7 +6030,8 @@ static void updateevent_apply_patch_event(json_t *old_event,
             buf_free(&buf);
         } else {
             /* Allow updating UTC times for non-recurring events */
-            if (!json_object_get(event_patch, "start")) {
+            if (json_object_get(event_patch, "utcStart") &&
+                !json_object_get(event_patch, "start")) {
                 json_object_del(new_event, "start");
             }
             if (json_object_get(event_patch, "utcEnd") && !json_object_get(event_patch, "duration")) {
