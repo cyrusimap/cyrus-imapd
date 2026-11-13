@@ -5001,15 +5001,14 @@ static void setcalendarevents_set_utctimes(json_t *event,
     }
 
     /* Set duration */
-    json_t *jduration = json_object_get(event, "duration");
-    jmapical_duration_as_string(&dur, &buf);
-    if (json_is_string(jduration) && jutcEnd) {
-        if (strcmp(json_string_value(jduration), buf_cstring(&buf))) {
+    if (JNOTNULL(jutcEnd)) {
+        if (JNOTNULL(json_object_get(event, "duration"))) {
             json_array_append_new(invalid, json_string("utcEnd"));
         }
-    }
-    else if (!jduration && !jmapical_duration_has_zero_time(&dur)) {
-        json_object_set_new(event, "duration", json_string(buf_cstring(&buf)));
+        else if (!jmapical_duration_has_zero_time(&dur)) {
+            jmapical_duration_as_string(&dur, &buf);
+            json_object_set_new(event, "duration", json_string(buf_cstring(&buf)));
+        }
     }
 
     /* Set timeZone */
