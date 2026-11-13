@@ -2,9 +2,8 @@
 Cyrus Bylaws
 =============
 
-To better facilitate the governance and to ensure the future of the Cyrus
-Project, we have established these bylaws under which the Project will be
-managed.
+To better facilitate the governance and to ensure the future of Cyrus IMAP, we
+have established these bylaws under which the Project will be managed.
 
 I. The Cyrus Governance Board
 -----------------------------
@@ -44,7 +43,7 @@ The members of the Core Developers group are:
 III. The Release Engineer
 -------------------------
 
-The Release Engineer is responsible for making Cyrus releases. The Release
+The Release Engineer is responsible for making Cyrus IMAP releases. The Release
 Engineer is also responsible for committing contributions from non-committers
 in the absence of anyone accepting the responsibility for a particular issue.
 The Release Engineer must be elected by a simple 2/3 majority of the Core
@@ -68,7 +67,7 @@ are no objections to the patch by the core developers, the core developer
 should then commit the code to the source repository. The submitter of the code
 is responsible for ensuring that the code gets reviewed by the core developers.
 Submitters may inquire as to the status of their patches to either the Release
-Engineer or CORE no more than once per week. Accepted patches will be included
+Engineer or Core no more than once per week. Accepted patches will be included
 in the next appropriate release.
 
 The Release Engineer shall make regular releases. If there are no blocker-level
@@ -80,7 +79,7 @@ The Core Developers group may block a pending release with a simple majority
 vote.
 
 V. Changes to the Bylaws
--------------------------
+------------------------
 
 A simple 2/3 majority vote of the current Governance Board is required to
 change the bylaws.
