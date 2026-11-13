@@ -1,0 +1,32 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: properties set from utcStart and utcEnd are reported in created.
+sub test_calendarevent_set_utcstart_serverset
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                event => {
+                    version => '2.0',
+                    calendarIds => {
+                        $user->calendars->default->id => JSON::true,
+                    },
+                    title => 'event',
+                    utcStart => '2024-05-01T09:00:00Z',
+                    utcEnd => '2024-05-01T10:30:00Z',
+                },
+            },
+        } ],
+    ]);
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+    $self->assert_cmp_deeply(superhashof({
+        start => '2024-05-01T09:00:00',
+        duration => 'PT1H30M',
+        timeZone => 'Etc/UTC',
+    }), $set->created->{event});
+}

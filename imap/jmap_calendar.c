@@ -5200,9 +5200,23 @@ static int createevent_toical(jmap_req_t *req,
     // Validate utcStart and utcEnd */
     if (JNOTNULL(json_object_get(create->jsevent, "utcStart")) ||
         JNOTNULL(json_object_get(create->jsevent, "utcEnd"))) {
+        static const char *const utcprops[] = {
+            "start", "duration", "timeZone"
+        };
+        bool had_utcprop[3];
+        for (size_t i = 0; i < 3; i++) {
+            json_t *jval = json_object_get(create->jsevent, utcprops[i]);
+            had_utcprop[i] = JNOTNULL(jval);
+        }
         /* Ignore calendar timezone - if event does not define its
          * timezone then fall back to Etc/UTC for utcStart/utcEnd */
         setcalendarevents_set_utctimes(create->jsevent, NULL, parser->invalid);
+        for (size_t i = 0; i < 3; i++) {
+            json_t *jval = json_object_get(create->jsevent, utcprops[i]);
+            if (!had_utcprop[i] && JNOTNULL(jval)) {
+                json_object_set(create->serverset, utcprops[i], jval);
+            }
+        }
     }
     setcalendarevents_reject_override_utctimes(
         json_object_get(create->jsevent, "recurrenceOverrides"),
