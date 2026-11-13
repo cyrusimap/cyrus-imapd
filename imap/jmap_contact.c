@@ -2002,7 +2002,7 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
                                         req->userid, &attrib);
         if (buf_len(&attrib)) {
             uint64_t t = str2uint64(buf_cstring(&attrib));
-            if (t < INT_MAX) {
+            if (t <= INT32_MAX) {
                 sort_order = (int) t;
             } else {
                 xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
@@ -2270,7 +2270,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
     jprop = json_object_get(arg, "sortOrder");
     if (json_is_integer(jprop)) {
         json_int_t t = json_integer_value(jprop);
-        if (t < 0 || t >= INT_MAX) {
+        if (t < 0 || t > INT32_MAX) {
             jmap_parser_invalid(parser, "sortOrder");
         }
         else {

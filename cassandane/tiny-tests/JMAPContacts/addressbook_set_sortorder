@@ -25,7 +25,7 @@ sub test_addressbook_set_sortorder
     $self->assert_num_equals(5, $res->[1][1]{list}[0]{sortOrder});
     my $id = $res->[0][1]{created}{"1"}{id};
 
-    # Attempt to update sortOrder with illegal values
+    # RFC 9610 S2: 0 <= sortOrder < 2^31
     $res = $jmap->CallMethods([
         ['AddressBook/set',
             { update => {
@@ -37,17 +37,39 @@ sub test_addressbook_set_sortorder
         ['AddressBook/set',
             { update => {
                 $id => {
-                    sortOrder => 2147483647
+                    sortOrder => 2147483648
                 }
             }
         }, "R2"],
     ]);
-    $self->assert_not_null($res->[0][1]{notUpdated}{$id});
-    $self->assert_str_equals('sortOrder',
-                             $res->[0][1]{notUpdated}{$id}{properties}[0]);
-    $self->assert_not_null($res->[1][1]{notUpdated}{$id});
-    $self->assert_str_equals('sortOrder',
-                             $res->[1][1]{notUpdated}{$id}{properties}[0]);
+    $self->assert_cmp_deeply({
+        $id => superhashof({
+            type => 'invalidProperties',
+            properties => ['sortOrder'],
+        }),
+    }, $res->[0][1]{notUpdated});
+    $self->assert_cmp_deeply({
+        $id => superhashof({
+            type => 'invalidProperties',
+            properties => ['sortOrder'],
+        }),
+    }, $res->[1][1]{notUpdated});
+
+    $res = $jmap->CallMethods([
+        ['AddressBook/set',
+            { update => {
+                $id => {
+                    sortOrder => 2147483647
+                }
+            }
+        }, "R1"],
+        ['AddressBook/get', {
+            ids => [$id],
+            properties => ['sortOrder']
+        }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_num_equals(2147483647, $res->[1][1]{list}[0]{sortOrder});
 
     # Update sortOrder
     $res = $jmap->CallMethods([
