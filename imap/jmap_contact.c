@@ -2249,7 +2249,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
     json_t *jprop = json_object_get(arg, "name");
     if (json_is_string(jprop)) {
         props->name = json_string_value(jprop);
-        if (strnlen(props->name, 256) == 256) {
+        if (!*props->name || strnlen(props->name, 256) == 256) {
             jmap_parser_invalid(parser, "name");
         }
     }

@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: an AddressBook name must not be the empty string, on create
+# or on update (RFC 9610 S2).
+sub test_addressbook_set_emptyname
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $id = $user->addressbooks->create({ name => 'A' })->id;
+
+    my $set = $jmap->request([
+        ['AddressBook/set', {
+            create => { B => { name => '' } },
+            update => { $id => { name => '' } },
+        }],
+    ])->single_sentence('AddressBook/set')->as_set;
+    my $invalid = {
+        type => 'invalidProperties',
+        properties => ['name'],
+    };
+    $self->assert_cmp_deeply({
+        B => superhashof($invalid),
+    }, $set->create_errors);
+    $self->assert_cmp_deeply({
+        $id => superhashof($invalid),
+    }, $set->update_errors);
+}
