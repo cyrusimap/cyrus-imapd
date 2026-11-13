@@ -1,0 +1,28 @@
+Description:
+
+The ``maxheaderlines`` option now limits the number of headers rather than
+header lines, with a header folded over many lines counting once.  Crucial
+headers such as From, To, Subject or Content-Type are no longer ignored when
+they follow a header folded over thousands of lines.
+
+
+Documentation:
+
+The ``maxheaderlines`` option in imapd.conf(5).
+
+
+Config changes:
+
+maxheaderlines
+
+
+Upgrade instructions:
+
+This bumps the mailbox cache minor version to 15.  Messages parsed by
+earlier versions keep their incomplete cache records until reparsed.  To fix
+them, run ``reconstruct -G`` on the affected mailboxes.
+
+
+GitHub issue:
+
+None.

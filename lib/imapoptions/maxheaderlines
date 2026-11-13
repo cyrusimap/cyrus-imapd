@@ -1,10 +1,10 @@
 Name: maxheaderlines
 Type: INT
 Default-Value: 1000
-Last-Modified: 2.3.17
+Last-Modified: UNRELEASED
 
-Maximum number of lines of header that will be processed into cache
-records.  Default 1000.  If set to zero, it is unlimited.  If a message
-hits the limit, an error will be logged and the rest of the lines in the
-header will be skipped.  This is to avoid malformed messages causing giant
-cache records.
+Maximum number of headers that will be processed into cache records.
+Default 1000.  If set to zero, it is unlimited.  A header counts once,
+however many lines it is folded over.  If a message hits the limit, an
+error will be logged and the rest of the headers will be skipped.  This is
+to avoid malformed messages causing giant cache records.
