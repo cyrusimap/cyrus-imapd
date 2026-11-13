@@ -6006,19 +6006,20 @@ static void updateevent_apply_patch_event(json_t *old_event,
     if (eventpatch_updates_utctimes(event_patch)) {
         json_t *jnew_overrides = json_object_get(new_event, "recurrenceOverrides");
         if (JNOTNULL(jnew_overrides)) {
-            /* Reject UTC times if they differ from old event */
             getcalendarevents_get_utctimes(old_event, floatingtz);
             json_t *jnew_utcStart = json_object_get(new_event, "utcStart");
             json_t *jnew_utcEnd = json_object_get(new_event, "utcEnd");
             if (JNOTNULL(jnew_utcStart)) {
                 json_t *jold_utcStart = json_object_get(old_event, "utcStart");
-                if (!json_equal(jold_utcStart, jnew_utcStart)) {
+                if (!json_equal(jold_utcStart, jnew_utcStart) ||
+                    JNOTNULL(json_object_get(event_patch, "start"))) {
                     json_array_append_new(invalid, json_string("utcStart"));
                 }
             }
             if (JNOTNULL(jnew_utcEnd)) {
                 json_t *jold_utcEnd = json_object_get(old_event, "utcEnd");
-                if (!json_equal(jold_utcEnd, jnew_utcEnd)) {
+                if (!json_equal(jold_utcEnd, jnew_utcEnd) ||
+                    JNOTNULL(json_object_get(event_patch, "duration"))) {
                     json_array_append_new(invalid, json_string("utcEnd"));
                 }
             }
