@@ -3684,6 +3684,17 @@ HIDDEN int jmap_is_using(jmap_req_t *req, const char *capa)
     return strarray_contains(req->using_capabilities, capa);
 }
 
+HIDDEN char *jmap_user_address(jmap_req_t *req)
+{
+    if (strchr(req->userid, '@')) {
+        return xstrdup(req->userid);
+    }
+    const char *domain = config_defdomain && *config_defdomain
+                             ? config_defdomain
+                             : config_servername;
+    return strconcat(req->userid, "@", domain, NULL);
+}
+
 /*
  * Lookup 'name' in the mailbox list, ignoring reserved/deleted records
  */

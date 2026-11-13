@@ -2664,14 +2664,7 @@ done:
 
 static json_t *_identity_email(jmap_req_t *req)
 {
-    if (strchr(req->userid, '@')) {
-        return json_string(req->userid);
-    }
-    if (!config_defdomain || !*config_defdomain) {
-        return json_string("");
-    }
-
-    char *email = strconcat(req->userid, "@", config_defdomain, NULL);
+    char *email = jmap_user_address(req);
     json_t *jemail = json_string(email);
     free(email);
     return jemail;

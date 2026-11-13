@@ -2302,11 +2302,7 @@ static int jmap_sieve_test(struct jmap_req *req)
         }
         else {
             if (!envelope) {
-                buf_setcstr(&buf, req->userid);
-                if (!strchr(req->userid, '@')) {
-                    buf_printf(&buf, "@%s", config_servername);
-                }
-                strarray_append(&env_to, buf_cstring(&buf));
+                strarray_appendm(&env_to, jmap_user_address(req));
             }
 
             /* execute the script */

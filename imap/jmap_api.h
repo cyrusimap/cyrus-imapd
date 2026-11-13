@@ -261,6 +261,16 @@ extern void jmap_finireq(jmap_req_t *req);
 
 extern int jmap_is_using(jmap_req_t *req, const char *capa);
 
+/**
+ * The email address of the authenticated user.
+ *
+ * @param req the request
+ * @return the userid if it is an address, else the userid at the default
+ *         domain, or at the server name if there is no default domain.
+ *         The caller must free it.
+ */
+extern char *jmap_user_address(jmap_req_t *req);
+
 /* Protocol implementations */
 extern void jmap_core_init(jmap_settings_t *settings);
 extern void jmap_blob_init(jmap_settings_t *settings);

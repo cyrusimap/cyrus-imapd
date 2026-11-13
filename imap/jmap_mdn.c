@@ -305,14 +305,6 @@ static json_t *parse_mdn_props(json_t *jmdn, struct mdn_t *mdn)
 
 /* The address MDN/send reports as Final-Recipient unless the client
  * names one: the identity's address, which is the user. */
-static char *identity_address(struct jmap_req *req)
-{
-    if (strchr(req->userid, '@')) {
-        return xstrdup(req->userid);
-    }
-    return strconcat(req->userid, "@", config_servername, NULL);
-}
-
 static json_t *generate_mdn(struct jmap_req *req,
                             struct mdn_t *mdn, struct buf *msgbuf)
 {
@@ -421,7 +413,7 @@ static json_t *generate_mdn(struct jmap_req *req,
 
     /* Final-Recipient: the identity's address, unless the client named one
      * of its own (RFC 9007, Section 5) */
-    mdn->final_addr = identity_address(req);
+    mdn->final_addr = jmap_user_address(req);
     if (mdn->client_final_rcpt) {
         const char *want = address_skip_type(mdn->client_final_rcpt);
         if (strcasecmp(want, mdn->final_addr)) {
