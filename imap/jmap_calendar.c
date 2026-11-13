@@ -3561,6 +3561,10 @@ static void getcalendarevents_filterinstance(json_t *myevent,
     json_object_del(myevent, "recurrenceOverrides");
     json_object_del(myevent, "recurrenceRule");
     jmap_filterprops(myevent, props);
+    if (jmap_wantprop(props, "recurrenceOverrides"))
+        json_object_set_new(myevent, "recurrenceOverrides", json_null());
+    if (jmap_wantprop(props, "recurrenceRule"))
+        json_object_set_new(myevent, "recurrenceRule", json_null());
     json_object_set_new(myevent, "id", json_string(id));
     json_object_set_new(myevent, "uid", json_string(ical_uid));
     json_object_set_new(myevent, "@type", json_string("Event"));
