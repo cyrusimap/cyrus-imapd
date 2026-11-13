@@ -3616,8 +3616,9 @@ static int zero_b_cb(void *rock,
     /* zero out the size */
     conv->size = 0;
 
-    /* Update the version */
-    conv->version = CONVERSATIONS_RECORD_VERSION;
+    /* Preserve version, initialize legacy B records */
+    if (conv->version < 1)
+        conv->version = 1;
 
     r = conversation_store(state, key, keylen, conv);
 
