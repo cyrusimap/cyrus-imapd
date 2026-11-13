@@ -60,6 +60,9 @@ sub test_quota_changes
     $self->assert_num_equals(0, scalar @{$res->[0][1]{created}});
     $self->assert_num_equals(3, scalar @{$res->[0][1]{updated}});
     $self->assert_num_equals(0, scalar @{$res->[0][1]{destroyed}});
+    # RFC 9425 S4.3: a limit changed, so updatedProperties is null
+    $self->assert_cmp_deeply(superhashof({ updatedProperties => undef }),
+                             $res->[0][1]);
 
     $state = $res->[0][1]{'newState'};
 
