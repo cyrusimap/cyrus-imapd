@@ -132,6 +132,7 @@ enum caldav_sort {
     CAL_SORT_MAILBOX,
     CAL_SORT_IMAP_UID,
     CAL_SORT_MODSEQ,
+    CAL_SORT_ICAL_RECURID,
     CAL_SORT_DESC  = 0x80 /* bit-flag for descending sort */
 };
 

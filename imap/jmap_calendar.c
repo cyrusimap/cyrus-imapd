@@ -7648,6 +7648,9 @@ static int eventquery_cmp QSORT_R_COMPAR_ARGS(const void *va,
             case CAL_SORT_START:
                 ret = strcmp(ma->utcstart, mb->utcstart);
                 break;
+            case CAL_SORT_ICAL_RECURID:
+                ret = strcmpsafe(ma->ical_recurid, mb->ical_recurid);
+                break;
             default:
                 ret = 0;
         }
@@ -8283,6 +8286,8 @@ static int eventquery_run(jmap_req_t *req,
                 sort[i] = CAL_SORT_START;
             else if (!strcmp(prop, "uid"))
                 sort[i] = CAL_SORT_ICAL_UID;
+            else if (!strcmp(prop, "recurrenceId"))
+                sort[i] = CAL_SORT_ICAL_RECURID;
             else
                 sort[i] = CAL_SORT_NONE;
             if (json_object_get(jval, "isAscending") == json_false()) {
@@ -8538,7 +8543,8 @@ static int calendarevent_validatecomparator(jmap_req_t *req __attribute__((unuse
         return 0;
     }
     if (!strcmp(comp->property, "start") ||
-        !strcmp(comp->property, "uid")) {
+        !strcmp(comp->property, "uid") ||
+        !strcmp(comp->property, "recurrenceId")) {
         return 1;
     }
     return 0;
