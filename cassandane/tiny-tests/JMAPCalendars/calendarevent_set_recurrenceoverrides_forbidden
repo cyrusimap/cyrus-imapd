@@ -1,0 +1,148 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_recurrenceoverrides_forbidden
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $rid = '2024-05-02T09:00:00';
+    my %event = (
+        version => '2.0',
+        calendarIds => { $user->calendars->default->id => JSON::true },
+        title => 'event',
+        start => '2024-05-01T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily', count => 3 },
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants => {
+            p1 => {
+                calendarAddress => 'mailto:p1@example.com',
+                roles => { attendee => JSON::true },
+            },
+        },
+    );
+
+    # Invariant: a recurrence override must not patch these pointers.
+    my %forbidden = (
+        '@type' => 'Task',
+        method => 'request',
+        organizerCalendarAddress => 'mailto:other@example.com',
+        'participants/p1/calendarAddress' => 'mailto:other@example.com',
+        privacy => 'private',
+        prodId => '-//Example//EN',
+        recurrenceId => '2024-05-03T09:00:00',
+        recurrenceIdTimeZone => 'Europe/Berlin',
+        sentBy => 'mailto:other@example.com',
+        uid => 'other',
+        recurrenceOverrides => {},
+        recurrenceRule => { frequency => 'weekly' },
+        'recurrenceRule/count' => 2,
+    );
+    my $i = 0;
+    my %cid = map { $_ => 'c' . $i++ } keys %forbidden;
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                map {
+                    $cid{$_} => {
+                        %event,
+                        recurrenceOverrides => {
+                            $rid => { $_ => $forbidden{$_} },
+                        },
+                    }
+                } keys %forbidden
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply({
+        map {
+            $cid{$_} => {
+                type => 'invalidProperties',
+                properties => ["recurrenceOverrides/$rid/$_"],
+            }
+        } keys %forbidden
+    }, $res->single_sentence('CalendarEvent/set')->as_set->create_errors);
+
+    # Invariant: replacing the participant changes its calendarAddress too.
+    my $other = {
+        calendarAddress => 'mailto:other@example.com',
+        roles => { attendee => JSON::true },
+    };
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                part => {
+                    %event,
+                    recurrenceOverrides => {
+                        $rid => { 'participants/p1' => $other },
+                    },
+                },
+                parts => {
+                    %event,
+                    recurrenceOverrides => {
+                        $rid => { participants => { p1 => $other } },
+                    },
+                },
+            },
+        } ],
+    ]);
+    my $err = {
+        type => 'invalidProperties',
+        properties =>
+            ["recurrenceOverrides/$rid/participants/p1/calendarAddress"],
+    };
+    $self->assert_cmp_deeply(
+        { part => $err, parts => $err },
+        $res->single_sentence('CalendarEvent/set')->as_set->create_errors,
+    );
+
+    # Invariant: relatedTo may be patched.
+    my $relatedTo = {
+        other => {
+            '@type' => 'Relation',
+            relation => { parent => JSON::true },
+        },
+    };
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                event => {
+                    %event,
+                    recurrenceOverrides => {
+                        $rid => { relatedTo => $relatedTo },
+                    },
+                },
+            },
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => ['#event'],
+            properties => ['recurrenceOverrides'],
+        } ],
+    ]);
+    my $id = $res->sentence_named('CalendarEvent/set')->as_set
+        ->created_id('event');
+    $self->assert_not_null($id);
+    $self->assert_cmp_deeply([ superhashof({
+        recurrenceOverrides => {
+            $rid => { relatedTo => $relatedTo },
+        },
+    }) ], $res->sentence_named('CalendarEvent/get')->arguments->{list});
+
+    # Invariant: an update may not patch a forbidden pointer either.
+    $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            update => {
+                $id => { "recurrenceOverrides/$rid/uid" => 'other' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply({
+        $id => {
+            type => 'invalidProperties',
+            properties => ["recurrenceOverrides/$rid/uid"],
+        },
+    }, $res->single_sentence('CalendarEvent/set')->as_set->update_errors);
+}

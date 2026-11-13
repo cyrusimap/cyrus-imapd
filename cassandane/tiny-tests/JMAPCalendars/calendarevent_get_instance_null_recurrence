@@ -1,0 +1,51 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: an instance has null recurrenceRule and recurrenceOverrides.
+sub test_calendarevent_get_instance_null_recurrence
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $event = $user->calendars->default->create_event({
+        title => 'event',
+        start => '2023-01-01T09:00:00',
+        timeZone => 'Europe/Vienna',
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily', count => 3 },
+        recurrenceOverrides => {
+            '2023-01-02T09:00:00' => { title => 'override' },
+        },
+    });
+
+    my $ovrId = encode_eventid($event->id, '20230102T090000');
+    my $rruleId = encode_eventid($event->id, '20230103T090000');
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/get' => {
+            ids => [$ovrId, $rruleId],
+            properties => ['recurrenceRule', 'recurrenceOverrides'],
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [$ovrId, $rruleId],
+        } ],
+    ]);
+
+    my $nulls = {
+        recurrenceRule => undef,
+        recurrenceOverrides => undef,
+    };
+
+    my $some = $res->sentence(0)->assert_named('CalendarEvent/get')->arguments;
+    $self->assert_cmp_deeply({
+        $ovrId => superhashof($nulls),
+        $rruleId => superhashof($nulls),
+    }, { map { $_->{id} => $_ } $some->{list}->@* });
+
+    my $all = $res->sentence(1)->assert_named('CalendarEvent/get')->arguments;
+    $self->assert_cmp_deeply({
+        $ovrId => superhashof({ title => 'override', %$nulls }),
+        $rruleId => superhashof({ title => 'event', %$nulls }),
+    }, { map { $_->{id} => $_ } $all->{list}->@* });
+}

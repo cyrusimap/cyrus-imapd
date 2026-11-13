@@ -17,7 +17,7 @@ sub test_calendarevent_set_readonly
         ['Calendar/set', {
             create => {
                 "1" => {
-                    name => "",
+                    name => "readonly",
                     color => "coral",
                     isVisible => \1
                 }

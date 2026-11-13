@@ -381,8 +381,9 @@ static void _emailsubmission_envelope_parse(json_t *envelope,
     else {
         jmap_parser_invalid(parser, "mailFrom");
     }
+    /* an empty rcptTo is noRecipients, checked later */
     json_t *rcpt = json_object_get(envelope, "rcptTo");
-    if (json_array_size(rcpt)) {
+    if (json_is_array(rcpt)) {
         size_t i;
         json_t *addr;
         json_array_foreach(rcpt, i, addr) {
@@ -812,18 +813,15 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* Lookup the message */
     uint32_t uid = 0;
     r = jmap_email_find(req, NULL, msgid, &mboxname, &uid, NULL);
-    if (r) {
-        if (r == IMAP_NOTFOUND) {
-            *set_err = json_pack("{s:s}", "type", "emailNotFound");
-        }
+    if (r == IMAP_NOTFOUND ||
+        (!r && !jmap_hasrights(req, mboxname, JACL_READITEMS))) {
+        /* an Email the user may not read is not found either */
+        *set_err = json_pack("{s:s s:[s]}", "type", "invalidProperties",
+                             "properties", "emailId");
+        r = 0;
         goto done;
     }
-
-    /* Check ACL */
-    if (!jmap_hasrights(req, mboxname, JACL_READITEMS)) {
-        *set_err = json_pack("{s:s}", "type", "emailNotFound");
-        goto done;
-    }
+    if (r) goto done;
 
     /* Open the mailboxes */
     r = mailbox_open_iwl(mboxname, &mbox);
@@ -2664,6 +2662,14 @@ done:
 
 /* Identity/get method */
 
+static json_t *_identity_email(jmap_req_t *req)
+{
+    char *email = jmap_user_address(req);
+    json_t *jemail = json_string(email);
+    free(email);
+    return jemail;
+}
+
 static int jmap_identity_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2684,8 +2690,7 @@ static int jmap_identity_get(jmap_req_t *req)
         json_object_set_new(me, "name", json_string(""));
     }
     if (jmap_wantprop(get.props, "email")) {
-        json_object_set_new(me, "email",
-                json_string(strchr(req->userid, '@') ? req->userid : ""));
+        json_object_set_new(me, "email", _identity_email(req));
     }
 
     if (jmap_wantprop(get.props, "mayDelete")) {
@@ -2763,10 +2768,10 @@ done:
  * defaults for the properties it leaves out */
 static json_t *_identity_current(jmap_req_t *req)
 {
-    return json_pack("{s:s s:s s:s s:n s:n s:s s:s s:b}",
+    return json_pack("{s:s s:s s:o s:n s:n s:s s:s s:b}",
                      "id", req->userid,
                      "name", "",
-                     "email", strchr(req->userid, '@') ? req->userid : "",
+                     "email", _identity_email(req),
                      "replyTo",
                      "bcc",
                      "textSignature", "",

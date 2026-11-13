@@ -283,6 +283,7 @@ static int getblob_cb(const conv_guidrec_t* rec, void* vrock)
 struct blob_range {
     size_t offset;
     size_t length;
+    bool has_length;
 };
 
 static int _parse_range(jmap_req_t *req __attribute__((unused)),
@@ -307,8 +308,11 @@ static int _parse_range(jmap_req_t *req __attribute__((unused)),
         long long val = -1;
         if (json_is_integer(arg)) val = json_integer_value(arg);
 
-        if (val <= 0) jmap_parser_invalid(parser, "length");
-        else rangep->length = val;
+        if (val < 0) jmap_parser_invalid(parser, "length");
+        else {
+            rangep->length = val;
+            rangep->has_length = true;
+        }
 
         return 1;
     }
@@ -325,7 +329,7 @@ static int jmap_blob_get(jmap_req_t *req)
     size_t i;
 
     /* Parse request */
-    struct blob_range range = { 0, 0 };
+    struct blob_range range = { 0 };
     jmap_get_parse(req, &parser, &blob_props, /*allow_null_ids*/0,
                    &_parse_range, &range, &get, &err);
     if (err) {
@@ -348,7 +352,7 @@ static int jmap_blob_get(jmap_req_t *req)
             size_t len = buf_len(&ctx.blob);
 
             if (range.offset) {
-                if (range.offset < len) {
+                if (range.offset <= len) {
                     base += range.offset;
                     len -= range.offset;
                 }
@@ -357,7 +361,7 @@ static int jmap_blob_get(jmap_req_t *req)
                     len = 0;
                 }
             }
-            if (range.length) {
+            if (range.has_length) {
                 if (len >= range.length) len = range.length;
                 else is_truncated = 1;
             }
@@ -458,7 +462,26 @@ struct lookup_types {
     int unknown;
 };
 
-static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
+/* The capability that defines a data type Blob/lookup supports */
+static const char *_datatype_capability(uint32_t kind)
+{
+    switch (kind) {
+    case JMAP_TYPE_MAILBOX:
+    case JMAP_TYPE_THREAD:
+    case JMAP_TYPE_EMAIL:
+        return JMAP_URN_MAIL;
+    case JMAP_TYPE_ADDRESSBOOK:
+    case JMAP_TYPE_CONTACTCARD:
+        return JMAP_URN_CONTACTS;
+    case JMAP_TYPE_CALENDAR:
+    case JMAP_TYPE_CALENDAREVENT:
+        return JMAP_URN_CALENDARS;
+    default:
+        return NULL;
+    }
+}
+
+static int _parse_datatypes(jmap_req_t *req,
                             struct jmap_parser *parser,
                             const char *key,
                             json_t *arg,
@@ -480,12 +503,18 @@ static int _parse_datatypes(jmap_req_t *req __attribute__((unused)),
             const jmap_data_type_t *dtype =
                 val ? jmap_data_types_lookup(val, strlen(val)) : NULL;
 
-            if (dtype && (dtype->attributes & JMAP_TYPE_HAS_BLOB)) {
+            const char *capa =
+                dtype && (dtype->attributes & JMAP_TYPE_HAS_BLOB)
+                    ? _datatype_capability(dtype->kind)
+                    : NULL;
+
+            if (capa && jmap_is_using(req, capa)) {
                 types->datatypes |= dtype->kind;
             }
             else {
-                /* RFC 9404 S4.3: an unknown type name is an unknownDataType
-                 * error; the caller reports it */
+                /* RFC 9404 S4.3: an unknown type name, or one whose
+                 * capability isn't in use, is an unknownDataType error;
+                 * the caller reports it */
                 types->unknown = 1;
             }
         }

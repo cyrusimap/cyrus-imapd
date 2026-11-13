@@ -58,6 +58,7 @@ sub test_card_blob_lookup ($self)
         using => [
             'urn:ietf:params:jmap:core',
             'urn:ietf:params:jmap:blob',
+            'urn:ietf:params:jmap:contacts',
         ],
         methodCalls => [['Blob/lookup', {
             typeNames => ['ContactCard', 'AddressBook'],

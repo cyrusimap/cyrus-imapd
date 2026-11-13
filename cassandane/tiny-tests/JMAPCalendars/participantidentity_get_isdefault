@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: exactly one participant identity is the default.
+sub test_participantidentity_get_isdefault
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $caldav = $self->{caldav};
+
+    xlog $self, "give the user two calendar user addresses";
+    $caldav->Request(
+      'PROPPATCH',
+      '',
+      x('D:propertyupdate', $caldav->NS(),
+        x('D:set',
+          x('D:prop',
+            x('C:calendar-user-address-set',
+              x('D:href', 'mailto:foo@local'),
+              x('D:href', 'mailto:cassandane@example.com'),
+            )
+          )
+        )
+      )
+    );
+
+    my $res = $jmap->request([
+        [ 'ParticipantIdentity/get' => { properties => ['isDefault'] } ],
+    ]);
+
+    $self->assert_cmp_deeply(bag(
+        { id => ignore(), isDefault => JSON::true },
+        { id => ignore(), isDefault => JSON::false },
+    ), $res->single_sentence('ParticipantIdentity/get')->arguments->{list});
+}

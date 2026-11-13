@@ -3223,7 +3223,6 @@ static void sanitize_override_patch(json_t *jpatch)
         "recurrenceIdTimeZone",
         "recurrenceOverrides",
         "recurrenceRule",
-        "relatedTo",
         "sentBy",
         "uid",
         NULL
@@ -4401,6 +4400,58 @@ static void validate_recurrencerule(jscal_ctx_t *ctx,
 static void validate_entry(jscal_ctx_t *ctx,
                            struct jmap_parser *parser, json_t *jentry);
 
+static bool same_calendaraddress(json_t *jpart1, json_t *jpart2)
+{
+    return !strcmpsafe(
+        json_string_value(json_object_get(jpart1, "calendarAddress")),
+        json_string_value(json_object_get(jpart2, "calendarAddress")));
+}
+
+// draft-ietf-calext-jscalendarbis S3.3.4: an override must not change the
+// calendarAddress of a participant, however the patch spells it
+static void validate_override_calendaraddresses(json_t *jmaster,
+                                                json_t *jovr,
+                                                json_t *jinvalid)
+{
+    json_t *jmaster_parts = json_object_get(jmaster, "participants");
+    struct buf buf = BUF_INITIALIZER;
+    const char *id;
+    json_t *jpart;
+    json_object_foreach (json_object_get(jovr, "participants"), id, jpart) {
+        json_t *jmaster_part = json_object_get(jmaster_parts, id);
+        if (jmaster_part && !same_calendaraddress(jmaster_part, jpart)) {
+            buf_printf(&buf, "participants/%s/calendarAddress", id);
+            json_array_append_new(jinvalid, json_string(buf_cstring(&buf)));
+            buf_reset(&buf);
+        }
+    }
+    buf_free(&buf);
+}
+
+// draft-ietf-calext-jscalendarbis S3.3.4
+static bool is_forbidden_override_pointer(const char *ptr)
+{
+    static const char *const forbidden[] = { "@type",
+                                             "method",
+                                             "organizerCalendarAddress",
+                                             "privacy",
+                                             "prodId",
+                                             "recurrenceId",
+                                             "recurrenceIdTimeZone",
+                                             "sentBy",
+                                             "uid",
+                                             NULL };
+    for (int i = 0; forbidden[i]; i++) {
+        if (!strcmp(ptr, forbidden[i])) {
+            return true;
+        }
+    }
+
+    size_t n = strcspn(ptr, "/");
+    return (n == 19 && !strncmp(ptr, "recurrenceOverrides", n))
+           || (n == 14 && !strncmp(ptr, "recurrenceRule", n));
+}
+
 static void validate_recurrenceoverrides(jscal_ctx_t *ctx,
                                          struct jmap_parser *parser,
                                          json_t *jentry,
@@ -4435,9 +4486,23 @@ static void validate_recurrenceoverrides(jscal_ctx_t *ctx,
             jmap_parser_invalid(parser, "excluded");
         }
         else if (!jexcl && json_object_size(jpatch)) {
-            // Apply the patch object to produce the recurrence override.
             json_t *jinvalid = json_array();
-            json_t *jovr = jmap_patchobject_apply(jmaster, jpatch, jinvalid, 0);
+            json_t *jovr = NULL;
+            const char *ptr;
+            json_t *jptrval;
+            json_object_foreach(jpatch, ptr, jptrval)
+            {
+                if (is_forbidden_override_pointer(ptr)) {
+                    json_array_append_new(jinvalid, json_string(ptr));
+                }
+            }
+            // Apply the patch object to produce the recurrence override.
+            if (!json_array_size(jinvalid)) {
+                jovr = jmap_patchobject_apply(jmaster, jpatch, jinvalid, 0);
+            }
+            if (JNOTNULL(jovr) && !json_array_size(jinvalid)) {
+                validate_override_calendaraddresses(jmaster, jovr, jinvalid);
+            }
             if (JNOTNULL(jovr) && !json_array_size(jinvalid)) {
                 // The patch-object is valid, let's validate if the resulting
                 // recurrence override is valid, too.
@@ -6373,6 +6438,43 @@ static void entry_from_ical(jscal_ctx_t *ctx,
                             json_t *jobj,
                             ptrarray_t *overrides);
 
+// An override can't change the calendarAddress of a participant, so an
+// override participant whose calendarAddress differs from the main
+// event's participant with the same id gets an id of its own.
+static void rekey_override_participants(json_t *jmain_parts, json_t *jovr_parts)
+{
+    json_t *jrekeyed = json_object();
+    const char *id;
+    json_t *jpart;
+    void *tmp;
+    json_object_foreach_safe (jovr_parts, tmp, id, jpart) {
+        json_t *jmain_part = json_object_get(jmain_parts, id);
+        if (!jmain_part || same_calendaraddress(jmain_part, jpart)) {
+            continue;
+        }
+
+        // Derive the id as for an ATTENDEE without a JSID, so it is stable
+        // and matches the main event's participant with that address.
+        const char *caladdr =
+            json_string_value(json_object_get(jpart, "calendarAddress"));
+        const char *newid = caladdr ? makeuuid5(JSCAL_UUID5NAMESPACE,
+                                                (const unsigned char *) caladdr,
+                                                strlen(caladdr))
+                                    : NULL;
+        json_t *jclash = newid ? json_object_get(jmain_parts, newid) : NULL;
+        if (!newid || json_object_get(jovr_parts, newid)
+            || json_object_get(jrekeyed, newid)
+            || (jclash && !same_calendaraddress(jclash, jpart)))
+        {
+            newid = makeuuid();
+        }
+        json_object_set(jrekeyed, newid, jpart);
+        json_object_del(jovr_parts, id);
+    }
+    json_object_update(jovr_parts, jrekeyed);
+    json_decref(jrekeyed);
+}
+
 static void recuroverrides_from_ical(jscal_ctx_t *ctx,
                                      icalcomponent *comp,
                                      json_t *jobj,
@@ -6483,6 +6585,8 @@ static void recuroverrides_from_ical(jscal_ctx_t *ctx,
         entry_from_ical(ctx, ovrc, jovr, NULL);
         json_object_del(jovr, "recurrenceId");
         json_object_del(jovr, "recurrenceIdTimeZone");
+        rekey_override_participants(json_object_get(jobj, "participants"),
+                                    json_object_get(jovr, "participants"));
 
         json_t *jpatch = jmap_patchobject_create(jobj, jovr, 0);
         json_object_del(jpatch, "hideAttendees");
@@ -6496,7 +6600,6 @@ static void recuroverrides_from_ical(jscal_ctx_t *ctx,
         json_object_del(jpatch, "recurrenceIdTimeZone");
         json_object_del(jpatch, "recurrenceOverrides");
         json_object_del(jpatch, "recurrenceRule");
-        json_object_del(jpatch, "relatedTo");
         json_object_del(jpatch, "sentBy");
         json_object_del(jpatch, "uid");
         const char *recurid = localtime_from_icaltime(icalrecurid, &buf);

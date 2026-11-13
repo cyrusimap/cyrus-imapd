@@ -1,0 +1,42 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: an untyped photo that is no longer than its image signature
+# is still recognised as that image type.
+sub test_card_set_media_photo_signature_only
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                card => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Jane Doe' },
+                    media => {
+                        m1 => {
+                            '@type' => 'Media',
+                            kind => 'photo',
+                            # "GIF89a"
+                            uri => 'data:;base64,R0lGODlh',
+                        },
+                    },
+                },
+            },
+        }],
+        ['ContactCard/get', {
+            ids => ['#card'],
+            properties => ['media'],
+        }],
+    ]);
+    $self->assert_not_null(
+        $res->sentence_named('ContactCard/set')->as_set->created_id('card'));
+    $self->assert_cmp_deeply(
+        [ superhashof({
+            media => { m1 => superhashof({ mediaType => 'image/gif' }) },
+        }) ],
+        $res->sentence_named('ContactCard/get')->arguments->{list},
+    );
+}

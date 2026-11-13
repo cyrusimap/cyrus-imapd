@@ -97,14 +97,25 @@ sub test_calendarevent_get_utcstart
         ['CalendarEvent/get', {
             ids => ['#2'],
             properties => ['utcStart', 'utcEnd', 'timeZone'],
-        }, 'R2']
+        }, 'R2'],
+        ['CalendarEvent/get', {
+            ids => ['#2'],
+            properties => ['utcStart', 'utcEnd', 'timeZone'],
+            timeZone => 'America/New_York',
+        }, 'R3']
     ]);
     my $eventId2 = $res->[0][1]{created}{2}{id};
     $self->assert_not_null($eventId2);
+
+    # Without a timeZone argument, floating times are in Etc/UTC.
     $event = $res->[1][1]{list}[0];
     $self->assert_not_null($event);
+    $self->assert_str_equals('2019-12-08T23:30:00Z', $event->{utcStart});
+    $self->assert_str_equals('2019-12-09T01:30:00Z', $event->{utcEnd});
 
-    # Floating event time falls back to calendar time zone America/New_York.
+    # The timeZone argument sets the time zone of floating events.
+    $event = $res->[2][1]{list}[0];
+    $self->assert_not_null($event);
     $self->assert_str_equals('2019-12-09T04:30:00Z', $event->{utcStart});
     $self->assert_str_equals('2019-12-09T06:30:00Z', $event->{utcEnd});
 }

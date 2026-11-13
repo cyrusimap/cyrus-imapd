@@ -1,16 +1,13 @@
 #!perl
 use Cassandane::Tiny;
 
-sub test_calendarevent_set_privacy_ignore_override
-    :min_version_3_7
+sub test_calendarevent_set_privacy_override
     ($self)
 {
     my $jmap = $self->default_user->jmap;
     my $default_cal_id = $self->default_user->calendars->default->id;
 
-    my $caldav = $self->{caldav};
-
-    xlog "Ignore overriden privacy in CalendarEvent/set";
+    xlog "Reject overridden privacy in CalendarEvent/set";
     my $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
             create => {
@@ -40,10 +37,8 @@ sub test_calendarevent_set_privacy_ignore_override
             },
         }, 'R1'],
     ]);
-    my $xhref = $res->[0][1]{created}{event1}{'x-href'};
-    $self->assert_not_null($xhref);
-
-    $res = $caldav->Request('GET', $xhref);
-    $self->assert($res->{content} =~ m/^CLASS:PRIVATE\r$/mi);
-    $self->assert(not $res->{content} =~ m/^CLASS:CONFIDENTIAL\r$/mi);
+    $self->assert_cmp_deeply({
+        type => 'invalidProperties',
+        properties => ['recurrenceOverrides/2020-01-02T09:00:00/privacy'],
+    }, $res->[0][1]{notCreated}{event1});
 }

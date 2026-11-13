@@ -2002,7 +2002,7 @@ static int getaddressbooks_cb(const mbentry_t *mbentry, void *vrock)
                                         req->userid, &attrib);
         if (buf_len(&attrib)) {
             uint64_t t = str2uint64(buf_cstring(&attrib));
-            if (t < INT_MAX) {
+            if (t <= INT32_MAX) {
                 sort_order = (int) t;
             } else {
                 xsyslog_ev(LOG_WARNING, "jmap.mailbox.annotation.invalid",
@@ -2249,7 +2249,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
     json_t *jprop = json_object_get(arg, "name");
     if (json_is_string(jprop)) {
         props->name = json_string_value(jprop);
-        if (strnlen(props->name, 256) == 256) {
+        if (!*props->name || strnlen(props->name, 256) == 256) {
             jmap_parser_invalid(parser, "name");
         }
     }
@@ -2270,7 +2270,7 @@ static void setaddressbook_readprops(jmap_req_t *req,
     jprop = json_object_get(arg, "sortOrder");
     if (json_is_integer(jprop)) {
         json_int_t t = json_integer_value(jprop);
-        if (t < 0 || t >= INT_MAX) {
+        if (t < 0 || t > INT32_MAX) {
             jmap_parser_invalid(parser, "sortOrder");
         }
         else {
@@ -2599,6 +2599,7 @@ done:
 
 static void setaddressbooks_create(struct jmap_req *req,
                                    const char *creation_id,
+                                   const char *default_addrbookname,
                                    json_t *arg,
                                    json_t **record,
                                    json_t **err)
@@ -2673,23 +2674,54 @@ static void setaddressbooks_create(struct jmap_req *req,
         goto done;
     }
 
-    /* Report addressbook as created. */
-    char id[JMAP_MAX_ADDRBOOKID_SIZE];
-    jmap_set_addrbookid(req->cstate, newmbentry, id);
-    *record = json_pack("{s:s s:o}", "id", id,
-                        "myRights",
-                        addressbookrights_to_jmap(jmap_myrights_mbentry(req,
-                                                                        newmbentry)));
-    jmap_add_id(req, creation_id, id);
-
-    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
-        json_object_set_new(*record, "mailboxUniqueId",
-                        json_string(newmbentry->uniqueid));
-        char *xhref = jmap_xhref(mboxname, NULL);
-        json_object_set_new(*record, "cyrusimap.org:href", json_string(xhref));
-        free(xhref);
+    /* Report the server-set properties and those the client left to
+     * their defaults, as AddressBook/get returns them (RFC 8620 S5.3) */
+    static const char *const reported_props[] = {
+        "id",       "description", "sortOrder", "isDefault", "isSubscribed",
+        "myRights", "shareWith",   NULL
+    };
+    struct jmap_get get = { .props = xzmalloc(sizeof(hash_table)),
+                            .list = json_array() };
+    construct_hash_table(get.props, 16, 0);
+    for (const char *const *prop = reported_props; *prop; prop++) {
+        if (!json_object_get(arg, *prop)) {
+            hash_insert(*prop, (void *) 1, get.props);
+        }
     }
-
+    if (jmap_is_using(req, JMAP_CONTACTS_EXTENSION)) {
+        hash_insert("mailboxUniqueId", (void *) 1, get.props);
+        hash_insert("cyrusimap.org:href", (void *) 1, get.props);
+    }
+    struct getaddressbooks_rock grock = {
+        .req = req,
+        .get = &get,
+        .default_addrbookname = default_addrbookname,
+        .skip_hidden = 1,
+    };
+    r = getaddressbooks_cb(newmbentry, &grock);
+    if (r) {
+        /* the addressbook exists, so it is still created */
+        xsyslog_ev(LOG_ERR, "jmap.addressbook.create.read.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mboxname),
+                   lf_err("error", r));
+        r = 0;
+    }
+    *record = json_incref(json_array_get(get.list, 0));
+    if (!*record) {
+        /* a sharee may not be able to read what it created */
+        char id[JMAP_MAX_ADDRBOOKID_SIZE];
+        jmap_set_addrbookid(req->cstate, newmbentry, id);
+        *record = json_pack(
+            "{s:s s:o}",
+            "id",
+            id,
+            "myRights",
+            addressbookrights_to_jmap(jmap_myrights_mbentry(req, newmbentry)));
+    }
+    jmap_add_id(req,
+                creation_id,
+                json_string_value(json_object_get(*record, "id")));
+    jmap_get_fini(&get);
     mboxlist_entry_free(&newmbentry);
 
 done:
@@ -2931,7 +2963,8 @@ static int jmap_addressbook_set(struct jmap_req *req)
             continue;
         }
         json_t *record = NULL, *err = NULL;
-        setaddressbooks_create(req, key, arg, &record, &err);
+        setaddressbooks_create(req, key, default_addrbookname, arg, &record,
+                               &err);
         if (!err) {
             json_object_set_new(set.created, key, record);
         }
@@ -2980,16 +3013,15 @@ static int jmap_addressbook_set(struct jmap_req *req)
         const char *newid = setargs.on_success_set_is_default;
         if (*newid == '#') newid = jmap_lookup_id(req, newid + 1);
 
-        /* Make sure the new default addressbook exists, and that the caller
-         * has admin rights on the addressbook home: for changing per-account
-         * state, per-addressbook rights aren't enough. */
+        /* Changing per-account state needs admin rights on the addressbook
+         * home, per-addressbook rights aren't enough. */
         mbentry_t *mbentry = NULL;
         if (newid) abookid_to_mbentry(req, newid, &mbentry);
-        if (!mbentry ||
-            !jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
-            /* Report the failure to set the new default */
-            jmap_set_default_failed(&set, newid,
-                                    mbentry ? "forbidden" : "notFound", NULL);
+        if (!mbentry) {
+            /* RFC 9610 S2.3: an unknown id is ignored */
+        }
+        else if (!jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
+            jmap_set_default_failed(&set, newid, "forbidden", NULL);
         }
         else {
             /* set jmap-default-addressbook annotation */

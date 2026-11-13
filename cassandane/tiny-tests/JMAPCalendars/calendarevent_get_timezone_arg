@@ -1,0 +1,85 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: the CalendarEvent/get timeZone argument applies to floating
+# events only, and must name a known time zone.
+sub test_calendarevent_get_timezone_arg
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $cal = $user->calendars->default;
+
+    my $floating = $cal->create_event({
+        title => 'floating',
+        start => '2024-05-01T09:00:00',
+        timeZone => undef,
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily', count => 3 },
+    });
+    my $berlin = $cal->create_event({
+        title => 'berlin',
+        start => '2024-05-01T09:00:00',
+        timeZone => 'Europe/Berlin',
+        duration => 'PT1H',
+    });
+    my $floatingId = $floating->id . "";
+    my $berlinId = $berlin->id . "";
+    my $instanceId = encode_eventid($floatingId, '20240502T090000');
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/get' => {
+            ids => [$floatingId, $berlinId, $instanceId],
+            properties => ['utcStart', 'utcEnd'],
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [$floatingId, $berlinId, $instanceId],
+            properties => ['utcStart', 'utcEnd'],
+            timeZone => 'America/New_York',
+        } ],
+        [ 'CalendarEvent/get' => {
+            ids => [$floatingId],
+            timeZone => 'Bogus/Zone',
+        } ],
+    ]);
+
+    my $utc = $res->sentence(0)->assert_named('CalendarEvent/get')->arguments;
+    $self->assert_cmp_deeply({
+        $floatingId => superhashof({
+            utcStart => '2024-05-01T09:00:00Z',
+            utcEnd => '2024-05-01T10:00:00Z',
+        }),
+        $berlinId => superhashof({
+            utcStart => '2024-05-01T07:00:00Z',
+            utcEnd => '2024-05-01T08:00:00Z',
+        }),
+        $instanceId => superhashof({
+            utcStart => '2024-05-02T09:00:00Z',
+            utcEnd => '2024-05-02T10:00:00Z',
+        }),
+    }, { map { $_->{id} => $_ } $utc->{list}->@* });
+
+    my $ny = $res->sentence(1)->assert_named('CalendarEvent/get')->arguments;
+    $self->assert_cmp_deeply({
+        $floatingId => superhashof({
+            utcStart => '2024-05-01T13:00:00Z',
+            utcEnd => '2024-05-01T14:00:00Z',
+        }),
+        $berlinId => superhashof({
+            utcStart => '2024-05-01T07:00:00Z',
+            utcEnd => '2024-05-01T08:00:00Z',
+        }),
+        $instanceId => superhashof({
+            utcStart => '2024-05-02T13:00:00Z',
+            utcEnd => '2024-05-02T14:00:00Z',
+        }),
+    }, { map { $_->{id} => $_ } $ny->{list}->@* });
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            type => 'invalidArguments',
+            arguments => ['timeZone'],
+        }),
+        $res->sentence(2)->assert_named('error')->arguments,
+    );
+}

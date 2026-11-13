@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: utcStart and utcEnd can't be set in recurrenceOverrides.
+sub test_calendarevent_set_utcstart_in_override
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my %event = (
+        version => '2.0',
+        calendarIds => { $user->calendars->default->id => JSON::true },
+        title => 'event',
+        start => '2024-05-01T09:00:00',
+        timeZone => 'Etc/UTC',
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily', count => 3 },
+    );
+    my $id = $user->calendarevents->create({ %event })->id;
+
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                bad => {
+                    %event,
+                    recurrenceOverrides => {
+                        '2024-05-02T09:00:00' => {
+                            utcStart => '2024-05-02T11:00:00Z',
+                            utcEnd => '2024-05-02T12:00:00Z',
+                        },
+                    },
+                },
+            },
+            update => {
+                $id => {
+                    recurrenceOverrides => {
+                        '2024-05-02T09:00:00' => {
+                            utcStart => '2024-05-02T11:00:00Z',
+                        },
+                    },
+                },
+            },
+        } ],
+    ]);
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+    $self->assert_cmp_deeply({
+        bad => {
+            type => 'invalidProperties',
+            properties => bag(
+                'recurrenceOverrides/2024-05-02T09:00:00/utcStart',
+                'recurrenceOverrides/2024-05-02T09:00:00/utcEnd',
+            ),
+        },
+    }, $set->create_errors);
+    $self->assert_cmp_deeply({
+        $id => {
+            type => 'invalidProperties',
+            properties => ['recurrenceOverrides/2024-05-02T09:00:00/utcStart'],
+        },
+    }, $set->update_errors);
+}

@@ -1090,6 +1090,9 @@ EXPORTED int caldav_foreach_jscal(struct caldav_db *caldavdb,
                 case CAL_SORT_MODSEQ:
                     buf_appendcstr(&stmt, "jscal_objs.modseq");
                     break;
+                case CAL_SORT_ICAL_RECURID:
+                    buf_appendcstr(&stmt, "jscal_objs.ical_recurid");
+                    break;
                 default:
                     continue;
             }

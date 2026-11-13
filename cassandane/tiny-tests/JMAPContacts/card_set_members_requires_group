@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: only a card of kind "group" may have members (RFC 9553 S2.1.6).
+sub test_card_set_members_requires_group
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $member = 'urn:uuid:03a0e51f-d1aa-4385-8a53-e29025acd8af';
+    my %kinds = (
+        nokind => {},
+        org => { kind => 'org' },
+        individual => { kind => 'individual' },
+    );
+
+    my %create = map {
+        $_ => {
+            '@type' => 'Card',
+            version => '1.0',
+            name => { full => $_ },
+            members => { $member => JSON::true },
+            $kinds{$_}->%*,
+        }
+    } keys %kinds;
+    $create{group} = {
+        '@type' => 'Card',
+        version => '1.0',
+        name => { full => 'group' },
+        kind => 'group',
+        members => { $member => JSON::true },
+    };
+
+    my $set = $jmap->request([
+        ['ContactCard/set', { create => \%create }],
+    ])->single_sentence('ContactCard/set')->as_set;
+
+    my $invalid = {
+        type => 'invalidProperties',
+        properties => ['members'],
+    };
+    $self->assert_cmp_deeply({
+        nokind => $invalid,
+        org => $invalid,
+        individual => $invalid,
+    }, $set->create_errors);
+    $self->assert_cmp_deeply(['group'], [ $set->created_creation_ids ]);
+}

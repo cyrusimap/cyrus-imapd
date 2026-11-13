@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: events and expanded instances sort by recurrenceId.
+sub test_calendarevent_query_sort_recurrenceid
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $default_cal_id = $user->calendars->default->id;
+
+    # Create the standalone instances of one uid in a single /set.
+    my %standalone = (
+        version => '2.0',
+        calendarIds => { $default_cal_id => JSON::true },
+        uid => 'standalone',
+        timeZone => 'Europe/Vienna',
+        duration => 'PT1H',
+    );
+    my $res = $jmap->request([
+        [ 'CalendarEvent/set' => {
+            create => {
+                rec => {
+                    version => '2.0',
+                    calendarIds => { $default_cal_id => JSON::true },
+                    uid => 'recurring',
+                    title => 'recurring',
+                    start => '2024-04-01T09:00:00',
+                    timeZone => 'Europe/Vienna',
+                    duration => 'PT1H',
+                    recurrenceRule => { frequency => 'daily', count => 3 },
+                },
+                late => {
+                    %standalone,
+                    title => 'late',
+                    start => '2021-01-01T09:00:00',
+                    recurrenceId => '2021-01-02T09:00:00',
+                },
+                early => {
+                    %standalone,
+                    title => 'early',
+                    start => '2021-01-03T09:00:00',
+                    recurrenceId => '2021-01-01T09:00:00',
+                },
+            },
+        } ],
+    ]);
+    my $set = $res->single_sentence('CalendarEvent/set')->as_set;
+    $set->assert_no_errors;
+    my $recId = $set->created_id('rec') . "";
+    my $lateId = $set->created_id('late') . "";
+    my $earlyId = $set->created_id('early') . "";
+
+    $res = $jmap->request([
+        [ 'CalendarEvent/query' => {
+            filter => {
+                uid => 'recurring',
+                after => '2024-04-01T00:00:00',
+                before => '2024-04-04T00:00:00',
+            },
+            expandRecurrences => JSON::true,
+            sort => [{ property => 'recurrenceId', isAscending => JSON::false }],
+        } ],
+        [ 'CalendarEvent/query' => {
+            filter => { uid => 'standalone' },
+            sort => [{ property => 'recurrenceId' }],
+        } ],
+        [ 'CalendarEvent/query' => {
+            filter => { uid => 'standalone' },
+            sort => [{ property => 'recurrenceId', isAscending => JSON::false }],
+        } ],
+    ]);
+
+    my ($expanded, $asc, $desc) = map {
+        $res->sentence($_)->assert_named('CalendarEvent/query')->arguments
+    } 0..2;
+    $self->assert_cmp_deeply([
+        encode_eventid($recId, '20240403T090000'),
+        encode_eventid($recId, '20240402T090000'),
+        encode_eventid($recId, '20240401T090000'),
+    ], $expanded->{ids});
+    $self->assert_cmp_deeply([$earlyId, $lateId], $asc->{ids});
+    $self->assert_cmp_deeply([$lateId, $earlyId], $desc->{ids});
+}

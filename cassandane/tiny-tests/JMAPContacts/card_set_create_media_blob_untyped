@@ -1,0 +1,72 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(decode_base64);
+
+# Invariant: a Media given by a blobId without a mediaType gets its type
+# from the content when it is an image, and never an empty mediaType.
+sub test_card_set_create_media_blob_untyped
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $png = decode_base64(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQMAAAAl21bKAAAAA1BMVEX/AAAZ4gk3'
+      . 'AAAAAXRSTlN/gFy0ywAAAApJREFUeJxjYgAAAAYAAzY3fKgAAAAASUVORK5CYII='
+    );
+    my $pngBlobId = $jmap->upload({
+        accountId => $jmap->fallback_account_id,
+        type => 'image/png',
+        blob => \$png,
+    })->blob_id;
+    my $soundBlobId = $jmap->upload({
+        accountId => $jmap->fallback_account_id,
+        type => 'audio/basic',
+        blob => \'not an image',
+    })->blob_id;
+
+    my $res = $jmap->request([
+        ['ContactCard/set', {
+            create => {
+                c1 => {
+                    '@type' => 'Card',
+                    version => '1.0',
+                    name => { full => 'Jane Doe' },
+                    media => {
+                        m1 => {
+                            '@type' => 'Media',
+                            kind => 'photo',
+                            blobId => $pngBlobId,
+                        },
+                        m2 => {
+                            '@type' => 'Media',
+                            kind => 'sound',
+                            blobId => $soundBlobId,
+                        },
+                    },
+                },
+            },
+        }],
+        ['ContactCard/get', {
+            ids => ['#c1'],
+            properties => ['media'],
+        }],
+    ]);
+
+    my $media = $res->sentence_named('ContactCard/set')
+                    ->as_set->created->{c1}{media};
+    $self->assert_cmp_deeply({
+        m1 => superhashof({
+            kind => 'photo',
+            blobId => re('.'),
+            mediaType => 'image/png',
+        }),
+        m2 => all(
+            superhashof({ kind => 'sound', blobId => re('.') }),
+            code(sub { exists $_[0]{mediaType}
+                       ? (0, 'has a mediaType') : 1 }),
+        ),
+    }, $media);
+
+    my $list = $res->sentence_named('ContactCard/get')->arguments->{list};
+    $self->assert_str_equals('image/png', $list->[0]{media}{m1}{mediaType});
+}

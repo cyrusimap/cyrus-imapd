@@ -59,16 +59,12 @@ sub test_calendarevent_set_recurrenceoverrides
             "2016-06-01T10:00:00" => {
                 freeBusyStatus => "free",
             },
-            "2016-07-01T09:00:00" => {
-                "uid" => "foo",
-            },
         },
     };
 
     my $ret = $self->createandget_event($event);
     $event->{id} = $ret->{id};
     $event->{calendarIds} = $ret->{calendarIds};
-    delete $event->{recurrenceOverrides}{"2016-07-01T09:00:00"}{uid}; # ignore 'uid' pointer in patch
     $self->assert_normalized_event_equals($event, $ret);
 
     $ret = $self->updateandget_event({

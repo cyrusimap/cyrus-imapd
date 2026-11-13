@@ -48,6 +48,44 @@ static const struct image_signature {
     { 0 }
 };
 
+EXPORTED const char *vcard_image_mediatype(const char *data, size_t size)
+{
+    const struct image_signature *sig;
+
+    for (sig = image_signatures; sig->mediatype; sig++) {
+        int i;
+        for (i = 0; i < 2 && sig->magic[i].len; i++) {
+            if (sig->magic[i].offset + sig->magic[i].len > size
+                || memcmp(data + sig->magic[i].offset,
+                          sig->magic[i].data,
+                          sig->magic[i].len))
+            {
+                break;
+            }
+        }
+        if (i == 2 || !sig->magic[i].len) {
+            return sig->mediatype;
+        }
+    }
+
+    const char *mediatype = NULL;
+    xmlDocPtr doc = xmlReadMemory(data,
+                                  size,
+                                  NULL,
+                                  NULL,
+                                  XML_PARSE_NOERROR | XML_PARSE_NOWARNING
+                                      | XML_PARSE_NONET);
+    if (doc) {
+        xmlNodePtr root = xmlDocGetRootElement(doc);
+        if (root && !xmlStrcmp(root->name, BAD_CAST "svg")) {
+            mediatype = "image/svg+xml";
+        }
+        xmlFreeDoc(doc);
+    }
+
+    return mediatype;
+}
+
 /* Decode a base64-encoded binary vCard property and calculate a GUID. */
 static size_t _prop_decode_value(const char *data,
                                  struct buf *decoded,
@@ -62,37 +100,7 @@ static size_t _prop_decode_value(const char *data,
     if (!decbuf) return 0;
 
     if (content_type && !*content_type) {
-        /* Attempt to detect the content type */
-        const struct image_signature *sig;
-
-        for (sig = image_signatures; sig->mediatype; sig++) {
-            int i;
-            for (i = 0; i < 2 && sig->magic[i].len; i++) {
-                if (size - sig->magic[i].offset <= sig->magic[i].len ||
-                    memcmp(decbuf + sig->magic[i].offset,
-                           sig->magic[i].data, sig->magic[i].len)) {
-                    break;
-                }
-            }
-            if (i == 2 || !sig->magic[i].len) {
-                *content_type = xstrdup(sig->mediatype);
-                break;
-            }
-        }
-
-        if (!*content_type) {
-            xmlDocPtr doc = xmlReadMemory(decbuf, size, NULL, NULL,
-                                          XML_PARSE_NOERROR |
-                                          XML_PARSE_NOWARNING |
-                                          XML_PARSE_NONET);
-            if (doc) {
-                xmlNodePtr root = xmlDocGetRootElement(doc);
-                if (!xmlStrcmp(root->name, BAD_CAST "svg")) {
-                    *content_type = xstrdup("image/svg+xml");
-                }
-                xmlFreeDoc(doc);
-            }
-        }
+        *content_type = xstrdupnull(vcard_image_mediatype(decbuf, size));
     }
 
     if (guid) {

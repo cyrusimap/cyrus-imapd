@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: AddressBook/set reports, in created, the server-set properties
+# and those the client left to their defaults (RFC 8620 S5.3), with the
+# values AddressBook/get returns.
+sub test_addressbook_set_create_defaults
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['AddressBook/set', {
+            create => { A => { name => 'A' } },
+        }],
+    ]);
+    my $created =
+        $res->single_sentence('AddressBook/set')->as_set->created->{A};
+    $self->assert_cmp_deeply({
+        id => re('.'),
+        description => undef,
+        sortOrder => 0,
+        isDefault => JSON::false,
+        isSubscribed => JSON::true,
+        myRights => {
+            mayRead => JSON::true,
+            mayWrite => JSON::true,
+            mayShare => JSON::true,
+            mayDelete => JSON::true,
+        },
+        shareWith => undef,
+        mailboxUniqueId => re('.'),
+        'cyrusimap.org:href' => re('.'),
+    }, $created);
+
+    $res = $jmap->request([
+        ['AddressBook/get', {
+            ids => [ $created->{id} ],
+            properties => [ keys %$created ],
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        [ $created ],
+        $res->single_sentence('AddressBook/get')->arguments->{list},
+    );
+
+    xlog $self, "properties the client sent are not reported back";
+    $res = $jmap->request([
+        ['AddressBook/set', {
+            create => {
+                B => {
+                    name => 'B',
+                    description => 'desc',
+                    sortOrder => 3,
+                },
+            },
+        }],
+    ]);
+    $self->assert_cmp_deeply({
+        id => re('.'),
+        isDefault => JSON::false,
+        isSubscribed => JSON::true,
+        myRights => ignore(),
+        shareWith => undef,
+        mailboxUniqueId => re('.'),
+        'cyrusimap.org:href' => re('.'),
+    }, $res->single_sentence('AddressBook/set')->as_set->created->{B});
+}

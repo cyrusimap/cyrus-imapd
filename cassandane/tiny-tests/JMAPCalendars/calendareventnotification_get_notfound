@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: unknown ids are reported in notFound, even before the account
+# has any notifications.
+sub test_calendareventnotification_get_notfound
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        [ 'CalendarEventNotification/get' => { ids => ['nope'] } ],
+    ]);
+
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => [],
+            notFound => ['nope'],
+        }),
+        $res->single_sentence('CalendarEventNotification/get')->arguments,
+    );
+}

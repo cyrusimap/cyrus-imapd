@@ -1,0 +1,19 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: the Identity of a user whose userid is not an address has
+# the userid at the default domain as its email.
+sub test_identity_get_email ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $defdomain = $self->{instance}->{config}->get('defaultdomain');
+    $self->assert_not_null($defdomain);
+
+    my $res = $jmap->request([
+        ['Identity/get', { properties => ['email'] }],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => 'cassandane', email => "cassandane\@$defdomain" } ],
+        $res->single_sentence('Identity/get')->arguments->{list},
+    );
+}

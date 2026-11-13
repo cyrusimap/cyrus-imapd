@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: a photo must be a recognised image type (RFC 9610 S3.5).
+sub test_card_set_media_photo_not_image
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $blobId = $jmap->upload({
+        accountId => $jmap->fallback_account_id,
+        type => 'text/plain',
+        blob => \"plain text\n",
+    })->blob_id;
+
+    my %media = (
+        blob => {
+            kind => 'photo',
+            blobId => $blobId,
+        },
+        typedblob => {
+            kind => 'photo',
+            blobId => $blobId,
+            mediaType => 'text/plain',
+        },
+        datauri => {
+            kind => 'photo',
+            uri => 'data:text/plain;base64,cGxhaW4gdGV4dAo=',
+        },
+    );
+
+    my %create = map {
+        $_ => {
+            '@type' => 'Card',
+            version => '1.0',
+            name => { full => 'Jane Doe' },
+            media => { m1 => { '@type' => 'Media', $media{$_}->%* } },
+        }
+    } keys %media;
+
+    my $set = $jmap->request([
+        ['ContactCard/set', { create => \%create }],
+    ])->single_sentence('ContactCard/set')->as_set;
+    $self->assert_cmp_deeply({
+        blob => {
+            type => 'invalidProperties',
+            properties => ['media/m1/blobId'],
+        },
+        typedblob => {
+            type => 'invalidProperties',
+            properties => ['media/m1/blobId'],
+        },
+        datauri => {
+            type => 'invalidProperties',
+            properties => ['media/m1/uri'],
+        },
+    }, $set->create_errors);
+
+    xlog $self, "the same files are fine as a logo";
+    $_->{media}{m1}{kind} = 'logo' for values %create;
+    $set = $jmap->request([
+        ['ContactCard/set', { create => \%create }],
+    ])->single_sentence('ContactCard/set')->as_set;
+    $self->assert_cmp_deeply(bag(qw(blob datauri typedblob)),
+                             [ $set->created_creation_ids ]);
+}

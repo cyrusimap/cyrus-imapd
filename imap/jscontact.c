@@ -3837,7 +3837,10 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
     if (m->supports_blobid) {
         jscontact_ctx_t *ctx = rrock->ctx;
         struct buf blob = BUF_INITIALIZER;
-        bool have_blob = false;
+        const char *blob_prop = NULL;
+        /* the image type of the blob's content, if detected yet */
+        const char *sniffed_type = NULL;
+        bool have_sniffed_type = false;
 
         /* blobId supersedes uri */
         jprop = json_object_get(obj, "blobId");
@@ -3869,6 +3872,18 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
                 goto fail;
             }
 
+            /* An uploaded blob has no type of its own */
+            if (!buf_len(&blobtype)) {
+                const char *type = media_type;
+                if (!type) {
+                    sniffed_type =
+                        vcard_image_mediatype(buf_base(&blob), buf_len(&blob));
+                    have_sniffed_type = true;
+                    type = sniffed_type;
+                }
+                if (type) buf_setcstr(&blobtype, type);
+            }
+
             buf_printf(&buf, "data:%s;base64,", buf_lcase(&blobtype));
 
             const char *base = buf_base(&blob);
@@ -3887,9 +3902,13 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             buf_truncate(&buf, buf_len(&buf) + len64);
             uri = buf_cstring(&buf);
 
-            if (!media_type) media_type = buf_release(&blobtype);
-            else buf_free(&blobtype);
-            have_blob = true;
+            if (!media_type && buf_len(&blobtype)) {
+                media_type = buf_release(&blobtype);
+            }
+            else {
+                buf_free(&blobtype);
+            }
+            blob_prop = "blobId";
 
             json_object_del(obj, "blobId");
             json_object_del(obj, "accountId");
@@ -3918,10 +3937,30 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             charset_decode_mimebody(data, strlen(data),
                                     ENCODING_BASE64, &decbuf, &size);
             buf_initm(&blob, decbuf, size);
-            have_blob = true;
+            blob_prop = "uri";
+
+            if (!media_type) {
+                sniffed_type = vcard_image_mediatype(decbuf, size);
+                have_sniffed_type = true;
+                media_type = xstrdupnull(sniffed_type);
+            }
         }
 
-        if (have_blob) {
+        if (blob_prop) {
+            if (pkind == VCARD_PHOTO_PROPERTY
+                && strncasecmpsafe(media_type, "image/", 6))
+            {
+                if (!have_sniffed_type) {
+                    sniffed_type =
+                        vcard_image_mediatype(buf_base(&blob), buf_len(&blob));
+                }
+                if (!sniffed_type) {
+                    jmap_parser_invalid(parser, blob_prop);
+                    buf_free(&blob);
+                    goto fail;
+                }
+            }
+
             /* The media type is encoded in the data: URI */
             json_object_del(obj, "mediaType");
 
@@ -4878,8 +4917,15 @@ static void jscard_to_vcard(jscontact_ctx_t *ctx,
                               VCARD_TEXT_VALUE);
         }
         else if (!strcmp(mykey, "members")) {
-            _jsmultikey_to_card(parser, jval, mykey, card,
-                                VCARD_MEMBER_PROPERTY);
+            /* RFC 9553 S2.1.6: only a group may have members */
+            if (strcasecmpsafe("group",
+                               json_string_value(json_object_get(arg, "kind")))) {
+                jmap_parser_invalid(parser, "members");
+            }
+            else {
+                _jsmultikey_to_card(parser, jval, mykey, card,
+                                    VCARD_MEMBER_PROPERTY);
+            }
         }
         else if (!strcmp(mykey, "prodId")) {
             jssimple_to_vcard(parser, mykey, l10n.lang,

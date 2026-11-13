@@ -546,7 +546,10 @@ static int jmap_quota_changes(jmap_req_t *req)
     /* Build response */
     changes.new_modseq = mboxname_readquotamodseq(qrock.inboxname);
 
-    jmap_ok(req, jmap_changes_reply(&changes));
+    /* the quota modseq doesn't say whether only "used" changed */
+    json_t *res = jmap_changes_reply(&changes);
+    json_object_set_new(res, "updatedProperties", json_null());
+    jmap_ok(req, res);
 
     free_hash_table(&qrock.quotas, &free);
     free(qrock.inboxname);

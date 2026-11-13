@@ -1,0 +1,59 @@
+Description:
+
+JMAP fixes for spec compliance found by the JMAP-TestSuite.  Changes a
+client can see:
+
+CalendarEvent/get computes utcStart/utcEnd of floating events in Etc/UTC
+unless the new timeZone argument names another zone; it used the
+calendar's time zone.  Setting utcStart on a floating event now gives it
+the calendar's timeZone (or Etc/UTC), on update as well as create, and
+reports it.  utcEnd alone on a floating event reads its start in Etc/UTC.
+
+CalendarEvent/set rejects a recurrenceOverrides patch on @type, method,
+organizerCalendarAddress, participants/*/calendarAddress, privacy,
+prodId, recurrenceId, recurrenceIdTimeZone, sentBy, uid,
+recurrenceOverrides or recurrenceRule with invalidProperties, as
+jscalendarbis requires; these were ignored.  relatedTo can now be patched.
+utcStart with start, utcEnd with duration, and either inside an override
+are rejected too.  An override written over CalDAV that gives a
+participant another address reads back with that attendee as a separate
+participant.
+
+Calendar/set and AddressBook/set reject an empty name.
+
+ContactCard/set rejects a photo that is not an image, and members on a
+card whose kind is not "group".
+
+Blob/lookup returns unknownDataType for a type whose capability is not
+in "using".  Blob/get accepts a length of 0.
+
+EmailSubmission/set returns invalidProperties for an unknown emailId,
+not "emailNotFound", and noRecipients for an empty rcptTo.
+
+The fallback Identity of a user without a domain uses
+userid@defaultdomain as its email, not "".  MDN/send and SieveScript/test
+use the same address, and so now prefer defaultdomain to servername.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Clients that sent forbidden recurrenceOverrides patches, photos that are
+not images, members on non-group cards, Blob/lookup types without their
+capability in "using", or relied on utcStart in the calendar's zone, get
+errors or different values.  Editing an existing
+card whose photo is not an image fails until the photo is replaced.
+
+
+GitHub issue:
+
+None.

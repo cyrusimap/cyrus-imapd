@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# Invariant: the recurrenceOverrides window places the overrides of a
+# floating event in the timeZone argument, as utcStart does, not in the
+# calendar's time zone.
+sub test_calendarevent_get_recurrenceoverrides_floating
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+
+    my $cal = $user->calendars->default;
+    $cal->update({ timeZone => 'Europe/Vienna' });
+    my $event = $cal->create_event({
+        title => 'event',
+        start => '2020-01-01T10:00:00',
+        timeZone => undef,
+        duration => 'PT1H',
+        recurrenceRule => { frequency => 'daily' },
+        recurrenceOverrides => {
+            '2020-01-02T10:00:00' => { title => 'override2' },
+        },
+    });
+
+    my %args = (
+        ids => [ $event->id ],
+        properties => ['recurrenceOverrides', 'utcStart'],
+        recurrenceOverridesAfter => '2020-01-02T09:30:00Z',
+    );
+    my $res = $jmap->request([
+        [ 'CalendarEvent/get' => \%args ],
+        [ 'CalendarEvent/get' => { %args, timeZone => 'Asia/Tokyo' } ],
+    ]);
+
+    my $utc = $res->sentence(0)->assert_named('CalendarEvent/get');
+    $self->assert_cmp_deeply({
+        '2020-01-02T10:00:00' => superhashof({
+            utcStart => '2020-01-02T10:00:00Z',
+        }),
+    }, $utc->arguments->{list}[0]{recurrenceOverrides});
+
+    my $tokyo = $res->sentence(1)->assert_named('CalendarEvent/get');
+    $self->assert_cmp_deeply(
+        [],
+        [ keys(($tokyo->arguments->{list}[0]{recurrenceOverrides} // {})->%*) ],
+    );
+}
