@@ -2664,6 +2664,21 @@ done:
 
 /* Identity/get method */
 
+static json_t *_identity_email(jmap_req_t *req)
+{
+    if (strchr(req->userid, '@')) {
+        return json_string(req->userid);
+    }
+    if (!config_defdomain || !*config_defdomain) {
+        return json_string("");
+    }
+
+    char *email = strconcat(req->userid, "@", config_defdomain, NULL);
+    json_t *jemail = json_string(email);
+    free(email);
+    return jemail;
+}
+
 static int jmap_identity_get(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
@@ -2684,8 +2699,7 @@ static int jmap_identity_get(jmap_req_t *req)
         json_object_set_new(me, "name", json_string(""));
     }
     if (jmap_wantprop(get.props, "email")) {
-        json_object_set_new(me, "email",
-                json_string(strchr(req->userid, '@') ? req->userid : ""));
+        json_object_set_new(me, "email", _identity_email(req));
     }
 
     if (jmap_wantprop(get.props, "mayDelete")) {
@@ -2763,10 +2777,10 @@ done:
  * defaults for the properties it leaves out */
 static json_t *_identity_current(jmap_req_t *req)
 {
-    return json_pack("{s:s s:s s:s s:n s:n s:s s:s s:b}",
+    return json_pack("{s:s s:s s:o s:n s:n s:s s:s s:b}",
                      "id", req->userid,
                      "name", "",
-                     "email", strchr(req->userid, '@') ? req->userid : "",
+                     "email", _identity_email(req),
                      "replyTo",
                      "bcc",
                      "textSignature", "",
