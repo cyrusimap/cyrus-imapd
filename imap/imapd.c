@@ -415,6 +415,7 @@ static struct capa_struct base_capabilities[] = {
     { "NOTIFY",                CAPA_POSTAUTH|CAPA_STATE,         /* RFC 5465 */
       { .statep = &imapd_notify_enabled }                     },
     { "OBJECTID",              CAPA_POSTAUTH,           { 0 } }, /* RFC 8474 */
+    { "OBJECTID+",             CAPA_POSTAUTH,           { 0 } }, /* draft-ietf-mailmaint-imap-objectid-bis */
     { "PARTIAL",               CAPA_POSTAUTH,           { 0 } }, /* RFC 9394 */
     { "PREVIEW",               CAPA_POSTAUTH|CAPA_STATE,         /* RFC 8970 */
       { .statep = &imapd_preview_enabled }                    },
@@ -606,6 +607,9 @@ static void canonical_list_patterns(const char *reference,
 static int list_cb(struct findall_data *data, void *rock);
 static int subscribed_cb(struct findall_data *data, void *rock);
 static void list_data(struct listargs *listargs);
+static void list_objectid_item(const mbentry_t *mbentry, struct buf *item);
+static const struct buf *unsolicited_objectid(const mbentry_t *mbentry,
+                                              struct buf *item);
 static int list_data_remote(struct backend *be, char *tag,
                             struct listargs *listargs, strarray_t *subs);
 
@@ -619,6 +623,9 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
+
+/* Owner conversations db reused while one command reports identifiers */
+static struct conversations_state *objectid_cstate = NULL;
 
 void shut_down(int code) __attribute__((noreturn));
 
@@ -1655,6 +1662,7 @@ static void cmdloop(void)
 
         /* Release any held index */
         index_release(imapd_index);
+        conversations_abort(&objectid_cstate);
 
         /* ensure we didn't leak anything! */
         assert(!open_mailboxes_exist());
@@ -4881,8 +4889,135 @@ out:
     quota_free(&q);
 }
 
+static void objectidplus_enabled(const char *cmd __attribute__((unused)))
+{
+    if (!(client_capa & ENABLED_OBJECTIDPLUS)) {
+        client_capa |= ENABLED_OBJECTIDPLUS;
+        client_behavior_mask |= CB_OBJECTID;
+        prot_printf(imapd_out, "* ENABLED OBJECTID+\r\n");
+
+        /* backends connected from now on get it from imap_postauth() */
+        for (int i = 0; i < ptrarray_size(&backend_cached); i++) {
+            proxy_enable(ptrarray_nth(&backend_cached, i), ENABLED_OBJECTIDPLUS);
+        }
+    }
+}
+
+/* Parsed OBJECTID parameters from SELECT/EXAMINE */
+struct select_objectid {
+    char *mailboxid;    /* MAILBOXID for ID-based selection, or NULL */
+    char *accountid;    /* ACCOUNTID for scoping, or NULL */
+};
+
+static bool is_objectid(const char *s)
+{
+    return jmap_is_valid_id(s) && strlen(s) <= 255;
+}
+
+/* The mailbox an OBJECTID parameter names, or NULL to select by name.
+ * Only a mailbox that SELECT by name would open matches, so the outcome
+ * never reveals whether identifiers the client can't use exist. */
+static mbentry_t *select_by_objectid(const struct select_objectid *objid,
+                                     int allowdeleted)
+{
+    if (!objid->mailboxid) return NULL;
+
+    /* without ACCOUNTID, the personal namespace's account */
+    const char *accountid = objid->accountid ? objid->accountid : imapd_userid;
+    mbentry_t *mbentry = NULL;
+
+    if (mboxlist_lookup_by_jmapid(accountid, objid->mailboxid,
+                                  &mbentry, NULL) &&
+        mboxlist_lookup_by_uniqueid(objid->mailboxid, &mbentry, NULL)) {
+        return NULL;
+    }
+
+    bool match = !(mbentry->mbtype & (MBTYPE_DELETED | MBTYPE_INTERMEDIATE));
+
+    if (match) {
+        /* must be the identifiers this server reports for the mailbox */
+        struct buf mailboxid = BUF_INITIALIZER;
+        struct buf found_accountid = BUF_INITIALIZER;
+
+        /* no cache: SELECT goes on to open this db itself */
+        jmap_get_mailbox_objectids(mbentry, NULL, &mailboxid, &found_accountid);
+        match = !strcmp(buf_cstring(&mailboxid), objid->mailboxid) &&
+                !strcmp(buf_cstring(&found_accountid), accountid);
+        buf_free(&mailboxid);
+        buf_free(&found_accountid);
+    }
+
+    if (match && mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL &&
+        !imapd_userisadmin && !imapd_want_dav()) {
+        match = false;
+    }
+    if (match && !imapd_userisadmin && !allowdeleted &&
+        mboxname_isdeletedmailbox(mbentry->name, NULL)) {
+        match = false;
+    }
+    if (match &&
+        !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_READ)) {
+        match = false;
+    }
+
+    if (!match) mboxlist_entry_free(&mbentry);
+    return mbentry;
+}
+
+/* Parse the key-value pairs of a SELECT (OBJECTID (...)) parameter, whose
+ * opening paren is consumed.  Returns the closing paren, or EOF if the
+ * list is malformed.  An empty list sets nothing. */
+static int parse_select_objectid(struct select_objectid *objid)
+{
+    static struct buf key, val;
+    int c;
+
+    c = prot_getc(imapd_in);
+    if (c == ')') {
+        return c;
+    }
+    prot_ungetc(c, imapd_in);
+
+    do {
+        c = getword(imapd_in, &key);
+        if (c != ' ' || !imparse_isatom(key.s)) {
+            return EOF;
+        }
+        c = getword(imapd_in, &val);
+
+        char **dst = NULL;
+        if (!strcasecmp(key.s, "MAILBOXID")) {
+            if (!is_objectid(val.s)) {
+                return EOF;
+            }
+            dst = &objid->mailboxid;
+        }
+        else if (!strcasecmp(key.s, "ACCOUNTID")) {
+            /* our ACCOUNTIDs aren't all ObjectIDs yet, see
+             * jmap_mailbox_accountid() */
+            if (!val.s[0]) {
+                return EOF;
+            }
+            dst = &objid->accountid;
+        }
+        else if (!is_objectid(val.s)) {
+            return EOF;
+        }
+
+        if (dst) {
+            if (*dst) {
+                return EOF;
+            }
+            *dst = xstrdup(val.s);
+        }
+    } while (c == ' ');
+
+    return c == ')' ? c : EOF;
+}
+
 static int parse_select_params(char *tag, char *cmd, int allowdeleted,
-                               struct index_init *init)
+                               struct index_init *init,
+                               struct select_objectid *objid)
 {
     struct vanished_params *v = &init->vanished;
     int r = IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -4950,6 +5085,24 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                 client_behavior_mask |= CB_ANNOTATE;
                 init->want_annotations = true;
             }
+            else if (!strcmp(arg.s, "OBJECTID")) {
+                objectidplus_enabled("SELECT (OBJECTID)");
+                if (c == ' ') {
+                    c = prot_getc(imapd_in);
+                    if (c == '(') {
+                        c = parse_select_objectid(objid);
+                        if (c != ')') {
+                            goto badobjectid;
+                        }
+                        c = prot_getc(imapd_in);
+                    }
+                    else {
+                        /* no identifiers, so this is the next parameter */
+                        prot_ungetc(c, imapd_in);
+                        c = ' ';
+                    }
+                }
+            }
             else if (allowdeleted &&
                      !strcmp(arg.s, "VENDOR.CMU-INCLUDE-EXPUNGED")) {
                 init->want_expunged = 1;
@@ -4993,6 +5146,12 @@ static int parse_select_params(char *tag, char *cmd, int allowdeleted,
                 tag, cmd);
     eatline(imapd_in, c);
     return r;
+
+ badobjectid:
+    prot_printf(imapd_out, "%s BAD Invalid OBJECTID parameter in %s\r\n",
+                tag, cmd);
+    eatline(imapd_in, c);
+    return r;
 }
 
 /*
@@ -5016,8 +5175,13 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     memset(&init, 0, sizeof(struct index_init));
 
-    r = parse_select_params(tag, cmd, allowdeleted, &init);
-    if (r) return;
+    struct select_objectid objid = { NULL, NULL };
+    r = parse_select_params(tag, cmd, allowdeleted, &init, &objid);
+    if (r) {
+        free(objid.mailboxid);
+        free(objid.accountid);
+        return;
+    }
 
     if (imapd_index) {
         maybe_autoexpunge();
@@ -5047,15 +5211,36 @@ static void cmd_select(char *tag, char *cmd, char *name)
         name = normalize_mboxname(name, NULL);
     }
 
-    char *intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
-    r = mlookup(tag, name, intname, &mbentry);
-    if (r == IMAP_MAILBOX_MOVED) {
-        goto done;
+    char *intname = NULL;
+    char *idname = NULL;
+    mbentry = select_by_objectid(&objid, allowdeleted);
+    if (mbentry) {
+        idname =
+            mboxname_to_external(mbentry->name, &imapd_namespace, imapd_userid);
+        if (client_capa & ENABLED_IMAP4REV2) {
+            /* LIST the mailbox we found, not the name we were given */
+            strarray_truncate(&listargs.pat, 0);
+            strarray_append(&listargs.pat, idname);
+            listargs.denormalized = NULL;
+        }
+    }
+    free(objid.mailboxid);
+    free(objid.accountid);
+
+    if (mbentry) {
+        intname = xstrdup(mbentry->name);
+    }
+    else {
+        intname = mboxname_from_external(name, &imapd_namespace, imapd_userid);
+        r = mlookup(tag, name, intname, &mbentry);
+        if (r == IMAP_MAILBOX_MOVED) {
+            goto done;
+        }
     }
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
         if (supports_referrals) {
-            imapd_refer(tag, mbentry->server, name);
+            imapd_refer(tag, mbentry->server, idname ? idname : name);
             goto done;
         }
 
@@ -5075,8 +5260,9 @@ static void cmd_select(char *tag, char *cmd, char *name)
         }
 
         /* Send SELECT command to backend */
+        const char *bename = idname ? idname : origname;
         prot_printf(backend_current->out, "%s %s {%zu+}\r\n%s",
-                    tag, cmd, strlen(origname), origname);
+                    tag, cmd, strlen(bename), bename);
         if (v->uidvalidity) {
             prot_printf(backend_current->out, " (QRESYNC (%u " MODSEQ_FMT,
                         v->uidvalidity, v->modseq);
@@ -5164,6 +5350,8 @@ static void cmd_select(char *tag, char *cmd, char *name)
 
     if (strarray_size(&listargs.pat)) {
         /* Emit LIST response, optionally with OLDNAME */
+        if (client_capa & ENABLED_OBJECTIDPLUS)
+            listargs.ret |= LIST_RET_OBJECTID;
         list_data(&listargs);
     }
 
@@ -5194,6 +5382,7 @@ static void cmd_select(char *tag, char *cmd, char *name)
     strarray_fini(&listargs.pat);
     if (name != origname) free(name);
     free(intname);
+    free(idname);
 }
 
 /*
@@ -5633,6 +5822,14 @@ badannotation:
             else goto badatt;
             break;
 
+        case 'O':
+            if (!strcmp(fetchatt.s, "OBJECTID")) {
+                fa->fetchitems |= FETCH_OBJECTID;
+                objectidplus_enabled("FETCH OBJECTID");
+            }
+            else goto badatt;
+            break;
+
         case 'P':
             if (imapd_preview_enabled && !strcmp(fetchatt.s, "PREVIEW")) {
                 fa->fetchitems |= FETCH_PREVIEW;
@@ -5930,6 +6127,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     char mytime[100];
     unsigned flags = FETCH_ALLOW_MODIFIERS;
     struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
+    char *owner = NULL;
 
     if (proxy_selected(tag, cmd, true, "%s", sequence)) return;
 
@@ -5951,8 +6149,11 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
     if (fetchargs.fetchitems & FETCH_ANNOTATION)
         client_behavior_mask |= CB_ANNOTATE;
 
-    if (fetchargs.fetchitems & (FETCH_EMAILID | FETCH_THREADID))
+    if (fetchargs.fetchitems
+        & (FETCH_EMAILID | FETCH_THREADID | FETCH_OBJECTID))
+    {
         client_behavior_mask |= CB_OBJECTID;
+    }
 
     if (fetchargs.fetchitems & FETCH_PREVIEW)
         client_behavior_mask |= CB_PREVIEW;
@@ -5971,13 +6172,16 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
                      !imapd_index->examining &&
                      (imapd_index->myrights & ACL_SETSEEN));
 
-    if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
+    /* ids come from the mailbox owner's db, which this never creates */
+    owner = mboxname_to_userid(index_mboxname(imapd_index));
+    if (owner && config_getswitch(IMAPOPT_CONVERSATIONS) &&
         (fetchargs.fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
-                                 FETCH_EMAILID | FETCH_THREADID))) {
-        r = conversations_open_user(imapd_userid, readonly, &convstate);
-        if (r) {
+                                 FETCH_EMAILID | FETCH_THREADID |
+                                 FETCH_OBJECTID))) {
+        r = conversations_open_user_existing(owner, readonly, &convstate);
+        if (r && r != IMAP_MAILBOX_NONEXISTENT) {
             xsyslog_ev(LOG_WARNING, "imap.conversations.open.failed",
-                       lf_s("u.username", imapd_userid), lf_err("error", r));
+                       lf_s("u.username", owner), lf_err("error", r));
             goto freeargs;
         }
     }
@@ -6002,6 +6206,7 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
  freeargs:
     conversations_commit(&convstate);
+    free(owner);
     fetchargs_fini(&fetchargs);
 }
 
@@ -7472,7 +7677,11 @@ localcreate:
                        lf_s("u.username", imapd_userid), lf_err("error", r));
         }
     }
-    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), mailboxid);
+    struct conversations_state *owner_cstate = NULL;
+    jmap_set_mailboxid(jmap_mailbox_owner_cstate(mailbox, &owner_cstate),
+                       mailbox_mbentry(mailbox),
+                       mailboxid);
+    conversations_abort(&owner_cstate);
     mailbox_close(&mailbox);
 
     if (specialuse.len) {
@@ -7516,10 +7725,20 @@ localcreate:
 
     if (strarray_size(&listargs.pat)) {
         /* Emit LIST response with OLDNAME */
+        if (client_capa & ENABLED_OBJECTIDPLUS)
+            listargs.ret |= LIST_RET_OBJECTID;
         list_data(&listargs);
     }
 
-    prot_printf(imapd_out, "%s OK [MAILBOXID (%s)] Completed\r\n", tag, mailboxid);
+    struct buf accountid = BUF_INITIALIZER;
+    jmap_mailbox_accountid(mbname_intname(mbname), &accountid);
+    index_print_objectid_ok(imapd_out,
+                            tag,
+                            error_message(IMAP_OK_COMPLETED),
+                            !!(client_capa & ENABLED_OBJECTIDPLUS),
+                            mailboxid,
+                            buf_cstring(&accountid));
+    buf_free(&accountid);
 
     imapd_check(NULL, 0);
 
@@ -7699,9 +7918,12 @@ static void cmd_delete(char *tag, char *name, int localonly, int force)
 
         if (name != origname && (client_capa & ENABLED_IMAP4REV2)) {
             /* Emit LIST response for name with OLDNAME */
+            struct buf objectid = BUF_INITIALIZER;
             print_listresponse(LIST_CMD_EXTENDED, name, origname,
                                imapd_namespace.hier_sep,
-                               MBOX_ATTRIBUTE_NONEXISTENT, NULL);
+                               MBOX_ATTRIBUTE_NONEXISTENT, NULL,
+                               unsolicited_objectid(mbentry, &objectid));
+            buf_free(&objectid);
         }
 
         prot_printf(imapd_out, "%s OK %s\r\n", tag,
@@ -8413,11 +8635,16 @@ respond:
         sync_checkpoint(imapd_in);
 
         if (client_capa & ENABLED_IMAP4REV2) {
+            if (client_capa & ENABLED_OBJECTIDPLUS)
+                listargs.ret |= LIST_RET_OBJECTID;
             if (oldname != orig_oldname) {
                 /* Emit LIST response for oldname with OLDNAME */
+                struct buf objectid = BUF_INITIALIZER;
                 print_listresponse(listargs.cmd, oldname, orig_oldname,
                                    imapd_namespace.hier_sep,
-                                   MBOX_ATTRIBUTE_NONEXISTENT, NULL);
+                                   MBOX_ATTRIBUTE_NONEXISTENT, NULL,
+                                   unsolicited_objectid(mbentry, &objectid));
+                buf_free(&objectid);
             }
             if (strarray_size(&listargs.pat)) {
                 /* Emit LIST response for newname with OLDNAME */
@@ -8425,8 +8652,31 @@ respond:
             }
         }
 
-        prot_printf(imapd_out, "%s OK %s\r\n", tag,
-                    error_message(IMAP_OK_COMPLETED));
+        /* the renamed mbentry, for the identifiers it has now */
+        mbentry_t *renamedmbentry = NULL;
+        if ((client_capa & ENABLED_OBJECTIDPLUS)
+            && !mboxlist_lookup(newmailboxname, &renamedmbentry, NULL))
+        {
+            struct buf mailboxid = BUF_INITIALIZER;
+            struct buf accountid = BUF_INITIALIZER;
+            jmap_get_mailbox_objectids(renamedmbentry,
+                                       &objectid_cstate,
+                                       &mailboxid,
+                                       &accountid);
+            index_print_objectid_ok(imapd_out,
+                                    tag,
+                                    error_message(IMAP_OK_COMPLETED),
+                                    true /*compound*/,
+                                    buf_cstring(&mailboxid),
+                                    buf_cstring(&accountid));
+            buf_free(&mailboxid);
+            buf_free(&accountid);
+        }
+        else {
+            prot_printf(imapd_out, "%s OK %s\r\n", tag,
+                        error_message(IMAP_OK_COMPLETED));
+        }
+        mboxlist_entry_free(&renamedmbentry);
     }
 
 done:
@@ -9771,6 +10021,10 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
         else if (!strcmp(arg.s, "mailboxid")) {        /* RFC 8474 */
             statusitems |= STATUS_MAILBOXID;
         }
+        else if (!strcmp(arg.s, "objectid")) {
+            statusitems |= STATUS_OBJECTID;
+            objectidplus_enabled("STATUS (OBJECTID)");
+        }
         else if (!strcmp(arg.s, "deleted")) {          /* RFC 9051 */
             statusitems |= STATUS_DELETED;
         }
@@ -9854,6 +10108,16 @@ static int print_statusline(const char *extname, unsigned statusitems,
     }
     if (statusitems & STATUS_MAILBOXID) {        /* RFC 8474 */
         prot_printf(imapd_out, "%cMAILBOXID (%s)", sepchar, sd->mailboxid);
+        sepchar = ' ';
+    }
+    if (statusitems & STATUS_OBJECTID) {         /* draft-ietf-mailmaint-imap-objectid-bis */
+        struct buf item = BUF_INITIALIZER;
+        index_objectid_code(&item,
+                            true /*compound*/,
+                            sd->mailboxid,
+                            sd->accountid);
+        prot_printf(imapd_out, "%c%s", sepchar, buf_cstring(&item));
+        buf_free(&item);
         sepchar = ' ';
     }
     if (statusitems & STATUS_DELETED) {          /* RFC 9051 */
@@ -13229,6 +13493,10 @@ static int getlistretopts(char *tag, struct listargs *args)
             c = parse_metadata_string_or_list(tag, &args->metaitems, NULL);
             if (c <= EOF) return c;
         }
+        else if (!strcmp(buf.s, "objectid")) {
+            args->ret |= LIST_RET_OBJECTID;
+            objectidplus_enabled("LIST RETURN (OBJECTID)");
+        }
         else {
             prot_printf(imapd_out,
                         "%s BAD Invalid List return option \"%s\"\r\n",
@@ -13393,6 +13661,46 @@ done:
     strarray_fini(&newe);
 }
 
+/* Body of the OBJECTID extended data item for a LIST response.
+ * Empty when no mailbox stands behind the name. */
+/* A mailbox's identifiers are visible to whoever can see the mailbox */
+static void list_objectid_item(const mbentry_t *mbentry, struct buf *item)
+{
+    buf_reset(item);
+    if (!mbentry || !mbentry->uniqueid) {
+        return;
+    }
+    if (!imapd_userisadmin &&
+        !(cyrus_acl_myrights(imapd_authstate, mbentry->acl) & ACL_LOOKUP)) {
+        return;
+    }
+
+    struct buf mailboxid = BUF_INITIALIZER;
+    struct buf accountid = BUF_INITIALIZER;
+    jmap_get_mailbox_objectids(mbentry,
+                               &objectid_cstate,
+                               &mailboxid,
+                               &accountid);
+
+    index_objectid_pairs(item,
+                         buf_cstring(&mailboxid),
+                         buf_cstring(&accountid));
+    buf_free(&mailboxid);
+    buf_free(&accountid);
+}
+
+/* The OBJECTID item for an unsolicited LIST response: filled into 'item'
+ * and returned once OBJECTID+ is active, NULL to omit it before then. */
+static const struct buf *unsolicited_objectid(const mbentry_t *mbentry,
+                                              struct buf *item)
+{
+    if (!(client_capa & ENABLED_OBJECTIDPLUS)) {
+        return NULL;
+    }
+    list_objectid_item(mbentry, item);
+    return item;
+}
+
 /* Print LIST or LSUB untagged response */
 static void list_response(const char *extname, const mbentry_t *mbentry,
                           uint32_t attributes, struct listargs *listargs)
@@ -13400,6 +13708,12 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
     int r;
     struct statusdata sdata = STATUSDATA_INIT;
     struct buf specialuse = BUF_INITIALIZER;
+
+    /* A \NonExistent name arrives with the mbentry of a descendant, or of
+     * a mailbox the user may not look up, so it has no identifiers of its
+     * own.  Intermediates do: they are JMAP mailboxes. */
+    const mbentry_t *objectid_mbentry =
+        (attributes & MBOX_ATTRIBUTE_NONEXISTENT) ? NULL : mbentry;
 
     /* Intermediates don't actually exist */
     if (mbentry && (mbentry->mbtype & MBTYPE_INTERMEDIATE)) {
@@ -13538,9 +13852,18 @@ static void list_response(const char *extname, const mbentry_t *mbentry,
         mboxlist_entry_free(&id_mbe);
     }
 
+    struct buf objectid = BUF_INITIALIZER;
+    const struct buf *objectid_item = NULL;
+    if (listargs->ret & LIST_RET_OBJECTID) {
+        list_objectid_item(objectid_mbentry, &objectid);
+        objectid_item = &objectid;
+    }
+
     print_listresponse(listargs->cmd, extname, oldname,
-                       imapd_namespace.hier_sep, attributes, &specialuse);
+                       imapd_namespace.hier_sep, attributes, &specialuse,
+                       objectid_item);
     buf_free(&specialuse);
+    buf_free(&objectid);
     free(oldname);
 
     if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT))
@@ -13627,8 +13950,8 @@ static int perform_output(const char *extname, const mbentry_t *mbentry, struct 
             /* already proxied to this backend server */
             return 0;
         }
-        if (listargs->ret &
-            (LIST_RET_SPECIALUSE | LIST_RET_STATUS | LIST_RET_METADATA)) {
+        if (listargs->ret & (LIST_RET_SPECIALUSE | LIST_RET_STATUS |
+                             LIST_RET_METADATA | LIST_RET_OBJECTID)) {
             /* remote mailbox that we need to fetch metadata from */
             struct backend *s;
 
@@ -14246,7 +14569,7 @@ static int list_data_remote(struct backend *be, char *tag,
         const char *return_opts[] = {
             /* XXX  MUST be in same order as LIST_RET_* bitmask */
             "subscribed", "children", "special-use",
-            "status ", "myrights", "metadata ", NULL
+            "status ", "myrights", "metadata ", "objectid", NULL
         };
         char c = '(';
         int i, j;
@@ -14267,7 +14590,7 @@ static int list_data_remote(struct backend *be, char *tag,
                     "messages", "recent", "uidnext", "uidvalidity", "unseen",
                     "highestmodseq", "appendlimit", "size", "mailboxid",
                     "deleted", "deleted-storage",
-                    "", "", "",  // placeholders for unused bits
+                    "objectid", "", "",  // placeholders for unused bits
                     "createdmodseq", "sharedseen", NULL
                 };
 
@@ -14491,6 +14814,10 @@ static void cmd_enable(char *tag)
         else if (!strcasecmp(arg.s, "uidonly")) {
             client_behavior_mask |= CB_UIDONLY;
             new_capa |= ENABLED_UIDONLY;
+        }
+        else if (!strcasecmp(arg.s, "objectid+")) {
+            client_behavior_mask |= CB_OBJECTID;
+            new_capa |= ENABLED_OBJECTIDPLUS;
         }
         else if (imapd_utf8_allowed && !strcasecmp(arg.s, "utf8=accept")) {
             client_behavior_mask |= CB_UTF8ACCEPT;
@@ -15213,11 +15540,15 @@ static void cmd_notify(char *tag, int set)
                                 strarray_add(mboxes, mbentry->name);
                             }
                             else {
+                                struct buf objectid = BUF_INITIALIZER;
                                 print_listresponse(LIST_CMD_EXTENDED,
                                                    arg.s, NULL,
                                                    imapd_namespace.hier_sep,
                                                    MBOX_ATTRIBUTE_NOACCESS,
-                                                   NULL);
+                                                   NULL,
+                                                   unsolicited_objectid(
+                                                       mbentry, &objectid));
+                                buf_free(&objectid);
                             }
                         }
                     }
@@ -15607,19 +15938,23 @@ static void push_updates(int idling)
                 struct fetchargs *fa = &notify_event_groups->selected.fetchargs;
                 struct conversations_state *convstate = NULL; /* for FETCH_*IDS */
 
-                /* Open conv.db if we need it */
-                if (config_getswitch(IMAPOPT_CONVERSATIONS) &&
+                /* Open the owner's conv.db, if it has one and we need it */
+                char *owner = mboxname_to_userid(index_mboxname(imapd_index));
+                if (owner && config_getswitch(IMAPOPT_CONVERSATIONS) &&
                     (fa->fetchitems & (FETCH_MAILBOXIDS | FETCH_MAILBOXES |
-                                       FETCH_EMAILID | FETCH_THREADID))) {
-                    int r = conversations_open_user(imapd_userid, 1/*shared*/,
-                                                    &convstate);
-                    if (r) {
+                                       FETCH_EMAILID | FETCH_THREADID |
+                                       FETCH_OBJECTID))) {
+                    int r = conversations_open_user_existing(owner,
+                                                             1 /*shared*/,
+                                                             &convstate);
+                    if (r && r != IMAP_MAILBOX_NONEXISTENT) {
                         xsyslog_ev(LOG_WARNING,
                                    "imap.conversations.open.failed",
-                                   lf_s("u.username", imapd_userid),
+                                   lf_s("u.username", owner),
                                    lf_err("error", r));
                     }
                 }
+                free(owner);
 
                 index_fetch(imapd_index, uidset ? uidset : "*",
                             1/*usinguid*/, 1/*readonly*/, convstate, fa, NULL);
@@ -15748,9 +16083,12 @@ static void push_updates(int idling)
                 break;
             }
 
+            struct buf objectid = BUF_INITIALIZER;
             print_listresponse(LIST_CMD_EXTENDED, extname, oldname,
-                               imapd_namespace.hier_sep, attribs, &specialuse);
+                               imapd_namespace.hier_sep, attribs, &specialuse,
+                               unsolicited_objectid(mbentry, &objectid));
 
+            buf_free(&objectid);
             free(oldname);
             free(freeme);
         }

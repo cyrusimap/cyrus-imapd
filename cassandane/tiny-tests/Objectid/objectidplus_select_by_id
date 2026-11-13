@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# SELECT (OBJECTID (...)) selects the mailbox with those identifiers,
+# whatever its name now is, with the keys in any order.
+#
+sub test_objectidplus_select_by_id
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('original');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $mailboxid = $talk->status('original', '(mailboxid)')->{mailboxid}[0];
+    $self->assert_not_null($mailboxid);
+
+    $talk->rename('original', 'renamed');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $want = { MAILBOXID => $mailboxid, ACCOUNTID => 'cassandane' };
+    for my $ids ("MAILBOXID $mailboxid ACCOUNTID cassandane",
+                 "ACCOUNTID cassandane MAILBOXID $mailboxid",
+                 "MAILBOXID $mailboxid",
+                 "MAILBOXID $mailboxid X-FUTURE-KEY abc")
+    {
+        xlog $self, "select by ($ids)";
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('original', "(OBJECTID ($ids))");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        my $code = $talk->get_response_code('objectid');
+        $self->assert_cmp_deeply($want, { split ' ', $code =~ tr/()//dr });
+    }
+
+    xlog $self, "an ACCOUNTID that doesn't own the mailbox matches nothing";
+    $talk->unselect();
+    $talk->clear_response_code('objectid');
+    $talk->select('original',
+                  "(OBJECTID (MAILBOXID $mailboxid ACCOUNTID other))");
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+}

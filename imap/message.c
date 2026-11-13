@@ -47,6 +47,8 @@
 #include "times.h"
 
 /* generated headers are not necessarily in current directory */
+#include "jmap_util.h"
+
 #include "imap/imap_err.h"
 #include "imap/rfc822_header.h"
 
@@ -5402,6 +5404,21 @@ EXPORTED int message_get_guid(message_t *m, const struct message_guid **guidp)
     return 0;
 }
 
+EXPORTED int message_get_emailid(message_t *m, char *emailid)
+{
+    int r = message_need(m, M_MAILBOX | M_RECORD);
+    if (r) {
+        return r;
+    }
+
+    jmap_set_emailid(mailbox_get_cstate(m->mailbox),
+                     &m->record.guid,
+                     0,
+                     &m->record.internaldate,
+                     emailid);
+    return 0;
+}
+
 EXPORTED const struct message_guid *msg_guid(const message_t *m)
 {
     assert(!message_need(m, M_RECORD));
@@ -5480,6 +5497,16 @@ EXPORTED int message_get_internaldate(message_t *m, time_t *datep)
     int r = message_need(m, M_RECORD);
     if (r) return r;
     *datep = m->record.internaldate.tv_sec;
+    return 0;
+}
+
+EXPORTED int message_get_internaldate_ts(message_t *m, struct timespec *tsp)
+{
+    int r = message_need(m, M_RECORD);
+    if (r) {
+        return r;
+    }
+    *tsp = m->record.internaldate;
     return 0;
 }
 

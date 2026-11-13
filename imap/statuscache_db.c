@@ -103,6 +103,7 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
 {
     struct buf keybuf = BUF_INITIALIZER;
     static char static_mailboxid[101];
+    static struct buf static_accountid = BUF_INITIALIZER;
     const char *data = NULL;
     size_t datalen = 0;
 
@@ -152,6 +153,10 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
         static_mailboxid[len] = '\0';
         sdata->mailboxid = static_mailboxid;
     }
+
+    /* not cached: derived from the name alone */
+    jmap_mailbox_accountid(mboxname, &static_accountid);
+    sdata->accountid = buf_cstring(&static_accountid);
 
     /* Sanity check the data */
     if (!sdata->highestmodseq)
@@ -401,7 +406,8 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
     assert(mailbox);
     assert(sdata);
     static char static_uniqueid[UUID_STR_LEN];
-    static char static_mailboxid[JMAP_MAX_MAILBOXID_SIZE];
+    static struct buf static_mailboxid = BUF_INITIALIZER;
+    static struct buf static_accountid = BUF_INITIALIZER;
 
     sdata->messages = mailbox->i.exists;
     sdata->uidnext = mailbox->i.last_uid+1;
@@ -419,11 +425,11 @@ HIDDEN void status_fill_mailbox(struct mailbox *mailbox, struct statusdata *sdat
         strncpy(static_uniqueid, uniqueid, UUID_STR_LEN-1);
         sdata->uniqueid = static_uniqueid;
     }
-
-    // need the cstate to get the right mailboxid
-    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), static_mailboxid);
-    sdata->mailboxid = static_mailboxid;
+    jmap_get_open_mailbox_objectids(mailbox,
+                                    &static_mailboxid,
+                                    &static_accountid);
+    sdata->mailboxid = buf_cstring(&static_mailboxid);
+    sdata->accountid = buf_cstring(&static_accountid);
 
     sdata->statusitems |= STATUS_INDEXITEMS | STATUS_MBENTRYITEMS;
 }

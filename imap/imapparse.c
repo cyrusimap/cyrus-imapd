@@ -16,6 +16,7 @@
 #include "imparse.h"
 #include "search_expr.h"
 #include "imapd.h"      /* for struct searchargs */
+#include "jmap_util.h"
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -1400,16 +1401,23 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c <= EOF) goto missingarg;
-            if ((arg.s[0] != 'A' && arg.s[0] != 'T') ||
-                !conversation_id_decode(&cid, arg.s+1)) {
+            if (!jmap_is_valid_id(arg.s) || strlen(arg.s) > 255) {
                 prot_printf(pout, "%s BAD Invalid threadid in Search command\r\n",
                             base->tag);
                 if (c != EOF) prot_ungetc(c, pin);
                 return EOF;
             }
-            e = search_expr_new(parent, SEOP_MATCH);
-            e->attr = search_attr_find("cid");
-            e->value.u = cid;
+            if ((arg.s[0] != 'A' && arg.s[0] != 'T')
+                || !conversation_id_decode(&cid, arg.s + 1) || !cid)
+            {
+                /* not an id we would issue, so nothing has it */
+                search_expr_new(parent, SEOP_FALSE);
+            }
+            else {
+                e = search_expr_new(parent, SEOP_MATCH);
+                e->attr = search_attr_find("cid");
+                e->value.u = cid;
+            }
 
             base->client_behavior_mask |= CB_OBJECTID;
         }

@@ -1,0 +1,33 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# CREATE answers with the RFC 8474 MAILBOXID response code until
+# OBJECTID+ is active, and with the compound OBJECTID code after.
+#
+sub test_objectidplus_create_response_code
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('before');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $before = $talk->get_response_code('mailboxid');
+    $self->assert_not_null($before);
+    $self->assert_null($talk->get_response_code('objectid'));
+
+    $talk->enable('objectid+');
+
+    $talk->clear_response_code('mailboxid');
+    $talk->create('after');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_null($talk->get_response_code('mailboxid'));
+    my $code = $talk->get_response_code('objectid');
+    my $after = { split ' ', $code =~ tr/()//dr };
+
+    my $status = $talk->status('after', '(objectid)');
+    $self->assert_cmp_deeply({ @{$status->{objectid}} }, $after);
+    $self->assert_str_equals('cassandane', $after->{ACCOUNTID});
+    $self->assert_str_not_equals($before->[0], $after->{MAILBOXID});
+}

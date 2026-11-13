@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Each mailbox carries its owner's ACCOUNTID, and the shared namespace
+# has one of its own.  SELECT by identifier finds mailboxes in any of
+# them, but a MAILBOXID without ACCOUNTID only in the user's own.
+#
+sub test_objectidplus_shared_accountid
+    :AltNamespace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other", subdirs => [ 'sub' ]);
+    $admintalk->setacl("user.other.sub", "cassandane", "lrs");
+    $admintalk->create("shared.team");
+    $admintalk->setacl("shared.team", "cassandane", "lrs");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('mine');
+
+    my %ids;
+    for my $name ('mine', 'Other Users.other.sub', 'Shared Folders.shared.team')
+    {
+        my $status = $talk->status($name, '(objectid)');
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $ids{$name} = { @{$status->{objectid}} };
+        $self->assert_matches(qr/\S/, $ids{$name}{MAILBOXID});
+    }
+    $self->assert_str_equals('cassandane', $ids{mine}{ACCOUNTID});
+    $self->assert_str_equals('other', $ids{'Other Users.other.sub'}{ACCOUNTID});
+    $self->assert_str_equals('anyone',
+                             $ids{'Shared Folders.shared.team'}{ACCOUNTID});
+
+    for my $name (sort keys %ids) {
+        my $id = $ids{$name};
+        xlog $self, "select $name by identifier";
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('mine',
+            "(OBJECTID (MAILBOXID $id->{MAILBOXID} ACCOUNTID $id->{ACCOUNTID}))");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        my $code = $talk->get_response_code('objectid');
+        $self->assert_cmp_deeply($id, { split ' ', $code =~ tr/()//dr });
+    }
+
+    xlog $self, "MAILBOXID alone refers to the user's own account";
+    for my $name (sort keys %ids) {
+        my $id = $ids{$name};
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('mine', "(OBJECTID (MAILBOXID $id->{MAILBOXID}))");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        my $code = $talk->get_response_code('objectid');
+        $self->assert_cmp_deeply($ids{mine},
+                                 { split ' ', $code =~ tr/()//dr });
+    }
+}

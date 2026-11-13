@@ -210,6 +210,17 @@ extern int conversations_open_path_version(const char *path,
                                            const char *userid, int shared,
                                            struct conversations_state **statep,
                                            int version);
+/**
+ * Open a user's conversations db only if it already exists.
+ *
+ * Like conversations_open_user(), but never creates the db.
+ *
+ * @return IMAP_MAILBOX_NONEXISTENT if the user has no conversations db
+ */
+extern int conversations_open_user_existing(
+    const char *userid,
+    int shared,
+    struct conversations_state **statep);
 #define conversations_open_user(u, sh, sp) \
     conversations_open_user_version(u, sh, sp, 0)
 extern int conversations_open_user_version(const char *username, int shared,

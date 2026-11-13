@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A DELETED.* mailbox reports its owner's identifiers the same way from
+# LIST, STATUS and SELECT, and reporting them never creates a
+# conversations db for a user who no longer has one.
+#
+sub test_objectidplus_deleted_mailbox_ids
+    :DelayedDelete :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user("other", subdirs => [ 'sub' ]);
+    my $convdb = $self->{instance}->get_conf_user_file("other", "conversations");
+    $self->assert_file_test($convdb, '-e');
+
+    $admintalk->enable('objectid+');
+
+    my %listed;
+    my $handlers = { list => sub ($, $list) {
+        $listed{$list->[2]} = { @{$list->[3][1] // []} }
+            if $list->[3] && $list->[3][0] =~ /^objectid$/i;
+    } };
+
+    xlog $self, "delete a folder of a user who still exists";
+    $admintalk->delete('user.other.sub');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $admintalk->_imap_cmd('LIST', 0, $handlers,
+                          '', 'DELETED.user.other.sub.*', 'RETURN', '(OBJECTID)');
+    $self->assert_num_equals(1, scalar keys %listed);
+    my ($deleted) = keys %listed;
+    my $ids = $listed{$deleted};
+    $self->assert_matches(qr/\S/, $ids->{MAILBOXID});
+
+    my $status = $admintalk->status($deleted, '(objectid)');
+    $self->assert_cmp_deeply($ids, { @{$status->{objectid}} });
+
+    $admintalk->examine($deleted);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    my $code = $admintalk->get_response_code('objectid');
+    $self->assert_cmp_deeply($ids, { split ' ', $code =~ tr/()//dr });
+    $admintalk->unselect();
+
+    xlog $self, "delete the whole user";
+    $admintalk->delete('user.other');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_not_file_test($convdb, '-e');
+
+    %listed = ();
+    $admintalk->_imap_cmd('LIST', 0, $handlers,
+                          '', 'DELETED.user.other.*', 'RETURN', '(OBJECTID)');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert(scalar keys %listed);
+    for my $name (keys %listed) {
+        $admintalk->status($name, '(objectid)');
+        $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    }
+    $self->assert_not_file_test($convdb, '-e');
+}

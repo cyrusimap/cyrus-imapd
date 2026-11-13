@@ -15,11 +15,14 @@
 #include "assert.h"
 #include "search_expr.h"
 #include "index.h"
+#include "jmap_util.h"
 #include "message.h"
 #include "charset.h"
 #include "annotate.h"
 #include "global.h"
 #include "lsort.h"
+#include "mailbox.h"
+#include "user.h"
 #include "seen.h"
 #include "xstrlcpy.h"
 #include "xmalloc.h"
@@ -2023,21 +2026,90 @@ static void _search_annot_callback(const char *mboxname __attribute__((unused)),
     }
 }
 
-static int search_emailid_match(message_t *m, const union search_value *v,
-                              void *internalised __attribute__((unused)),
-                              void *data1 __attribute__((unused)))
+/* An EMAILID decoded for one mailbox, in the form that mailbox's ids take */
+struct search_emailid_internal
 {
-    const struct message_guid *guid = NULL;
-    char emailid[26];
+    enum {
+        EMAILID_NONE,
+        EMAILID_NANOSEC,
+        EMAILID_LEGACY
+    } kind;
+    uint64_t nanosec;
+    const char *guidprefix; /* hex GUID prefix of a legacy EMAILID */
+};
 
-    int r = message_get_guid(m, &guid);
-    if (r) return 0;
+static void search_emailid_internalise(struct index_state *state,
+                                       const union search_value *v,
+                                       void *data1 __attribute__((unused)),
+                                       void **internalisedp)
+{
+    free(*internalisedp);
+    *internalisedp = NULL;
+    if (!v || !state) {
+        return;
+    }
 
-    emailid[0] = 'M';
-    memcpy(emailid+1, message_guid_encode(guid), 24);
-    emailid[25] = '\0';
+    struct search_emailid_internal *internal = xzmalloc(sizeof(*internal));
+    const char *id = v->s;
 
-    return !strcmp(v->s, emailid);
+    /* the owner's id form, as FETCH reports them */
+    struct conversations_state *owner_cstate = NULL;
+    bool compact = USER_COMPACT_EMAILIDS(
+        jmap_mailbox_owner_cstate(state->mailbox, &owner_cstate));
+    conversations_abort(&owner_cstate);
+
+    if (compact) {
+        if (id[0] == JMAP_EMAILID_PREFIX && strlen(id) == JMAP_EMAILID_SIZE - 1)
+        {
+            struct buf buf = BUF_INITIALIZER;
+            uint64_t u64;
+            charset_decode(&buf, id + 1, strlen(id + 1), ENCODING_BASE64JMAPID);
+            if (buf_len(&buf) == sizeof(u64)) {
+                memcpy(&u64, buf_base(&buf), sizeof(u64));
+                internal->nanosec = UINT64_MAX - ntohll(u64);
+                internal->kind = EMAILID_NANOSEC;
+            }
+            buf_free(&buf);
+        }
+    }
+    else if (id[0] == JMAP_LEGACY_EMAILID_PREFIX
+             && strlen(id) == JMAP_LEGACY_EMAILID_SIZE - 1)
+    {
+        internal->guidprefix = id + 1;
+        internal->kind = EMAILID_LEGACY;
+    }
+
+    *internalisedp = internal;
+}
+
+static int search_emailid_match(message_t *m,
+                                const union search_value *v,
+                                void *internalised,
+                                void *data1 __attribute__((unused)))
+{
+    struct search_emailid_internal *internal = internalised;
+
+    if (!internal) {
+        char emailid[JMAP_MAX_EMAILID_SIZE];
+        return !message_get_emailid(m, emailid) && !strcmp(v->s, emailid);
+    }
+
+    switch (internal->kind) {
+    case EMAILID_NANOSEC: {
+        struct timespec internaldate;
+        return !message_get_internaldate_ts(m, &internaldate)
+               && TIMESPEC_TO_NANOSEC(&internaldate) == internal->nanosec;
+    }
+    case EMAILID_LEGACY: {
+        const struct message_guid *guid = NULL;
+        return !message_get_guid(m, &guid)
+               && !strncmp(message_guid_encode(guid),
+                           internal->guidprefix,
+                           JMAP_LEGACY_EMAILID_SIZE - 2);
+    }
+    default:
+        return 0;
+    }
 }
 
 static int search_annotation_match(message_t *m, const union search_value *v,
@@ -2962,7 +3034,7 @@ EXPORTED void search_attr_init(void)
             /* flags */0,
             SEARCH_PART_NONE,
             SEARCH_COST_INDEX,
-            /*internalise*/NULL,
+            search_emailid_internalise,
             /*cmp*/ NULL,
             search_emailid_match,
             search_string_serialise,

@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# The identifier list of SELECT (OBJECTID (...)) holds each key at most
+# once, and every value but ACCOUNTID is an ObjectID.  An empty list
+# selects by name, like OBJECTID without arguments.
+#
+sub test_objectidplus_select_by_id_syntax
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->create('testbox');
+
+    for my $ids ('(MAILBOXID)', '( )', '(MAILBOXID a )',
+                 '(MAILBOXID a MAILBOXID b)', '(MAILBOXID a.b)', '(MAILBOXID a FUTURE b.c)',
+                 '(MAILBOXID ' . ('a' x 256) . ')')
+    {
+        xlog $self, "OBJECTID $ids is rejected";
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('testbox', "(OBJECTID $ids)");
+        $self->assert_str_equals('bad', $talk->get_last_completion_response());
+    }
+
+    for my $params ('(OBJECTID CONDSTORE)', '(OBJECTID () CONDSTORE)') {
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('testbox', $params);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_not_null($talk->get_response_code('objectid'));
+    }
+}

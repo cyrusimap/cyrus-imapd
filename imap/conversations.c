@@ -363,10 +363,12 @@ EXPORTED int open_conversations_exist(void)
     return open_conversations ? 1 : 0;
 }
 
-EXPORTED int conversations_open_path_version(const char *fname,
-                                             const char *userid, int shared,
-                                             struct conversations_state **statep,
-                                             int version)
+static int _conversations_open(const char *fname,
+                               const char *userid,
+                               int shared,
+                               struct conversations_state **statep,
+                               int version,
+                               bool create)
 {
     struct conversations_open *open = NULL;
     const char *val = NULL;
@@ -404,11 +406,14 @@ EXPORTED int conversations_open_path_version(const char *fname,
     bool is_new = false;
 
     /* open db */
-    int flags = CYRUSDB_CREATE | (shared ? (CYRUSDB_SHARED|CYRUSDB_NOCRC) : CYRUSDB_CONVERT);
+    int flags = shared ? (CYRUSDB_SHARED | CYRUSDB_NOCRC) : CYRUSDB_CONVERT;
+    if (create) {
+        flags |= CYRUSDB_CREATE;
+    }
     r = cyrusdb_lockopen(DB, fname, flags, &open->s.db, &open->s.txn);
     if (r || open->s.db == NULL) {
         _conv_remove(&open->s);
-        return IMAP_IOERROR;
+        return r == CYRUSDB_NOTFOUND ? IMAP_MAILBOX_NONEXISTENT : IMAP_IOERROR;
     }
 
     /* parse the version */
@@ -518,6 +523,28 @@ EXPORTED int conversations_open_path_version(const char *fname,
     *statep = &open->s;
 
     return 0;
+}
+
+EXPORTED int conversations_open_path_version(const char *fname,
+                                             const char *userid, int shared,
+                                             struct conversations_state **statep,
+                                             int version)
+{
+    return _conversations_open(fname, userid, shared, statep, version, true);
+}
+
+EXPORTED int conversations_open_user_existing(
+    const char *userid,
+    int shared,
+    struct conversations_state **statep)
+{
+    char *path = conversations_getuserpath(userid);
+    if (!path) {
+        return IMAP_MAILBOX_BADNAME;
+    }
+    int r = _conversations_open(path, userid, shared, statep, 0, false);
+    free(path);
+    return r;
 }
 
 EXPORTED int conversations_open_user_version(const char *userid, int shared,

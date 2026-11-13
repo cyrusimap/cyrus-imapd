@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Identifiers in another user's mailbox take the owner's form, whatever
+# form the requesting user's own ids take, and SEARCH finds a message by
+# the identifiers FETCH reports for it.
+#
+sub test_objectidplus_shared_owner_ids
+    :AltNamespace :CompactIdsPerUser
+    ($self)
+{
+    # created over IMAP, so with legacy ids; cassandane has compact ids
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->create("user.other");
+    $admintalk->create("user.other.box");
+    $admintalk->setacl("user.other.box", "cassandane", "lrs");
+    $admintalk->setacl("user.other.box", "admin", "lrswipkxtecdan");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->{adminstore}->set_folder('user.other.box');
+    $self->make_message('one', store => $self->{adminstore});
+
+    my $talk = $self->{store}->get_client();
+    my $box = 'Other Users.other.box';
+
+    my $status = $talk->status($box, '(objectid)');
+    my %boxids = @{$status->{objectid}};
+    $self->assert_str_equals('other', $boxids{ACCOUNTID});
+
+    $talk->examine($box);
+    my $code = $talk->get_response_code('objectid');
+    $self->assert_cmp_deeply(\%boxids, { split ' ', $code =~ tr/()//dr });
+
+    my $res = $talk->fetch('1', '(objectid)');
+    my %ids = @{$res->{1}{objectid}};
+    $self->assert_matches(qr/^M[0-9a-f]{24}$/, $ids{EMAILID});
+    $self->assert_matches(qr/^T[0-9a-f]{16}$/, $ids{THREADID});
+
+    my $found = $talk->search('emailid', $ids{EMAILID});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([1], $found);
+}

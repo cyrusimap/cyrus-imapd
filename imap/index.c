@@ -274,15 +274,17 @@ EXPORTED int index_open_mailbox(struct mailbox *mailbox, struct index_init *init
 {
     int r;
     struct index_state *state = xzmalloc(sizeof(struct index_state));
-    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
-
     state->mailbox = mailbox;
     state->mboxname = xstrdup(mailbox_name(mailbox));
     state->owner = mboxname_to_userid(state->mboxname);
     state->uniqueid = xstrdupnull(mailbox_uniqueid(mailbox));
     state->mailboxid = xzmalloc(JMAP_MAX_MAILBOXID_SIZE);
 
-    jmap_set_mailboxid(cstate, mailbox_mbentry(mailbox), state->mailboxid);
+    struct conversations_state *owner_cstate = NULL;
+    jmap_set_mailboxid(jmap_mailbox_owner_cstate(mailbox, &owner_cstate),
+                       mailbox_mbentry(mailbox),
+                       state->mailboxid);
+    conversations_abort(&owner_cstate);
 
     if (init) {
         state->authstate = init->authstate;
@@ -814,6 +816,43 @@ EXPORTED modseq_t index_highestmodseq(struct index_state *state)
     return state->highestmodseq;
 }
 
+EXPORTED void index_objectid_pairs(struct buf *buf,
+                                   const char *mailboxid,
+                                   const char *accountid)
+{
+    buf_printf(buf, "MAILBOXID %s ACCOUNTID %s", mailboxid, accountid);
+}
+
+EXPORTED void index_objectid_code(struct buf *buf,
+                                  bool compound,
+                                  const char *mailboxid,
+                                  const char *accountid)
+{
+    if (compound) {
+        /* draft-ietf-mailmaint-imap-objectid-bis */
+        buf_appendcstr(buf, "OBJECTID (");
+        index_objectid_pairs(buf, mailboxid, accountid);
+        buf_putc(buf, ')');
+    }
+    else {
+        /* RFC 8474 */
+        buf_printf(buf, "MAILBOXID (%s)", mailboxid);
+    }
+}
+
+EXPORTED void index_print_objectid_ok(struct protstream *pout,
+                                      const char *tag,
+                                      const char *text,
+                                      bool compound,
+                                      const char *mailboxid,
+                                      const char *accountid)
+{
+    struct buf code = BUF_INITIALIZER;
+    index_objectid_code(&code, compound, mailboxid, accountid);
+    prot_printf(pout, "%s OK [%s] %s\r\n", tag, buf_cstring(&code), text);
+    buf_free(&code);
+}
+
 EXPORTED void index_select(struct index_state *state, struct index_init *init)
 {
     index_tellexists(state);
@@ -833,8 +872,16 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
                 state->highestmodseq);
 
-    /* RFC 8474 */
-    prot_printf(state->out, "* OK [MAILBOXID (%s)] Ok\r\n", state->mailboxid);
+    /* RFC 8474 / draft-ietf-mailmaint-imap-objectid-bis */
+    struct buf accountid = BUF_INITIALIZER;
+    jmap_mailbox_accountid(state->mboxname, &accountid);
+    index_print_objectid_ok(state->out,
+                            "*",
+                            "Ok",
+                            !!(client_capa & ENABLED_OBJECTIDPLUS),
+                            state->mailboxid,
+                            buf_cstring(&accountid));
+    buf_free(&accountid);
 
     /* RFC 4467 */
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
@@ -3861,6 +3908,23 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
             jmap_set_threadid(convstate, record.cid, threadid);
             prot_printf(state->out, "%cTHREADID (%s)", sepchar, threadid);
         }
+        sepchar = ' ';
+    }
+    if (fetchitems & FETCH_OBJECTID) {
+        char emailid[JMAP_MAX_EMAILID_SIZE];
+        char threadid[JMAP_THREADID_SIZE];
+
+        jmap_set_emailid(convstate, &record.guid,
+                         0, &record.internaldate, emailid);
+
+        prot_printf(state->out, "%cOBJECTID (EMAILID %s", sepchar, emailid);
+
+        if (record.cid) {
+            jmap_set_threadid(convstate, record.cid, threadid);
+            prot_printf(state->out, " THREADID %s", threadid);
+        }
+
+        prot_putc(')', state->out);
         sepchar = ' ';
     }
     if (fetchitems & FETCH_SAVEDATE) {

@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Once OBJECTID+ is active, RENAME answers with the OBJECTID response
+# code, carrying the identifiers the mailbox had before the rename.
+#
+sub test_objectidplus_rename_preserves_mailboxid
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $talk->create('foo');
+    $talk->create('bar');
+    my $foo = $talk->status('foo', '(objectid)')->{objectid};
+    my $bar = $talk->status('bar', '(objectid)')->{objectid};
+
+    $talk->rename('foo', 'renamed');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    my $code = $talk->get_response_code('objectid');
+    $self->assert_cmp_deeply({ @$foo }, { split ' ', $code =~ tr/()//dr });
+
+    $self->assert_cmp_deeply($foo,
+                             $talk->status('renamed', '(objectid)')->{objectid});
+    $self->assert_cmp_deeply($bar,
+                             $talk->status('bar', '(objectid)')->{objectid});
+}

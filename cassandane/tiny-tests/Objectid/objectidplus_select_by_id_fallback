@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# SELECT (OBJECTID (...)) falls back to the name when no mailbox the
+# user can see has the identifiers.
+#
+sub test_objectidplus_select_by_id_fallback
+    :AltNamespace
+    ($self)
+{
+    $self->{instance}->create_user("other", subdirs => [ 'hidden' ]);
+    my $admintalk = $self->{adminstore}->get_client();
+    my $hiddenid = $admintalk->status('user.other.hidden', '(mailboxid)')
+                             ->{mailboxid}[0];
+    $self->assert_not_null($hiddenid);
+
+    my $talk = $self->{store}->get_client();
+    $talk->create('testbox');
+    my $testboxid = $talk->status('testbox', '(mailboxid)')->{mailboxid}[0];
+
+    for my $ids ("MAILBOXID Fnonexistent99 ACCOUNTID cassandane",
+                 "MAILBOXID $hiddenid ACCOUNTID other",
+                 "MAILBOXID $hiddenid")
+    {
+        xlog $self, "select by ($ids) gets testbox";
+        $talk->unselect();
+        $talk->clear_response_code('objectid');
+        $talk->select('testbox', "(OBJECTID ($ids))");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        my $code = $talk->get_response_code('objectid');
+        $self->assert_cmp_deeply(
+            { MAILBOXID => $testboxid, ACCOUNTID => 'cassandane' },
+            { split ' ', $code =~ tr/()//dr });
+    }
+}

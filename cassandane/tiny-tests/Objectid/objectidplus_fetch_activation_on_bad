@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A FETCH naming OBJECTID activates OBJECTID+ even when the command
+# fails on a later item.
+#
+sub test_objectidplus_fetch_activation_on_bad
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $self->make_message('one');
+    $talk->select('INBOX');
+
+    my $enabled;
+    $talk->_imap_cmd('FETCH', 0,
+                     { enabled => sub ($, $list) { $enabled = $list } },
+                     '1', '(OBJECTID NOSUCHITEM)');
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply(['OBJECTID+'], $enabled);
+
+    $talk->unselect();
+    $talk->clear_response_code('mailboxid');
+    $talk->select('INBOX');
+    $self->assert_not_null($talk->get_response_code('objectid'));
+    $self->assert_null($talk->get_response_code('mailboxid'));
+}

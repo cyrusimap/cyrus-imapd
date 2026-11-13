@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# SEARCH EMAILID and SEARCH THREADID find a message by the identifiers
+# FETCH (OBJECTID) reports for it.
+#
+sub test_objectidplus_search_by_fetched_ids
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $self->make_message('one');
+    $self->make_message('two');
+    $talk->select('INBOX');
+
+    my $res = $talk->fetch('1:*', '(objectid)');
+    for my $uid (1, 2) {
+        my %ids = @{$res->{$uid}{objectid}};
+        $self->assert_matches(qr/\S/, $ids{EMAILID});
+        $self->assert_matches(qr/\S/, $ids{THREADID});
+
+        my $found = $talk->search('emailid', $ids{EMAILID});
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_cmp_deeply([$uid], $found);
+
+        $found = $talk->search('threadid', $ids{THREADID});
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_cmp_deeply([$uid], $found);
+    }
+}

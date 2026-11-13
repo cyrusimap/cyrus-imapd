@@ -1,0 +1,36 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# For a user with legacy ids, SEARCH EMAILID and SEARCH THREADID find a
+# message by the legacy identifiers FETCH (OBJECTID) reports, and a
+# well-formed THREADID that names no thread matches nothing.
+#
+sub test_objectidplus_search_emailid_legacy
+    :AltNamespace :OldJMAPIds
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $self->make_message('one');
+    $self->make_message('two');
+    $talk->select('INBOX');
+
+    my $res = $talk->fetch('1:*', '(objectid)');
+    for my $uid (1, 2) {
+        my %ids = @{$res->{$uid}{objectid}};
+        $self->assert_matches(qr/^M[0-9a-f]{24}$/, $ids{EMAILID});
+        $self->assert_matches(qr/^T[0-9a-f]{16}$/, $ids{THREADID});
+
+        my $found = $talk->search('emailid', $ids{EMAILID});
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_cmp_deeply([$uid], $found);
+
+        $found = $talk->search('threadid', $ids{THREADID});
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $self->assert_cmp_deeply([$uid], $found);
+    }
+
+    my $found = $talk->search('threadid', 'T0000000000000001');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([], $found);
+}
