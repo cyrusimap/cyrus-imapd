@@ -4935,6 +4935,28 @@ static void remove_itip_properties(icalcomponent *ical)
 
 }
 
+static void setcalendarevents_reject_override_utctimes(json_t *joverrides,
+                                                       json_t *invalid)
+{
+    struct buf buf = BUF_INITIALIZER;
+    const char *recurid;
+    json_t *joverride;
+    json_object_foreach (joverrides, recurid, joverride) {
+        static const char *const names[] = { "utcStart", "utcEnd" };
+        for (size_t i = 0; i < 2; i++) {
+            if (JNOTNULL(json_object_get(joverride, names[i]))) {
+                buf_printf(&buf,
+                           "recurrenceOverrides/%s/%s",
+                           recurid,
+                           names[i]);
+                json_array_append_new(invalid, json_string(buf_cstring(&buf)));
+                buf_reset(&buf);
+            }
+        }
+    }
+    buf_free(&buf);
+}
+
 static void setcalendarevents_set_utctimes(json_t *event,
                                            icaltimezone *fallbacktz,
                                            json_t *invalid)
@@ -5182,6 +5204,9 @@ static int createevent_toical(jmap_req_t *req,
          * timezone then fall back to Etc/UTC for utcStart/utcEnd */
         setcalendarevents_set_utctimes(create->jsevent, NULL, parser->invalid);
     }
+    setcalendarevents_reject_override_utctimes(
+        json_object_get(create->jsevent, "recurrenceOverrides"),
+        parser->invalid);
 
     // Validate privacy on shared calendars
     if (strcmp(req->accountid, req->userid)) {
@@ -5997,37 +6022,7 @@ static void updateevent_apply_patch_event(json_t *old_event,
                     json_array_append_new(invalid, json_string("utcEnd"));
                 }
             }
-            json_t *jold_overrides = json_object_get(old_event, "recurrenceOverrides");
-            json_t *jnew_override;
-            const char *recurid;
-            struct buf buf = BUF_INITIALIZER;
-            json_object_foreach(jnew_overrides, recurid, jnew_override) {
-                json_t *jold_override = json_object_get(jold_overrides, recurid);
-                jnew_utcStart = json_object_get(jnew_override, "utcStart");
-                jnew_utcEnd = json_object_get(jnew_override, "utcEnd");
-
-                if (JNOTNULL(jnew_utcStart)) {
-                    json_t *jold_utcStart = json_object_get(jold_override, "utcStart");
-                    if (!jold_utcStart || !json_equal(jold_utcStart, jnew_utcStart)) {
-                        buf_setcstr(&buf, "recurrenceOverrides/");
-                        buf_appendcstr(&buf, recurid);
-                        buf_appendcstr(&buf, "/utcStart");
-                        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                        buf_reset(&buf);
-                    }
-                }
-                if (JNOTNULL(jnew_utcEnd)) {
-                    json_t *jold_utcEnd = json_object_get(jold_override, "utcEnd");
-                    if (!jold_utcEnd || !json_equal(jold_utcEnd, jnew_utcEnd)) {
-                        buf_setcstr(&buf, "recurrenceOverrides/");
-                        buf_appendcstr(&buf, recurid);
-                        buf_appendcstr(&buf, "/utcEnd");
-                        json_array_append_new(invalid, json_string(buf_cstring(&buf)));
-                        buf_reset(&buf);
-                    }
-                }
-            }
-            buf_free(&buf);
+            setcalendarevents_reject_override_utctimes(jnew_overrides, invalid);
         } else {
             /* Allow updating UTC times for non-recurring events */
             if (json_object_get(event_patch, "utcStart") &&

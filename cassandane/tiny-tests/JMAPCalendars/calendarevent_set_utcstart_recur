@@ -124,7 +124,7 @@ sub test_calendarevent_set_utcstart_recur
     $self->assert_str_equals('2019-12-13T03:30:00Z', $override->{utcStart});
     $self->assert_str_equals('2019-12-13T04:30:00Z', $override->{utcEnd});
 
-    # It's OK to loop back a recurring event with overrides and UTC times.
+    # UTC times can't be set in recurrenceOverrides, not even unchanged.
     $event->{title} = 'updated title';
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -132,13 +132,14 @@ sub test_calendarevent_set_utcstart_recur
                 $eventId => $event,
             },
         }, 'R1'],
-        ['CalendarEvent/get', {
-            ids => [$eventId],
-            properties => $proplist,
-        }, 'R2']
     ]);
-    $self->assert(exists $res->[0][1]{updated}{$eventId});
-    $self->assert_cmp_deeply($event, $res->[1][1]{list}[0]);
+    $self->assert_cmp_deeply({
+        type => 'invalidProperties',
+        properties => bag(
+            'recurrenceOverrides/2019-12-13T12:30:00/utcStart',
+            'recurrenceOverrides/2019-12-13T12:30:00/utcEnd',
+        ),
+    }, $res->[0][1]{notUpdated}{$eventId});
 
     # But it is not OK to update UTC times in a recurring event with overrides.
     $res = $jmap->CallMethods([
