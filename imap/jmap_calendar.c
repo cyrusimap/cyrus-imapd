@@ -12684,6 +12684,11 @@ static int jmap_participantidentity_get(struct jmap_req *req)
             buf_reset(&buf);
         }
 
+        /* same as the default organizer, see _imip_calendar_address() */
+        if (jmap_wantprop(get.props, "isDefault")) {
+            json_object_set_new(jpartid, "isDefault", json_boolean(i == 0));
+        }
+
         json_object_set_new(jpartidsbyid, buf_cstring(&idbuf), jpartid);
         buf_reset(&idbuf);
     }
