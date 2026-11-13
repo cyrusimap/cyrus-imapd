@@ -173,7 +173,7 @@
  */
 #define MAILBOX_MINOR_VERSION       (20) /* read comment above! */
 /** The index_record::cache_version that new cache records get */
-#define MAILBOX_CACHE_MINOR_VERSION (14)
+#define MAILBOX_CACHE_MINOR_VERSION (15)
 
 #define FNAME_HEADER "/cyrus.header"
 #define FNAME_INDEX "/cyrus.index"

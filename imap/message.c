@@ -838,7 +838,8 @@ static void message_parse_headers(struct msg *msg, struct body *body,
     int len;
     if (sawboundaryp) *sawboundaryp = 0;
     uint32_t maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
-    int have_max = 0;
+    uint32_t nheaders = 0;
+    bool have_max = false;
     const char *value;
 
     body->header_offset = msg->offset;
@@ -891,18 +892,14 @@ static void message_parse_headers(struct msg *msg, struct body *body,
             /* if we're skipping, skip now */
             if (have_max) continue;
 
-            /* check if we've hit a limit and flag it */
-            if (maxlines && body->header_lines > maxlines) {
-                if (efname)
-                    xsyslog_ev(LOG_WARNING, "message.limit.reached",
-                               lf_s("sys.path", efname),
-                               lf_s("limit.name", "maxheaderlines"),
-                               lf_d("limit.value", maxlines));
-                else
-                    xsyslog_ev(LOG_WARNING, "message.limit.reached",
-                               lf_s("limit.name", "maxheaderlines"),
-                               lf_d("limit.value", maxlines));
-                have_max = 1;
+            /* check if we've hit the maximum header limit and flag it */
+            bool is_header = next[1] && !strchr(" \t\r\n", next[1]);
+            if (maxlines && is_header && nheaders++ > maxlines) {
+                xsyslog_ev(LOG_WARNING, "message.limit.reached",
+                           lf_s_opt("sys.path", efname),
+                           lf_s("limit.name", "maxheaderlines"),
+                           lf_d("limit.value", maxlines));
+                have_max = true;
                 continue;
             }
 

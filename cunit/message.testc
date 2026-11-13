@@ -1684,4 +1684,47 @@ static void test_parse_empty_header_value(void)
     check_received_date("Received: x;\t\r\n\r\n", "");
 }
 
+static void test_maxheaderlines(void)
+{
+    static const char msg[] = "Subject: this subject\r\n"
+                              " spans four\r\n"
+                              " header\r\n"
+                              " lines\r\n"
+                              "From: from@local\r\n"
+                              "Content-Type: multipart/mixed;\r\n"
+                              " boundary=b\r\n"
+                              "To: to@local\r\n"
+                              "Cc: cc@local\r\n"
+                              "\r\n"
+                              "--b\r\n"
+                              "\r\n"
+                              "text\r\n"
+                              "--b--\r\n";
+
+    imapopts[IMAPOPT_MAXHEADERLINES].val.i32 = 3;
+
+    unsigned reached = CU_SYSLOG_MATCH("event=message\\.limit\\.reached ");
+
+    struct body body;
+    memset(&body, 0x45, sizeof(body));
+    int r = message_parse_mapped(msg, sizeof(msg) - 1, &body, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_SYSLOG(reached, 1);
+
+    // Parsed: the first four headers
+    CU_ASSERT_STRING_EQUAL(body.subject, "this subject spans four header lines");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.from);
+    CU_ASSERT_STRING_EQUAL(body.from->mailbox, "from");
+    CU_ASSERT_STRING_EQUAL(body.type, "MULTIPART");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "MIXED");
+    CU_ASSERT_EQUAL(body.numparts, 1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.to);
+    CU_ASSERT_STRING_EQUAL(body.to->mailbox, "to");
+    // Skipped: past the limit.
+    CU_ASSERT_PTR_NULL(body.cc);
+
+    message_free_body(&body);
+}
+
 /* vim: set ft=c: */
