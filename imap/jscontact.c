@@ -3837,7 +3837,7 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
     if (m->supports_blobid) {
         jscontact_ctx_t *ctx = rrock->ctx;
         struct buf blob = BUF_INITIALIZER;
-        bool have_blob = false;
+        const char *blob_prop = NULL;
 
         /* blobId supersedes uri */
         jprop = json_object_get(obj, "blobId");
@@ -3903,7 +3903,7 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             else {
                 buf_free(&blobtype);
             }
-            have_blob = true;
+            blob_prop = "blobId";
 
             json_object_del(obj, "blobId");
             json_object_del(obj, "accountId");
@@ -3932,14 +3932,22 @@ static vcardproperty *_jsresource_to_vcard(struct jmap_parser *parser, json_t *o
             charset_decode_mimebody(data, strlen(data),
                                     ENCODING_BASE64, &decbuf, &size);
             buf_initm(&blob, decbuf, size);
-            have_blob = true;
+            blob_prop = "uri";
 
             if (!media_type) {
                 media_type = xstrdupnull(vcard_image_mediatype(decbuf, size));
             }
         }
 
-        if (have_blob) {
+        if (blob_prop) {
+            if (pkind == VCARD_PHOTO_PROPERTY &&
+                strncasecmpsafe(media_type, "image/", 6) &&
+                !vcard_image_mediatype(buf_base(&blob), buf_len(&blob))) {
+                jmap_parser_invalid(parser, blob_prop);
+                buf_free(&blob);
+                goto fail;
+            }
+
             /* The media type is encoded in the data: URI */
             json_object_del(obj, "mediaType");
 
