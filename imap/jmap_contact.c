@@ -2980,16 +2980,15 @@ static int jmap_addressbook_set(struct jmap_req *req)
         const char *newid = setargs.on_success_set_is_default;
         if (*newid == '#') newid = jmap_lookup_id(req, newid + 1);
 
-        /* Make sure the new default addressbook exists, and that the caller
-         * has admin rights on the addressbook home: for changing per-account
-         * state, per-addressbook rights aren't enough. */
+        /* Changing per-account state needs admin rights on the addressbook
+         * home, per-addressbook rights aren't enough. */
         mbentry_t *mbentry = NULL;
         if (newid) abookid_to_mbentry(req, newid, &mbentry);
-        if (!mbentry ||
-            !jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
-            /* Report the failure to set the new default */
-            jmap_set_default_failed(&set, newid,
-                                    mbentry ? "forbidden" : "notFound", NULL);
+        if (!mbentry) {
+            /* RFC 9610 S2.3: an unknown id is ignored */
+        }
+        else if (!jmap_hasrights(req, cardhomename, JACL_ADMIN_ADDRBOOK)) {
+            jmap_set_default_failed(&set, newid, "forbidden", NULL);
         }
         else {
             /* set jmap-default-addressbook annotation */

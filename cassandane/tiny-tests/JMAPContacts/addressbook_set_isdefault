@@ -162,12 +162,27 @@ sub test_addressbook_set_isdefault
         $res
     );
 
-    xlog $self, "try to change the default to a bogus addressbook id";
+    my $get_default = sub {
+        my $list = $jmap->request([[
+            'AddressBook/get', { properties => ['isDefault'] },
+        ]])->single_sentence("AddressBook/get")->arguments->{list};
+        return [ map { $_->{id} } grep { $_->{isDefault} } @$list ];
+    };
+    my $default = $get_default->();
+
+    xlog $self, "an unknown addressbook id is ignored without error";
     $res = $jmap->request([[
         'AddressBook/set', {
             onSuccessSetIsDefault => 'foo'
         }
     ]])->single_sentence("AddressBook/set")->arguments;
 
-    $self->assert_equals(JSON::null, $res->{updated});
+    $self->assert_cmp_deeply(
+        superhashof({
+            updated => JSON::null,
+            notUpdated => JSON::null,
+        }),
+        $res
+    );
+    $self->assert_cmp_deeply($default, $get_default->());
 }
