@@ -317,6 +317,47 @@ endif # SERVER
 
 endif # SIEVE
 
+if USE_INTERNAL_SASL
+noinst_LTLIBRARIES += lib/libsasl_min.la
+endif # USE_INTERNAL_SASL
+
+# These headers correspond to the public SASL API.  They must be kept
+# compatible with any external SASL implementation we want to be able
+# to link with.
+LIBSASL_API = \
+    libsasl_min/sasl.h \
+    libsasl_min/saslplug.h \
+    libsasl_min/saslutil.h \
+    libsasl_min/prop.h
+
+lib_libsasl_min_la_SOURCES = \
+    $(LIBSASL_API) \
+    libsasl_min/core_auxprop.c \
+    libsasl_min/core_canonuser.c \
+    libsasl_min/core_checkpw.c \
+    libsasl_min/core_client.c \
+    libsasl_min/core_common.c \
+    libsasl_min/core_config.c \
+    libsasl_min/core_saslint.h \
+    libsasl_min/core_saslutil.c \
+    libsasl_min/core_server.c \
+    libsasl_min/core_seterror.c \
+    libsasl_min/core_staticopen.c \
+    libsasl_min/canonuser_internal.c \
+    libsasl_min/canonuser_internal.h \
+    libsasl_min/mech_anonymous.c \
+    libsasl_min/mech_anonymous.h \
+    libsasl_min/mech_external.c \
+    libsasl_min/mech_external.h \
+    libsasl_min/mech_plain.c \
+    libsasl_min/mech_plain.h \
+    libsasl_min/plugin_common.c \
+    libsasl_min/plugin_common.h
+
+lib_libsasl_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
+
+lib_libsasl_min_la_LIBADD =
+
 EXTRA_DIST = \
     COPYING \
     Doxyfile \
@@ -637,11 +678,13 @@ cunit_TESTS = \
     cunit/crc32.testc \
     cunit/dlist.testc \
     cunit/duplicate.testc \
+    cunit/dynarray.testc \
     cunit/getxstring.testc \
     cunit/glob.testc \
     cunit/guid.testc \
     cunit/hash.testc \
     cunit/hashset.testc \
+    cunit/ical_support.testc \
     cunit/imapurl.testc \
     cunit/imparse.testc \
     cunit/index_file.testc \
@@ -671,19 +714,8 @@ cunit_TESTS = \
     cunit/signals.testc \
     cunit/slowio.testc \
     cunit/smallarrayu64.testc \
-    cunit/sqldb.testc \
-    cunit/xsyslog_ev.testc
-
-if SIEVE
-cunit_TESTS += cunit/sieve.testc
-endif
-
-if HAVE_GUESSTZ
-cunit_TESTS += cunit/guesstz.testc
-endif # HAVE_GUESSTZ
-
-cunit_TESTS += \
     cunit/spool.testc \
+    cunit/sqldb.testc \
     cunit/squat.testc \
     cunit/strarray.testc \
     cunit/strconcat.testc \
@@ -691,11 +723,22 @@ cunit_TESTS += \
     cunit/stristr.testc \
     cunit/times.testc \
     cunit/tok.testc \
-    cunit/dynarray.testc \
     cunit/util.testc \
-    cunit/ical_support.testc \
     cunit/xsha1.testc \
+    cunit/xsyslog_ev.testc \
     cunit/zeroskip.testc
+
+if HAVE_GUESSTZ
+cunit_TESTS += cunit/guesstz.testc
+endif # HAVE_GUESSTZ
+
+if USE_INTERNAL_SASL
+cunit_TESTS += cunit/libsasl_min.testc
+endif # USE_INTERNAL_SASL
+
+if SIEVE
+cunit_TESTS += cunit/sieve.testc
+endif # SIEVE
 
 cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
     imap/css3_color.c imap/mutex_fake.c imap/spool.c imap/search_expr.c \
@@ -1577,6 +1620,10 @@ lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
 lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
+if USE_INTERNAL_SASL
+EXTRA_lib_libcyrus_la_DEPENDENCIES = lib/libsasl_min.la
+endif # USE_INTERNAL_SASL
+
 lib_libcyrus_la_LIBADD = libcrc32.la ${LIB_SASL} $(SSL_LIBS) $(GCOV_LIBS) $(LIBM)
 lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 

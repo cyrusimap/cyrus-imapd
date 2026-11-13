@@ -11,7 +11,7 @@ use DB_File;
 my $SCRAM = 'scram-sha-256';
 
 sub test_scram_fuzz
-    :min_version_3_5 :NoStartInstances
+    :needs_dependency_libsasl2 :NoStartInstances
     ($self)
 {
     $self->config_set(

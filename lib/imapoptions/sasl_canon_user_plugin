@@ -1,0 +1,9 @@
+Name: sasl_canon_user_plugin
+Type: STRING
+Default-Value: INTERNAL
+Last-Modified: UNRELEASED
+For-Documentation-Only: 1
+SASL-Option: canon_user_plugin
+
+Specify the plugin to use for user canonicalisation.  The only such plugin
+is "INTERNAL".

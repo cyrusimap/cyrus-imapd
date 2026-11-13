@@ -86,6 +86,12 @@ has for_documentation_only => (
     default => undef,
 );
 
+has sasl_option => (
+    isa => Str,
+    is => 'ro',
+    predicate => 1,
+);
+
 has documentation => (
     isa => ArrayRef[Str],
     is => 'ro',
@@ -229,6 +235,12 @@ sub BUILD ($self, $args)
         # Replaced-By is only valid when Deprecated-Since is set
         die "replaced_by requires deprecated_since"
             if not $self->has_deprecated_since;
+    }
+
+    if ($self->has_sasl_option) {
+        # SASL-Option entries must also be For-Documentation-Only
+        die "sasl_option requires for_documentation_only"
+            if not $self->for_documentation_only;
     }
 }
 

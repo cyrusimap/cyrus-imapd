@@ -600,6 +600,10 @@ extlinks = {
         "https://github.com/cyrusimap/cyrus-imapd/releases/tag/cyrus-imapd-%s",
         "cyrus-imapd-%s",
     ),
+    "saslconf": (
+        "https://www.cyrusimap.org/sasl/sasl/options.html#cmdoption-arg-%s",
+        "%s",
+    ),
 }
 
 # Change this to whatever your output root is
