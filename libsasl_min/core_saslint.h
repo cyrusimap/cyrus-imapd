@@ -2,8 +2,8 @@
 /* SPDX-License-Identifier: BSD-3-Clause-CMU */
 /* See COPYING file at the root of the distribution for more details. */
 
-#ifndef LIBSASL_MIN_SASLINT_H
-#define LIBSASL_MIN_SASLINT_H
+#ifndef LIBSASL_MIN_CORE_SASLINT_H
+#define LIBSASL_MIN_CORE_SASLINT_H
 
 #include <config.h>
 
@@ -479,4 +479,4 @@ int _sasl_canon_user_lookup(sasl_conn_t *conn,
  */
 int get_fqhostname(char *name, unsigned namelen, int abort_if_no_fqdn);
 
-#endif /* LIBSASL_MIN_SASLINT_H */
+#endif /* LIBSASL_MIN_CORE_SASLINT_H */
