@@ -13886,6 +13886,32 @@ static int _email_bulkupdate_plan_mailboxids(struct email_bulkupdate *bulk, ptra
         }
         ptrarray_t *current_uidrecs = hash_lookup(email_id, &bulk->uidrecs_by_email_id);
 
+        /* Only an EmailSubmission may take an email out of the scheduled
+         * mailbox, or its pending send would go ahead unseen.
+         * A whole update object only names where the email is to be,
+         * so compare it with where the email is now. */
+        if (scheduled_id && update->mailboxids && !update->patch_mailboxids &&
+            !bulk->from_cstate &&
+            !json_object_get(update->mailboxids, scheduled_id) &&
+            !strarray_contains(bulk->req->scheduled_emails, email_id)) {
+            bool in_scheduled = false;
+
+            for (int j = 0; j < ptrarray_size(current_uidrecs); j++) {
+                struct email_uidrec *uidrec = ptrarray_nth(current_uidrecs, j);
+
+                if (!strcmp(uidrec->mboxrec->mbox_id, scheduled_id)) {
+                    in_scheduled = true;
+                    break;
+                }
+            }
+
+            if (in_scheduled) {
+                json_object_set_new(bulk->set_errors, email_id,
+                                    json_pack("{s:s}", "type", "forbidden"));
+                continue;
+            }
+        }
+
         if (update->snooze_in_mboxid) {
             /* Update/delete existing snoozeDetails */
 
@@ -14831,16 +14857,21 @@ static int _email_bulkupdate_open(jmap_req_t *req, struct email_bulkupdate *bulk
 
             /* If trying to move a message in/out of $scheduled
                it better be in our scheduled email cache */
+            bool forbidden = false;
             if (!strcmpnull(scheduled_uniqueid, mbox_id)) {
                 is_valid = strarray_contains(req->scheduled_emails,
                                              update->email_id);
+                forbidden = !is_valid;
             }
 
             if (!is_valid) {
                 if (json_object_get(bulk->set_errors, update->email_id) == NULL) {
                     json_object_set_new(bulk->set_errors, update->email_id,
-                            json_pack("{s:s s:[s]}", "type", "invalidProperties",
-                                "properties", "mailboxIds"));
+                            forbidden
+                            ? json_pack("{s:s}", "type", "forbidden")
+                            : json_pack("{s:s s:[s]}",
+                                        "type", "invalidProperties",
+                                        "properties", "mailboxIds"));
                 }
             }
         }

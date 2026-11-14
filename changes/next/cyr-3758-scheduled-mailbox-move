@@ -1,0 +1,33 @@
+Description:
+
+JMAP Email/set no longer lets a client move an email out of the scheduled
+mailbox by replacing its whole mailboxIds.  Only its EmailSubmission may take
+it out, as the patch form of mailboxIds already required.  Previously such a
+move succeeded despite the mailbox's mayRemoveItems being false, and the
+email's pending send still went out, even after the email was then destroyed.
+Moving an email out of the scheduled mailbox never cancels its send: use
+EmailSubmission/set with undoStatus "canceled" for that.
+
+Moving an email into or out of the scheduled mailbox other than by an
+EmailSubmission now fails with "forbidden" in either form of mailboxIds,
+like destroying an email there, rather than "invalidProperties".
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.  This is CYR-3758.
