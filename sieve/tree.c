@@ -183,6 +183,9 @@ test_t *new_test(int type, sieve_script_t *parse_script)
         break;
     }
 
+    mime_t *mime = test_get_mime(p);
+    if (mime) mime->option = B_MIMEOPT_NONE;
+
     if (!supported) {
         sieveerror_c(parse_script, SIEVE_MISSING_REQUIRE, capability);
     }
@@ -289,6 +292,13 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
     case B_IKEEP_TARGET:
         capability = "vnd.cyrus.implicit_keep_target";
         supported = parse_script->support & SIEVE_CAPA_IKEEP_TARGET;
+        break;
+
+    case B_FOREVERYPART:
+    case B_BREAK:
+        capability = "foreverypart";
+        supported = parse_script->support & SIEVE_CAPA_FOREVERYPART;
+        break;
     }
 
     if (!supported) {
@@ -309,6 +319,16 @@ commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
     p->next = NULL;
 
     return p;
+}
+
+EXPORTED mime_t *test_get_mime(test_t *t)
+{
+    switch (t->type) {
+    case BC_EXISTS:  return &t->u.ex.mime;
+    case BC_HEADER:  return &t->u.hhs.mime;
+    case BC_ADDRESS: return &t->u.ae.mime;
+    default:         return NULL;
+    }
 }
 
 void free_testlist(testlist_t *tl)
@@ -340,6 +360,10 @@ void free_test(test_t *t)
         break;
 
     case BC_EXISTS:
+    case BC_EXISTS_PRE_MIME:
+        strarray_free(t->u.ex.sl);
+        break;
+
     case BC_IHAVE:
     case BC_VALIDEXTLIST:
     case BC_VALIDNOTIFYMETHOD:
@@ -351,9 +375,13 @@ void free_test(test_t *t)
     case BC_TRUE:
         break;
 
-    case BC_HASFLAG:
     case BC_HEADER:
+        strarray_free(t->u.hhs.mime.params);
+        GCC_FALLTHROUGH
+
+    case BC_HASFLAG:
     case BC_HEADER_PRE_INDEX:
+    case BC_HEADER_PRE_MIME:
     case BC_STRING:
         strarray_free(t->u.hhs.sl);
         strarray_free(t->u.hhs.pl);
@@ -361,6 +389,7 @@ void free_test(test_t *t)
 
     case BC_ADDRESS:
     case BC_ADDRESS_PRE_INDEX:
+    case BC_ADDRESS_PRE_MIME:
     case BC_ENVELOPE:
         strarray_free(t->u.ae.sl);
         strarray_free(t->u.ae.pl);
@@ -529,6 +558,15 @@ void free_tree(commandlist_t *cl)
 
         case B_IKEEP_TARGET:
             free_target_mailbox(&cl->u.ikt);
+            break;
+
+        case B_FOREVERYPART:
+            free(cl->u.fep.name);
+            free_tree(cl->u.fep.block);
+            break;
+
+        case B_BREAK:
+            free(cl->u.brk.name);
             break;
         }
 

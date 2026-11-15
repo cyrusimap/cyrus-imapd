@@ -186,6 +186,22 @@ static void print_vallist(const char *label, arrayu64_t *list,
     arrayu64_free(list);
 }
 
+static void print_mime(test_t *test)
+{
+    static const char *options[] = { "", " TYPE", " SUBTYPE", " CONTENTTYPE" };
+    mime_t *mime = test_get_mime(test);
+
+    if (!mime || !mime->mime) return;
+
+    printf(" MIME ANYCHILD(%d)", !!mime->anychild);
+    if (mime->option == B_PARAM) {
+        print_stringlist(" PARAM", mime->params);
+    }
+    else if (mime->option > B_MIMEOPT_NONE && mime->option < B_PARAM) {
+        printf("%s", options[mime->option - B_MIMEOPT_NONE]);
+    }
+}
+
 static void print_comparator(comp_t *comp)
 {
     printf(" COMPARATOR [ ");
@@ -286,8 +302,11 @@ static void print_test(test_t *test)
         printf("TRUE");
         break;
 
+    case BC_EXISTS_PRE_MIME:
     case BC_EXISTS:
-        print_stringlist("EXISTS", test->u.sl);
+        printf("EXISTS");
+        print_mime(test);
+        print_stringlist("", test->u.ex.sl);
         break;
 
     case BC_SIZE:
@@ -295,8 +314,10 @@ static void print_test(test_t *test)
                (test->u.sz.t == B_OVER) ? "over" : "under", test->u.sz.n);
         break;
 
+    case BC_ADDRESS_PRE_MIME:
     case BC_ADDRESS:
         printf("ADDRESS");
+        print_mime(test);
         printf(" ADDRPART(%s)", addrpart_to_string(test->u.ae.addrpart));
         if (test->u.ae.comp.index) {
             printf(" INDEX(%d %s)", abs(test->u.ae.comp.index),
@@ -315,8 +336,10 @@ static void print_test(test_t *test)
         print_stringlist(" PATTERNS", test->u.ae.pl);
         break;
 
+    case BC_HEADER_PRE_MIME:
     case BC_HEADER:
         printf("HEADER");
+        print_mime(test);
         if (test->u.hhs.comp.index) {
             printf(" INDEX(%d %s)", abs(test->u.hhs.comp.index),
                    (test->u.hhs.comp.index < 0) ? "[LAST]" : "");
@@ -741,6 +764,23 @@ static void dump2(bytecode_input_t *d, int bc_len)
             break;
 
 
+        case B_FOREVERYPART:
+            printf("FOREVERYPART (ends at %d)", cmd.u.fep.end);
+            print_string(" NAME", cmd.u.fep.name);
+            break;
+
+
+        case B_NEXTPART:
+            printf("NEXTPART");
+            break;
+
+
+        case B_BREAK:
+            printf("BREAK LOOPS(%d)", cmd.u.brk.loops);
+            print_string(" NAME", cmd.u.brk.name);
+            break;
+
+
         case B_INCLUDE:
             printf("INCLUDE LOCATION(%s) ONCE(%d) OPTIONAL(%d)",
                    (cmd.u.inc.location == B_PERSONAL) ? "Personal" : "Global",
@@ -1092,6 +1132,27 @@ static void generate_zone(struct Zone *zone, struct buf *buf)
 
 #define INSERT_FOLD(indent, buf) buf_printf(buf, "\n%*s", indent, "");
 
+static void generate_mime(test_t *test, unsigned long long *requires,
+                          struct buf *buf)
+{
+    mime_t *mime = test_get_mime(test);
+
+    if (!mime || !mime->mime) return;
+
+    *requires |= SIEVE_CAPA_MIME;
+    generate_switch(":mime", 1, buf);
+    generate_switch(":anychild", mime->anychild, buf);
+
+    switch (mime->option) {
+    case B_TYPE:        generate_switch(":type", 1, buf);        break;
+    case B_SUBTYPE:     generate_switch(":subtype", 1, buf);     break;
+    case B_CONTENTTYPE: generate_switch(":contenttype", 1, buf); break;
+    case B_PARAM:
+        generate_stringlist(":param", mime->params, buf);
+        break;
+    }
+}
+
 static int generate_test(bytecode_input_t *bc, int pos, int version,
                          unsigned indent, unsigned long long *requires,
                          struct buf *buf)
@@ -1134,9 +1195,11 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         generate_token("true", 0, buf);
         break;
 
+    case BC_EXISTS_PRE_MIME:
     case BC_EXISTS:
         generate_token("exists", 0, buf);
-        generate_stringlist(NULL, test.u.sl, buf);
+        generate_mime(&test, requires, buf);
+        generate_stringlist(NULL, test.u.ex.sl, buf);
         break;
 
     case BC_SIZE:
@@ -1145,8 +1208,10 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
                         test.u.sz.n, buf);
         break;
 
+    case BC_ADDRESS_PRE_MIME:
     case BC_ADDRESS:
         generate_token("address", 0, buf);
+        generate_mime(&test, requires, buf);
         generate_index(test.u.ae.comp.index, requires, buf);
         generate_comparator(&test.u.ae.comp, requires, buf);
         if (test.u.ae.addrpart != B_ALL) {
@@ -1167,8 +1232,10 @@ static int generate_test(bytecode_input_t *bc, int pos, int version,
         generate_stringlist(NULL, test.u.ae.pl, buf);
         break;
 
+    case BC_HEADER_PRE_MIME:
     case BC_HEADER:
         generate_token("header", 0, buf);
+        generate_mime(&test, requires, buf);
         generate_index(test.u.hhs.comp.index, requires, buf);
         generate_comparator(&test.u.hhs.comp, requires, buf);
         generate_stringlist(NULL, test.u.hhs.sl, buf);
@@ -1373,6 +1440,27 @@ static int generate_block(bytecode_input_t *bc, int pos, int end,
             pos = generate_block(bc, pos, cmd.u.jump,
                                  version, elsif, indent, requires, buf);
             continue;
+
+        case B_FOREVERYPART:
+            *requires |= SIEVE_CAPA_FOREVERYPART;
+            generate_token("foreverypart", indent, buf);
+            generate_string(":name", cmd.u.fep.name, buf);
+            buf_appendcstr(buf, " {\n");
+
+            pos = generate_block(bc, pos, cmd.u.fep.end,
+                                 version, 0, indent + 4, requires, buf);
+            generate_token("}\n", indent, buf);
+            continue;
+
+        case B_NEXTPART:
+            /* end of a loop body */
+            continue;
+
+        case B_BREAK:
+            *requires |= SIEVE_CAPA_FOREVERYPART;
+            generate_token("break", indent, buf);
+            generate_string(":name", cmd.u.brk.name, buf);
+            break;
 
         case B_STOP:
             generate_token("stop", indent, buf);

@@ -118,6 +118,12 @@ EXPORTED const strarray_t *sieve_listextensions(sieve_interp_t *i)
             buf_appendcstr(&buf, " body");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAP4FLAGS)
             buf_appendcstr(&buf, " imap4flags");
+        if (i->getmimeparts &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_FOREVERYPART))
+            buf_appendcstr(&buf, " foreverypart");
+        if (i->getmimeparts &&
+            (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_MIME))
+            buf_appendcstr(&buf, " mime");
         if (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_DATE)
             buf_appendcstr(&buf, " date");
         if ((config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IHAVE))
@@ -182,6 +188,7 @@ EXPORTED int sieve_interp_free(sieve_interp_t **interp)
     if (*interp) {
         free((*interp)->lastitem);
         strarray_free((*interp)->extensions);
+        arrayu64_free((*interp)->mime.depths);
         free(*interp);
         *interp = NULL;
     }
@@ -326,6 +333,16 @@ EXPORTED void sieve_register_environment(sieve_interp_t *interp,
 EXPORTED void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f)
 {
     interp->getbody = f;
+}
+
+EXPORTED int sieve_register_mime(sieve_interp_t *interp, const sieve_mime_t *m)
+{
+    if (!(m->getparts && m->getheader && m->parseheader)) return SIEVE_FAIL;
+
+    interp->getmimeparts = m->getparts;
+    interp->getmimeheader = m->getheader;
+    interp->parsemimeheader = m->parseheader;
+    return SIEVE_OK;
 }
 
 EXPORTED int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v)
@@ -663,6 +680,16 @@ unsigned long long extension_isactive(sieve_interp_t *interp, const char *str)
     case SIEVE_CAPA_SERVERMETA:
         if (!(interp->getmetadata &&
               (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_SERVERMETADATA))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_FOREVERYPART:
+        if (!(interp->getmimeparts &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_FOREVERYPART))) capa = 0;
+        break;
+
+    case SIEVE_CAPA_MIME:
+        if (!(interp->getmimeparts &&
+              (config_ext & IMAP_ENUM_SIEVE_EXTENSIONS_MIME))) capa = 0;
         break;
 
     case SIEVE_CAPA_VACATION_SEC:

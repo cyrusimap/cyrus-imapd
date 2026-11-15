@@ -19,6 +19,7 @@ typedef struct Test test_t;
 typedef struct Testlist testlist_t;
 typedef struct Comp comp_t;
 typedef struct Zone zone_t;
+typedef struct Mime mime_t;
 typedef struct CmdArg cmdarg_t;
 
 struct CmdArg {
@@ -55,23 +56,36 @@ struct Zone {
     char *offset;   /* time-zone offset string (+/-hhmm) */
 };
 
+struct Mime {
+    int mime;       /* :mime was given */
+    int anychild;
+    int option;     /* B_MIMEOPT_NONE, B_TYPE, ..., B_PARAM */
+    strarray_t *params;
+};
+
 struct Test {
     unsigned type;
     int ignore_err;
     union {
         test_t *t; /* not */
-        strarray_t *sl; /* exists, ihave, valid_ext_list */
+        strarray_t *sl; /* ihave, valid_ext_list */
         testlist_t *tl; /* anyof, allof (bytecode generation only) */
         struct { /* anyof, allof (bytecode parsing/eval only) */
             int ntests;   /* number of tests */
             int endtests; /* offset to end of tests */
         } aa;
+        struct { /* it's an exists test */
+            mime_t mime;
+            strarray_t *sl;
+        } ex;
         struct { /* it's a header or hasflag or string test */
+            mime_t mime;
             comp_t comp;
             strarray_t *sl;
             strarray_t *pl;
         } hhs;
         struct { /* it's an address or envelope test */
+            mime_t mime;
             comp_t comp;
             strarray_t *sl;
             strarray_t *pl;
@@ -231,6 +245,15 @@ struct Commandlist {
             char *reason_var;
         } cal;
         struct TargetMailbox ikt; /* it's an implicit keep target */
+        struct { /* it's a foreverypart loop */
+            char *name;
+            commandlist_t *block; /* bytecode generation only */
+            int end;  /* offset past the loop (bytecode parsing/eval only) */
+        } fep;
+        struct { /* it's a break */
+            char *name;
+            int loops; /* number of enclosing loops to terminate */
+        } brk;
     } u;
     struct Commandlist *next;
 
@@ -244,6 +267,12 @@ test_t *new_test(int type, sieve_script_t *parse_script);
 testlist_t *new_testlist(test_t *t, testlist_t *n);
 commandlist_t *new_command(int type, sieve_script_t *parse_script);
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n);
+
+/**
+ * Return the "mime" arguments of a header, address, or exists test,
+ * or NULL for any other type of test.
+ */
+mime_t *test_get_mime(test_t *t);
 
 void free_testlist(testlist_t *tl);
 void free_test(test_t *t);

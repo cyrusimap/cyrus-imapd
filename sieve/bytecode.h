@@ -109,8 +109,9 @@ typedef union
  * version 0x20 scripts implemented vnd.cyrus.implicit_keep_target
  * version 0x21 scripts implemented comparator-i;unicode-casemap (RFC 5051)
  * version 0x22 scripts implemented processcalendar per RFC 9671
+ * version 0x23 scripts implemented foreverypart and mime (RFC 5703)
 */
-#define BYTECODE_VERSION 0x22
+#define BYTECODE_VERSION 0x23
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -416,6 +417,26 @@ enum bytecode {
                                    <outcome-var: string>
                                    <reason-var: string>                        */
 
+    B_FOREVERYPART,             /* require "foreverypart"
+
+                                   <loop-end: int> <name: string>
+                                   <loop-body: command-list>
+                                   B_NEXTPART
+
+                                   loop-end is the offset of the command that
+                                   follows B_NEXTPART                          */
+
+    B_NEXTPART,                 /* require "foreverypart"
+
+                                   ends the body of the innermost loop         */
+
+    B_BREAK,                    /* require "foreverypart"
+
+                                   <loops: int> <name: string>
+
+                                   loops is the number of enclosing loops to
+                                   terminate                                   */
+
     /*****  insert new actions above this line  *****/
     B_ILLEGAL_VALUE             /* any value >= this code is illegal */
 };
@@ -427,7 +448,9 @@ enum bytecode_comps {
     BC_TRUE,
     BC_NOT,                     /* <subtest: test>                             */
 
-    BC_EXISTS,                  /* <header-names: string-list>                 */
+    BC_EXISTS_PRE_MIME,         /* legacy exists w/o support for :mime
+
+                                   <header-names: string-list>                 */
 
     BC_SIZE,                    /* <over/under: int> <size: int>               */
 
@@ -466,12 +489,16 @@ enum bytecode_comps {
                                    <COMPARATOR> <date-part: int>
                                    <patterns: string-list>                     */
 
-    BC_ADDRESS,                 /* <index: int>
+    BC_ADDRESS_PRE_MIME,        /* legacy address w/o support for :mime
+
+                                   <index: int>
                                    <COMPARATOR> <address-part: int>
                                    <header-names: string-list>
                                    <patterns: string-list>                     */
 
-    BC_HEADER,                  /* <index: int>
+    BC_HEADER_PRE_MIME,         /* legacy header w/o support for :mime
+
+                                   <index: int>
                                    <COMPARATOR> <header-names: string-list>
                                    <patterns: string-list>                     */
 
@@ -554,6 +581,21 @@ enum bytecode_comps {
 
                                    <zonetag: int> <tzoffset: string>
                                    <COMPARATOR> <date-part: int>
+                                   <patterns: string-list>                     */
+
+    BC_EXISTS,                  /* <mime-bitmask: int>
+                                   <header-names: string-list>                 */
+
+    BC_HEADER,                  /* <mime-bitmask: int> <mime-option: int>
+                                   <param-names: string-list>
+                                   <index: int>
+                                   <COMPARATOR> <header-names: string-list>
+                                   <patterns: string-list>                     */
+
+    BC_ADDRESS,                 /* <mime-bitmask: int>
+                                   <index: int>
+                                   <COMPARATOR> <address-part: int>
+                                   <header-names: string-list>
                                    <patterns: string-list>                     */
 
     /*****  insert new tests above this line  *****/
@@ -680,8 +722,20 @@ enum bytecode_tags {
     B_UNIQUEID,
 
     B_IDTYPE_PLACEHOLDER_1,
-    B_IDTYPE_PLACEHOLDER_2
+    B_IDTYPE_PLACEHOLDER_2,
+
+    /* MIME Options (85-90) */
+    B_MIMEOPT_NONE,     /* require mime */
+    B_TYPE,             /* require mime */
+    B_SUBTYPE,          /* require mime */
+    B_CONTENTTYPE,      /* require mime */
+    B_PARAM,            /* require mime */
+
+    B_MIMEOPT_PLACEHOLDER_1
 };
+
+/* deepest nesting of foreverypart loops */
+#define BC_MAX_LOOPS 8
 
 #define INC_LOCATION_MASK 0x3F
 #define INC_ONCE_MASK     0x40
@@ -713,6 +767,12 @@ enum bytecode_variables_bitflags {
 #define BFV_MOD20_MASK (BFV_QUOTEWILDCARD | BFV_QUOTEREGEX)
 #define BFV_MOD15_MASK (BFV_ENCODEURL)
 #define BFV_MOD10_MASK (BFV_LENGTH)
+
+/* :mime and :anychild (require "mime") */
+enum bytecode_mime_bitflags {
+    BFM_MIME            = 1<<0,
+    BFM_ANYCHILD        = 1<<1
+};
 
 enum bytecode_required_extensions {
     BFE_VARIABLES       = 1<<0

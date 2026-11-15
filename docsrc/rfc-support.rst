@@ -525,6 +525,16 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     Extended MKCOL for Web Distributed Authoring and Versioning (WebDAV)
 
+:rfc:`5703`
+
+    Sieve Email Filtering: MIME Part Tests, Iteration, Extraction,
+    Replacement, and Enclosure
+
+    .. NOTE::
+
+        The foreverypart and mime extensions are implemented.  The
+        extracttext, replace, and enclose extensions are not implemented.
+
 :rfc:`5804`
 
     A protocol for Remotely Managing Sieve Scripts
@@ -1076,11 +1086,6 @@ RFC Wishlist
 :rfc:`5466`
 
     IMAP4 Extension for Named Searches (Filters)
-
-:rfc:`5703`
-
-    Sieve Email Filtering: MIME Part Tests, Iteration, Extraction,
-    Replacement, and Enclosure
 
 :rfc:`5842`
 

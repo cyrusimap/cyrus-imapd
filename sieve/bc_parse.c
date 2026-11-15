@@ -269,6 +269,16 @@ static const struct args_t cmd_args_table[] = {
         offsetof(struct Commandlist, u.cal.outcome_var),
         offsetof(struct Commandlist, u.cal.reason_var)
       } },
+    { B_FOREVERYPART,            "is",                                   /* 49 */
+      { offsetof(struct Commandlist, u.fep.end),
+        offsetof(struct Commandlist, u.fep.name)
+        /* Loop body is parsed by caller */
+      } },
+    { B_NEXTPART,                "", { 0 } },                            /* 50 */
+    { B_BREAK,                   "is",                                   /* 51 */
+      { offsetof(struct Commandlist, u.brk.loops),
+        offsetof(struct Commandlist, u.brk.name)
+      } },
 };
 // clang-format: on
 
@@ -277,8 +287,8 @@ static const struct args_t test_args_table[] = {
     { BC_FALSE,                  "", { 0 } },                            /*  0 */
     { BC_TRUE,                   "", { 0 } },                            /*  1 */
     { BC_NOT,                    "", { 0 } },                            /*  2 */
-    { BC_EXISTS,                 "S",                                    /*  3 */
-      { offsetof(struct Test, u.sl)
+    { BC_EXISTS_PRE_MIME,        "S",                                    /*  3 */
+      { offsetof(struct Test, u.ex.sl)
       } },
     { BC_SIZE,                   "ii",                                   /*  4 */
       { offsetof(struct Test, u.sz.t),
@@ -324,14 +334,14 @@ static const struct args_t test_args_table[] = {
         offsetof(struct Test, u.dt.date_part),
         offsetof(struct Test, u.dt.kl)
       } },
-    { BC_ADDRESS,                "iCiSS",                                /* 13 */
+    { BC_ADDRESS_PRE_MIME,       "iCiSS",                                /* 13 */
       { offsetof(struct Test, u.ae.comp.index),
         offsetof(struct Test, u.ae.comp),
         offsetof(struct Test, u.ae.addrpart),
         offsetof(struct Test, u.ae.sl),
         offsetof(struct Test, u.ae.pl)
       } },
-    { BC_HEADER,                 "iCSS",                                 /* 14 */
+    { BC_HEADER_PRE_MIME,        "iCSS",                                 /* 14 */
       { offsetof(struct Test, u.hhs.comp.index),
         offsetof(struct Test, u.hhs.comp),
         offsetof(struct Test, u.hhs.sl),
@@ -418,6 +428,30 @@ static const struct args_t test_args_table[] = {
         offsetof(struct Test, u.dt.comp),
         offsetof(struct Test, u.dt.date_part),
         offsetof(struct Test, u.dt.kl)
+      } },
+    { BC_EXISTS,                 "B2S",                                  /* 33 */
+      { offsetof(struct Test, u.ex.mime.mime),     BFM_MIME,
+        offsetof(struct Test, u.ex.mime.anychild), BFM_ANYCHILD,
+        offsetof(struct Test, u.ex.sl)
+      } },
+    { BC_HEADER,                 "B2iSiCSS",                             /* 34 */
+      { offsetof(struct Test, u.hhs.mime.mime),     BFM_MIME,
+        offsetof(struct Test, u.hhs.mime.anychild), BFM_ANYCHILD,
+        offsetof(struct Test, u.hhs.mime.option),
+        offsetof(struct Test, u.hhs.mime.params),
+        offsetof(struct Test, u.hhs.comp.index),
+        offsetof(struct Test, u.hhs.comp),
+        offsetof(struct Test, u.hhs.sl),
+        offsetof(struct Test, u.hhs.pl)
+      } },
+    { BC_ADDRESS,                "B2iCiSS",                              /* 35 */
+      { offsetof(struct Test, u.ae.mime.mime),     BFM_MIME,
+        offsetof(struct Test, u.ae.mime.anychild), BFM_ANYCHILD,
+        offsetof(struct Test, u.ae.comp.index),
+        offsetof(struct Test, u.ae.comp),
+        offsetof(struct Test, u.ae.addrpart),
+        offsetof(struct Test, u.ae.sl),
+        offsetof(struct Test, u.ae.pl)
       } },
 };
 // clang-format: on
@@ -700,8 +734,9 @@ EXPORTED int bc_test_parse(bytecode_input_t *bc, int pos, int version,
             case B_REGEX:
             case B_COUNT:
             case B_VALUE:
-                if (opcode == BC_ADDRESS_PRE_INDEX) opcode = BC_ADDRESS;
-                else opcode = BC_HEADER;
+                if (opcode == BC_ADDRESS_PRE_INDEX)
+                    opcode = BC_ADDRESS_PRE_MIME;
+                else opcode = BC_HEADER_PRE_MIME;
 
                 fmt = cmd_args_table[opcode].fmt;
                 offsets = cmd_args_table[opcode].offsets;

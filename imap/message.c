@@ -10,6 +10,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
@@ -680,6 +681,140 @@ EXPORTED void message_fetch_part(struct message_content *msg,
     *parts = NULL;
     message_find_part(msg->body, "1", content_types,
                       buf_base(&msg->map), buf_len(&msg->map), parts, &n);
+}
+
+/* Walk the MIME parts of body depth-first, appending each part's nesting
+   depth to depths (if not NULL).  Returns the part numbered stop, if any. */
+static const struct body *mimepart_walk(const struct body *body,
+                                        unsigned stop, arrayu64_t *depths)
+{
+    struct {
+        const struct body *body;
+        unsigned depth;
+    } *stack = xmalloc(sizeof(*stack));
+    size_t nstack = 0, alloc = 1;
+    const struct body *found = NULL;
+
+    /* an explicit stack, since the nesting is up to the message */
+    stack[nstack].body = body;
+    stack[nstack++].depth = 0;
+
+    for (unsigned part = 0; nstack; part++) {
+        const struct body *b = stack[--nstack].body;
+        unsigned depth = stack[nstack].depth;
+        const struct body *children = NULL;
+        int nchildren = 0;
+
+        if (part == stop) {
+            found = b;
+            break;
+        }
+
+        if (depths) arrayu64_append(depths, depth);
+
+        if (!strcmpsafe(b->type, "MULTIPART")) {
+            nchildren = b->numparts;
+            children = b->subpart;
+        }
+        else if (body_is_rfc822(b) && b->subpart) {
+            nchildren = 1;
+            children = b->subpart;
+        }
+
+        if (nstack + nchildren > alloc) {
+            alloc = nstack + nchildren;
+            stack = xrealloc(stack, alloc * sizeof(*stack));
+        }
+
+        /* push in reverse, so that the first child is visited first */
+        for (int i = nchildren - 1; i >= 0; i--) {
+            stack[nstack].body = &children[i];
+            stack[nstack++].depth = depth + 1;
+        }
+    }
+
+    free(stack);
+
+    return found;
+}
+
+EXPORTED void message_mimepart_depths(const struct body *body,
+                                      arrayu64_t *depths)
+{
+    mimepart_walk(body, UINT_MAX, depths);
+}
+
+struct mimeheader_rock {
+    const char *name;
+    strarray_t *values;
+};
+
+static int mimeheader_cb(const char *key, const char *val, void *rock)
+{
+    struct mimeheader_rock *mrock = rock;
+
+    if (!strcasecmp(key, mrock->name)) strarray_append(mrock->values, val);
+
+    return 0;
+}
+
+EXPORTED int message_mimepart_header(const struct message_content *msg,
+                                     unsigned part, const char *name,
+                                     strarray_t *values)
+{
+    const struct body *body =
+        msg->body ? mimepart_walk(msg->body, part, NULL) : NULL;
+    struct mimeheader_rock rock = { name, values };
+    int before = strarray_size(values);
+
+    if (!body ||
+        body->header_offset + body->header_size > buf_len(&msg->map)) {
+        return 0;
+    }
+
+    message_foreach_header(buf_base(&msg->map) + body->header_offset,
+                           body->header_size, &mimeheader_cb, &rock);
+
+    return strarray_size(values) - before;
+}
+
+EXPORTED int message_parse_mimeheader(const char *name, const char *value,
+                                      char **type, char **subtype,
+                                      strarray_t *params)
+{
+    struct param *plist = NULL;
+
+    *type = *subtype = NULL;
+
+    if (!strcasecmp(name, "Content-Type"))
+        message_parse_type(value, type, subtype, &plist);
+    else
+        message_parse_disposition(value, type, &plist);
+
+    if (*type) lcase(*type);
+    if (*subtype) lcase(*subtype);
+
+    for (struct param *p = plist; p; p = p->next) {
+        size_t len = strlen(p->attribute);
+        char *val;
+
+        if (len && p->attribute[len-1] == '*') {
+            /* RFC 2231 extended value */
+            p->attribute[--len] = '\0';
+            val = charset_parse_mimexvalue(p->value, NULL);
+            if (!val) continue;
+        }
+        else {
+            val = charset_parse_mimeheader(p->value, CHARSET_MIME_UTF8);
+        }
+
+        strarray_appendm(params, lcase(xstrdup(p->attribute)));
+        strarray_appendm(params, val);
+    }
+
+    param_free(&plist);
+
+    return *type ? 0 : -1;
 }
 
 /*

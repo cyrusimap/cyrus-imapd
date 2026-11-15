@@ -275,6 +275,42 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
+static int getmimeparts(void *mc, arrayu64_t *depths)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    if (!m->content.body && message_parse_file_buf(m->data, &m->content.map,
+                                    &m->content.body, NULL)) return SIEVE_FAIL;
+
+    message_mimepart_depths(m->content.body, depths);
+
+    return SIEVE_OK;
+}
+
+static int getmimeheader(void *mc, unsigned part, const char *name,
+                         strarray_t *values)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    if (!part) {
+        const char **vals;
+
+        if (getheader(mc, name, &vals) != SIEVE_OK) return SIEVE_FAIL;
+        for (; *vals; vals++) strarray_append(values, *vals);
+
+        return SIEVE_OK;
+    }
+
+    if (!m->content.body && message_parse_file_buf(m->data, &m->content.map,
+                                    &m->content.body, NULL)) return SIEVE_FAIL;
+
+    return message_mimepart_header(&m->content, part, name, values) ?
+        SIEVE_OK : SIEVE_FAIL;
+}
+
+static const sieve_mime_t mime = { &getmimeparts, &getmimeheader,
+                                   &message_parse_mimeheader };
+
 static int getinclude(void *sc __attribute__((unused)),
                       const char *script,
                       int isglobal __attribute__((unused)),
@@ -1009,6 +1045,7 @@ int main(int argc, char *argv[])
     sieve_register_envelope(i, getenvelope);
     sieve_register_environment(i, getenvironment);
     sieve_register_body(i, getbody);
+    sieve_register_mime(i, &mime);
     sieve_register_include(i, getinclude);
     sieve_register_logger(i, sieve_log);
 

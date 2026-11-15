@@ -52,6 +52,8 @@ extern void addr_delete_buffer(YY_BUFFER_STATE);
 extern int sievelineno;
 
 void sieveerror_c(sieve_script_t*, int code, ...);
+void sieveerror_f(sieve_script_t*, const char *fmt, ...)
+    __attribute__((format(printf, 2, 3)));
 
 static int check_reqs(sieve_script_t*, strarray_t *sl);
 static int chk_match_vars(sieve_script_t*, char *s);
@@ -83,11 +85,15 @@ static commandlist_t *build_snooze(sieve_script_t *sscript,
 static commandlist_t *build_cal(sieve_script_t *sscript, commandlist_t *t);
 static commandlist_t *build_ikeep_target(sieve_script_t*,
                                          commandlist_t *c, char *folder);
+static commandlist_t *build_foreverypart(sieve_script_t*,
+                                         commandlist_t *c, commandlist_t *b);
+static commandlist_t *build_break(sieve_script_t*, commandlist_t *c);
 
 /* construct/canonicalize test commands */
 static test_t *build_anyof(sieve_script_t*, testlist_t *tl);
 static test_t *build_allof(sieve_script_t*, testlist_t *tl);
 static test_t *build_not(sieve_script_t*, test_t *t);
+static test_t *build_exists(sieve_script_t*, test_t *t, strarray_t *sl);
 static test_t *build_address(sieve_script_t*, test_t *t,
                              strarray_t *sl, strarray_t *pl);
 static test_t *build_envelope(sieve_script_t*, test_t *t,
@@ -129,7 +135,7 @@ extern void sieverestart(FILE *f);
 
 %name-prefix "sieve"
 %defines
-%destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags ntags itags sntags caltags ikttags
+%destructor  { free_tree($$);     } commands command action control thenelse elsif block ktags ftags rtags stags vtags flagtags ahtags dhtags ntags itags sntags caltags ikttags fptags brtags
 %destructor  { free_testlist($$); } testlist tests
 %destructor  { free_test($$);     } test
 %destructor  { strarray_free($$); } optstringlist stringlist strings string1 recipients
@@ -258,6 +264,16 @@ extern void sieverestart(FILE *f);
 /* servermetadata - RFC 5490 */
 %token <nval> SERVERMETADATA
 %token SERVERMETADATAEXISTS
+
+/* foreverypart - RFC 5703 */
+%token FOREVERYPART BREAK NAME
+%type <cl> fptags brtags
+
+/* mime - RFC 5703 */
+%token ANYCHILD PARAM
+%token <nval> TYPE SUBTYPE CONTENTTYPE
+%type <test> extags
+%type <nval> mimeopttag
 
 /* redirect-deliverby - RFC 6009 */
 %token BYTIMEREL BYTIMEABS BYMODE BYTRACE
@@ -395,6 +411,55 @@ control:  IF thenelse            { $$ = $2; }
         | INCLUDE itags string ';'
                                  { $$ = build_include(sscript, $2, $3); }
         | RETURN ';'             { $$ = new_command(B_RETURN, sscript); }
+        | FOREVERYPART fptags    {
+                                     if (strarray_size(&sscript->loops) ==
+                                         BC_MAX_LOOPS) {
+                                         sieveerror_f(sscript,
+                                                      "foreverypart loops "
+                                                      "nested more than %d "
+                                                      "deep", BC_MAX_LOOPS);
+                                     }
+                                     strarray_append(&sscript->loops,
+                                                     $2->u.fep.name ?
+                                                     $2->u.fep.name : "");
+                                 }
+          block                  {
+                                     free(strarray_pop(&sscript->loops));
+                                     $$ = build_foreverypart(sscript, $2, $4);
+                                 }
+        | BREAK brtags ';'       { $$ = build_break(sscript, $2); }
+        ;
+
+
+/* FOREVERYPART tagged arguments */
+fptags: /* empty */              { $$ = new_command(B_FOREVERYPART, sscript); }
+        | fptags NAME string     {
+                                     $$ = $1;
+                                     if ($$->u.fep.name) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":name");
+                                         free($$->u.fep.name);
+                                     }
+
+                                     $$->u.fep.name = $3;
+                                 }
+        ;
+
+
+/* BREAK tagged arguments */
+brtags: /* empty */              { $$ = new_command(B_BREAK, sscript); }
+        | brtags NAME string     {
+                                     $$ = $1;
+                                     if ($$->u.brk.name) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":name");
+                                         free($$->u.brk.name);
+                                     }
+
+                                     $$->u.brk.name = $3;
+                                 }
         ;
 
 
@@ -1426,12 +1491,8 @@ test:     ANYOF testlist         { $$ = build_anyof(sscript, $2); }
         | NOT test               { $$ = build_not(sscript, $2);   }
         | SFALSE                 { $$ = new_test(BC_FALSE, sscript); }
         | STRUE                  { $$ = new_test(BC_TRUE, sscript);  }
-        | EXISTS stringlist      {
-                                     $$ = new_test(BC_EXISTS, sscript);
-                                     $$->u.sl = $2;
-                                     $$->nargs = bc_precompile($$->args, "S",
-                                                               $$->u.sl);
-                                 }
+        | EXISTS extags stringlist
+                                 { $$ = build_exists(sscript, $2, $3); }
         | SIZE sizetag NUMBER    {
                                      $$ = new_test(BC_SIZE, sscript);
                                      $$->u.sz.t = $2;
@@ -1570,6 +1631,99 @@ htags: /* empty */               {
         | htags listmatch
         | htags comparator
         | htags indexext
+        | htags mime
+        | htags mimeopt
+        ;
+
+
+/* EXISTS tagged arguments */
+extags: /* empty */              { $$ = new_test(BC_EXISTS, sscript); }
+        | extags mime
+        ;
+
+
+/* :mime and :anychild */
+mime: MIME                       {
+                                     /* $0 refers to a test_t* */
+                                     mime_t *mime = test_get_mime($<test>0);
+
+                                     if (mime->mime) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":mime");
+                                     }
+                                     else if (!supported(SIEVE_CAPA_MIME)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mime");
+                                     }
+
+                                     mime->mime = 1;
+                                 }
+        | ANYCHILD               {
+                                     /* $0 refers to a test_t* */
+                                     mime_t *mime = test_get_mime($<test>0);
+
+                                     if (mime->anychild) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_DUPLICATE_TAG,
+                                                      ":anychild");
+                                     }
+                                     else if (!supported(SIEVE_CAPA_MIME)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mime");
+                                     }
+
+                                     mime->anychild = 1;
+                                 }
+        ;
+
+
+/* MIMEOPTS */
+mimeopt: mimeopttag              {
+                                     /* $0 refers to a test_t* (HEADER) */
+                                     mime_t *mime = &$<test>0->u.hhs.mime;
+
+                                     if (mime->option != B_MIMEOPT_NONE) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MULTIPLE_TAGS,
+                                                      "mime option");
+                                     }
+                                     else if (!supported(SIEVE_CAPA_MIME)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mime");
+                                     }
+
+                                     mime->option = $1;
+                                 }
+        | PARAM stringlist       {
+                                     /* $0 refers to a test_t* (HEADER) */
+                                     mime_t *mime = &$<test>0->u.hhs.mime;
+
+                                     if (mime->option != B_MIMEOPT_NONE) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MULTIPLE_TAGS,
+                                                      "mime option");
+                                     }
+                                     else if (!supported(SIEVE_CAPA_MIME)) {
+                                         sieveerror_c(sscript,
+                                                      SIEVE_MISSING_REQUIRE,
+                                                      "mime");
+                                     }
+
+                                     strarray_free(mime->params);
+                                     mime->option = B_PARAM;
+                                     mime->params = $2;
+                                 }
+        ;
+
+
+/* MIMEOPTS tags */
+mimeopttag: TYPE                 { $$ = B_TYPE;        }
+        | SUBTYPE                { $$ = B_SUBTYPE;     }
+        | CONTENTTYPE            { $$ = B_CONTENTTYPE; }
         ;
 
 
@@ -1753,6 +1907,7 @@ atags: /* empty */               {
         | atags listmatch
         | atags comparator
         | atags indexext
+        | atags mime
         ;
 
 
@@ -2902,6 +3057,49 @@ static commandlist_t *build_include(sieve_script_t *sscript,
     return c;
 }
 
+static commandlist_t *build_foreverypart(sieve_script_t *sscript,
+                                         commandlist_t *c, commandlist_t *b)
+{
+    assert(c && c->type == B_FOREVERYPART);
+
+    if (c->u.fep.name) verify_utf8(sscript, c->u.fep.name);
+
+    c->u.fep.block = b;
+
+    return c;
+}
+
+static commandlist_t *build_break(sieve_script_t *sscript, commandlist_t *c)
+{
+    assert(c && c->type == B_BREAK);
+
+    const strarray_t *loops = &sscript->loops;
+    const char *name = c->u.brk.name;
+    int i = strarray_size(loops) - 1;
+
+    if (name) {
+        /* a nested loop with the same name hides an outer one */
+        while (i >= 0 && strcmp(strarray_nth(loops, i), name)) i--;
+    }
+
+    if (i < 0) {
+        if (name) {
+            sieveerror_f(sscript,
+                         "break: no enclosing foreverypart loop named '%s'",
+                         name);
+        }
+        else {
+            sieveerror_f(sscript, "break: not inside a foreverypart loop");
+        }
+    }
+
+    c->u.brk.loops = strarray_size(loops) - i;
+
+    c->nargs = bc_precompile(c->args, "is", c->u.brk.loops, c->u.brk.name);
+
+    return c;
+}
+
 static commandlist_t *build_log(sieve_script_t *sscript, char *text)
 {
     commandlist_t *c;
@@ -3052,6 +3250,32 @@ static test_t *build_not(sieve_script_t *sscript, test_t *t)
     return n;
 }
 
+/* Return the bytecode bitmask for :mime and :anychild */
+static int mime_bitmask(sieve_script_t *sscript, const mime_t *mime)
+{
+    /* :anychild and MIMEOPTS are only allowed with :mime */
+    if (!mime->mime &&
+        (mime->anychild || mime->option != B_MIMEOPT_NONE)) {
+        sieveerror_c(sscript, SIEVE_MISSING_TAG, ":mime");
+    }
+
+    return (mime->mime ? BFM_MIME : 0) |
+           (mime->anychild ? BFM_ANYCHILD : 0);
+}
+
+static test_t *build_exists(sieve_script_t *sscript,
+                            test_t *t, strarray_t *sl)
+{
+    assert(t && t->type == BC_EXISTS);
+
+    t->u.ex.sl = sl;
+    t->nargs = bc_precompile(t->args, "iS",
+                             mime_bitmask(sscript, &t->u.ex.mime),
+                             t->u.ex.sl);
+
+    return t;
+}
+
 static test_t *build_hhs(sieve_script_t *sscript, test_t *t,
                          strarray_t *sl, strarray_t *pl)
 {
@@ -3081,7 +3305,11 @@ static test_t *build_header(sieve_script_t *sscript, test_t *t,
 
     verify_stringlist(sscript, sl, verify_header);
 
-    t->nargs = bc_precompile(t->args, "i", t->u.hhs.comp.index);
+    t->nargs = bc_precompile(t->args, "iiSi",
+                             mime_bitmask(sscript, &t->u.hhs.mime),
+                             t->u.hhs.mime.option,
+                             t->u.hhs.mime.params,
+                             t->u.hhs.comp.index);
 
     return build_hhs(sscript, t, sl, pl);
 }
@@ -3141,9 +3369,13 @@ static test_t *build_address(sieve_script_t *sscript, test_t *t,
         sieveerror_c(sscript, SIEVE_MISSING_TAG, ":index");
     }
 
-    verify_stringlist(sscript, sl, verify_addrheader);
+    /* MIME header fields need not be RFC 5322 address fields */
+    verify_stringlist(sscript, sl,
+                      t->u.ae.mime.mime ? verify_header : verify_addrheader);
 
-    t->nargs = bc_precompile(t->args, "i", t->u.ae.comp.index);
+    t->nargs = bc_precompile(t->args, "ii",
+                             mime_bitmask(sscript, &t->u.ae.mime),
+                             t->u.ae.comp.index);
 
     return build_ae(sscript, t, sl, pl);
 }

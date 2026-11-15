@@ -1,0 +1,91 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(decode);
+
+sub test_foreverypart_nested_break ($self)
+{
+    xlog $self, "Install a script that walks the MIME parts";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["foreverypart", "mime", "variables", "editheader"];
+
+foreverypart {
+    if header :mime :contenttype :matches "Content-Type" "*" {
+        set "all" "${all}${1},";
+    }
+}
+addheader "X-All" "${all}";
+
+foreverypart :name "outer" {
+    set "outer" "${outer}x";
+    if header :mime :subtype "Content-Type" "alternative" {
+        foreverypart {
+            if header :mime :subtype "Content-Type" "html" {
+                set "inner" "${inner}html";
+                break :name "outer";
+            }
+            set "inner" "${inner}plain,";
+        }
+    }
+}
+addheader "X-Outer" "${outer}";
+addheader "X-Inner" "${inner}";
+EOF
+    );
+
+    my $raw = <<'EOF';
+From: Some Person <some@example.com>
+To: Other Person <other@example.com>
+Subject: parts
+Message-ID: <parts@example.com>
+Date: Fri, 13 Nov 2026 12:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain
+
+one
+--b1
+Content-Type: multipart/alternative; boundary="b2"
+
+--b2
+Content-Type: text/plain
+
+two
+--b2
+Content-Type: text/html
+
+<p>two</p>
+--b2--
+
+--b1
+Content-Type: message/rfc822
+
+From: Third Person <third@example.com>
+Subject: inner
+Content-Type: application/pdf
+Content-Transfer-Encoding: base64
+
+JVBERi0=
+--b1--
+EOF
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $raw));
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    my $res = $imaptalk->fetch(1,
+        '(BODY.PEEK[HEADER.FIELDS (X-ALL X-OUTER X-INNER)])');
+
+    # addheader encodes long values as RFC 2047 encoded words
+    my %headers = map {
+        $_ => [ map { decode('MIME-Header', $_) } $res->{1}{headers}{$_}->@* ]
+    } keys $res->{1}{headers}->%*;
+
+    # depth first, starting with the message itself
+    $self->assert_cmp_deeply({
+        'x-all' => [ 'multipart/mixed,text/plain,multipart/alternative,'
+                   . 'text/plain,text/html,message/rfc822,application/pdf,' ],
+        'x-outer' => [ 'xxx' ],
+        'x-inner' => [ 'plain,html' ],
+    }, \%headers);
+}

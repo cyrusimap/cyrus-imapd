@@ -1,0 +1,78 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mime_anychild_reaction ($self)
+{
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.reactions")
+        or die "Cannot create INBOX.reactions: $@";
+
+    xlog $self, "File RFC 9078 reactions by their Content-Disposition";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["mime", "fileinto"];
+
+if header :mime :anychild :type "Content-Disposition" "reaction" {
+    fileinto "INBOX.reactions";
+}
+EOF
+    );
+
+    # The reaction is a body part; the top-level header has none
+    my $reaction = <<'EOF';
+From: Some Person <some@example.com>
+To: Other Person <other@example.com>
+Subject: Re: Lunch?
+Message-ID: <reaction1@example.com>
+In-Reply-To: <lunch@example.com>
+Date: Fri, 13 Nov 2026 12:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: reaction
+
+=F0=9F=91=8D
+--b1
+Content-Type: text/html; charset=utf-8
+
+<p>Sounds good</p>
+--b1--
+EOF
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $reaction));
+
+    # A disposition that merely starts with "reaction" must not match
+    my $other = <<'EOF';
+From: Some Person <some@example.com>
+To: Other Person <other@example.com>
+Subject: Re: Lunch?
+Message-ID: <reply1@example.com>
+Date: Fri, 13 Nov 2026 12:05:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b2"
+
+--b2
+Content-Type: text/plain; charset=utf-8
+
+See attached.
+--b2
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: attachment; filename="reactions.txt"
+
+Not a reaction.
+--b2--
+EOF
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $other));
+
+    $imaptalk->select("INBOX.reactions");
+    my $res = $imaptalk->fetch('1:*', '(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])');
+    $self->assert_num_equals(1, scalar keys %$res);
+    $self->assert_matches(qr/<reaction1\@example\.com>/,
+                          $res->{1}{headers}{'message-id'}[0]);
+
+    $imaptalk->select("INBOX");
+    $res = $imaptalk->fetch('1:*', '(BODY.PEEK[HEADER.FIELDS (MESSAGE-ID)])');
+    $self->assert_num_equals(1, scalar keys %$res);
+    $self->assert_matches(qr/<reply1\@example\.com>/,
+                          $res->{1}{headers}{'message-id'}[0]);
+}

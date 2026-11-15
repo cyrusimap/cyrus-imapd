@@ -438,6 +438,310 @@ static int parse_tzoffset(const char *s, int *offset)
     return 0;
 }
 
+/*
+ * MIME parts - "foreverypart" and "mime" (RFC 5703)
+ */
+
+static const arrayu64_t *mime_depths(sieve_interp_t *interp, void *m)
+{
+    if (!interp->mime.depths) {
+        interp->mime.depths = arrayu64_new();
+        if (interp->getmimeparts(m, interp->mime.depths) != SIEVE_OK) {
+            arrayu64_truncate(interp->mime.depths, 0);
+        }
+    }
+
+    return interp->mime.depths;
+}
+
+/* Return the part number that follows the last descendant of 'part' */
+static unsigned mime_subtree_end(sieve_interp_t *interp, void *m,
+                                 unsigned part)
+{
+    const arrayu64_t *depths = mime_depths(interp, m);
+    size_t nparts = arrayu64_size(depths);
+    unsigned end = part + 1;
+
+    if (part >= nparts) return end;
+
+    uint64_t depth = arrayu64_nth(depths, part);
+    while (end < nparts && arrayu64_nth(depths, end) > depth) end++;
+
+    return end;
+}
+
+static void mime_reset(sieve_interp_t *interp)
+{
+    arrayu64_free(interp->mime.depths);
+    interp->mime.depths = NULL;
+    interp->mime.part = 0;
+}
+
+/* Convert an :index argument into the range [*first, *last) of count values */
+static void index_range(int index, int count, int *first, int *last)
+{
+    if (!index) {
+        *first = 0;
+        *last = count;
+        return;
+    }
+
+    *first = index > 0 ? index - 1 : count + index;
+    if (*first < 0 || *first >= count) *first = *last = 0;
+    else *last = *first + 1;
+}
+
+static void address_values(const char *value, int apart, strarray_t *hays)
+{
+    struct address_itr ai;
+    const struct address *a;
+
+    address_itr_init(&ai, value, 0);
+
+    while ((a = address_itr_next(&ai))) {
+        char *addr = NULL;
+
+        switch (apart) {
+        case B_ALL:
+            addr = address_get_all(a, /*canon_domain*/0);
+            break;
+        case B_LOCALPART:
+            addr = address_get_localpart(a);
+            break;
+        case B_DOMAIN:
+            addr = address_get_domain(a, /*canon_domain*/0);
+            break;
+        case B_USER:
+            addr = address_get_user(a);
+            break;
+        case B_DETAIL:
+            addr = address_get_detail(a);
+            break;
+        }
+
+        strarray_appendm(hays, addr ? addr : xstrdup(""));
+    }
+
+    address_itr_fini(&ai);
+}
+
+/* Append the strings that a MIMEOPT selects from a header value to hays.
+   Returns whether the value parsed. */
+static int mimeopt_values(sieve_interp_t *interp, int option,
+                          const strarray_t *pnames,
+                          const char *name, const char *value,
+                          strarray_t *hays)
+{
+    char *type = NULL, *subtype = NULL;
+    strarray_t params = STRARRAY_INITIALIZER;
+    int is_ctype = !strcasecmp(name, "Content-Type");
+    int is_cdisp = !strcasecmp(name, "Content-Disposition");
+    int parsed = interp->parsemimeheader(name, value, &type, &subtype,
+                                         &params) == SIEVE_OK;
+
+    /* RFC 5703, 4.1: other header fields test as a blank string */
+    if (!parsed || !(is_ctype || is_cdisp)) {
+        free(type);
+        free(subtype);
+        type = subtype = NULL;
+    }
+
+    switch (option) {
+    case B_TYPE:
+        strarray_append(hays, type ? type : "");
+        break;
+
+    case B_SUBTYPE:
+        strarray_append(hays, is_ctype && subtype ? subtype : "");
+        break;
+
+    case B_CONTENTTYPE:
+        if (is_ctype && type && subtype)
+            strarray_appendm(hays, strconcat(type, "/", subtype, NULL));
+        else
+            strarray_append(hays, is_cdisp && type ? type : "");
+        break;
+
+    case B_PARAM:
+        for (int i = 0; i + 1 < strarray_size(&params); i += 2) {
+            if (strarray_contains_case(pnames, strarray_nth(&params, i))) {
+                strarray_append(hays, strarray_nth(&params, i + 1));
+            }
+        }
+        break;
+    }
+
+    free(type);
+    free(subtype);
+    strarray_fini(&params);
+
+    return parsed;
+}
+
+struct mime_test {
+    const test_t *test;
+    const mime_t *mime;
+    const comp_t *comp;
+    strarray_t names;       /* header names, variables expanded */
+    strarray_t pnames;      /* :param names, variables expanded */
+    dynarray_t *needles;
+    comparator_t *cmp;
+    void *comprock;
+    strarray_t *match_vars;
+};
+
+/* Evaluate a header, address or exists test with :mime against one part */
+static int eval_mime_part(sieve_interp_t *interp, void *m,
+                          struct mime_test *mt, unsigned part)
+{
+    const test_t *test = mt->test;
+    strarray_t values = STRARRAY_INITIALIZER;
+    strarray_t hays = STRARRAY_INITIALIZER;
+    unsigned count = 0;
+    int res = 0;
+
+    if (test->type == BC_EXISTS) {
+        /* every named field must exist in this part */
+        res = 1;
+        for (int x = 0; x < strarray_size(&mt->names) && res; x++) {
+            strarray_truncate(&values, 0);
+            res = interp->getmimeheader(m, part, strarray_nth(&mt->names, x),
+                                        &values) == SIEVE_OK;
+        }
+        goto done;
+    }
+
+    for (int x = 0; x < strarray_size(&mt->names) && !res; x++) {
+        const char *name = strarray_nth(&mt->names, x);
+        int first, last;
+
+        strarray_truncate(&values, 0);
+        if (interp->getmimeheader(m, part, name, &values) != SIEVE_OK) continue;
+
+        index_range(mt->comp->index, strarray_size(&values), &first, &last);
+
+        for (int y = first; y < last && !res; y++) {
+            const char *value = strarray_nth(&values, y);
+            int n;
+
+            strarray_truncate(&hays, 0);
+
+            if (test->type == BC_ADDRESS) {
+                address_values(value, test->u.ae.addrpart, &hays);
+                n = strarray_size(&hays);
+            }
+            else if (mt->mime->option == B_MIMEOPT_NONE) {
+                /* Per RFC 5228, Section 5.7,
+                   leading and trailing whitespace are ignored */
+                strarray_appendm(&hays, charset_parse_mimeheader(value,
+                                    CHARSET_MIME_UTF8 | CHARSET_TRIMWS));
+                n = 1;
+            }
+            else {
+                int parsed = mimeopt_values(interp, mt->mime->option,
+                                            &mt->pnames, name, value, &hays);
+
+                /* RFC 5703, 4.1: :count counts the headers that parsed,
+                   or with :param, the parameters found */
+                n = mt->mime->option == B_PARAM ?
+                    strarray_size(&hays) : parsed;
+            }
+
+            if (mt->comp->match == B_COUNT) {
+                count += n;
+                continue;
+            }
+
+            for (int z = 0; z < strarray_size(&hays) && !res; z++) {
+                res = do_comparisons(mt->needles, strarray_nth(&hays, z),
+                                     mt->cmp, mt->comprock, mt->match_vars);
+            }
+        }
+    }
+
+    if (res >= 0 && mt->comp->match == B_COUNT) {
+        char scount[20];
+
+        snprintf(scount, sizeof(scount), "%u", count);
+        res = do_comparisons(mt->needles, scount,
+                             mt->cmp, mt->comprock, mt->match_vars);
+    }
+
+  done:
+    strarray_fini(&values);
+    strarray_fini(&hays);
+
+    return res;
+}
+
+/* Evaluate a header, address or exists test with :mime */
+static int eval_mime_test(sieve_interp_t *interp, void *m, test_t *test,
+                          variable_list_t *variables, int requires)
+{
+    struct mime_test mt = { .test = test, .mime = test_get_mime(test) };
+    const strarray_t *sl = NULL, *pl = NULL;
+    int res = 0;
+
+    switch (test->type) {
+    case BC_EXISTS:
+        sl = test->u.ex.sl;
+        break;
+    case BC_HEADER:
+        sl = test->u.hhs.sl;
+        pl = test->u.hhs.pl;
+        mt.comp = &test->u.hhs.comp;
+        break;
+    case BC_ADDRESS:
+        sl = test->u.ae.sl;
+        pl = test->u.ae.pl;
+        mt.comp = &test->u.ae.comp;
+        break;
+    }
+
+    for (int x = 0; x < strarray_size(sl); x++) {
+        const char *name = strarray_nth(sl, x);
+
+        if (requires & BFE_VARIABLES) name = parse_string(name, variables);
+        strarray_append(&mt.names, name);
+    }
+
+    for (int x = 0; x < strarray_size(mt.mime->params); x++) {
+        const char *name = strarray_nth(mt.mime->params, x);
+
+        if (requires & BFE_VARIABLES) name = parse_string(name, variables);
+        strarray_append(&mt.pnames, name);
+    }
+
+    if (mt.comp) {
+        mt.cmp = lookup_comp(interp, mt.comp->collation, mt.comp->match,
+                             mt.comp->relation, &mt.comprock);
+        if (!mt.cmp) {
+            res = SIEVE_RUN_ERROR;
+            goto done;
+        }
+
+        mt.match_vars = varlist_select(variables, VL_MATCH_VARS)->var;
+        mt.needles = prepare_needles((strarray_t *) pl, mt.comp->match,
+                                     mt.comp->collation, requires, variables);
+    }
+
+    /* RFC 5703, 4.1: the current part, and with :anychild its descendants */
+    unsigned part = interp->mime.part;
+    unsigned end = mt.mime->anychild ?
+        mime_subtree_end(interp, m, part) : part + 1;
+
+    for (; part < end && !res; part++) {
+        res = eval_mime_part(interp, m, &mt, part);
+    }
+
+  done:
+    strarray_fini(&mt.names);
+    strarray_fini(&mt.pnames);
+    free_needles(mt.needles);
+
+    return res;
+}
+
 /* Evaluate a bytecode test */
 static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
                         bytecode_input_t * bc, int * ip,
@@ -477,17 +781,26 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         break;
 
     case BC_EXISTS:
+        if (test.u.ex.mime.mime) {
+            res = eval_mime_test(interp, m, &test, variables, requires);
+            free(strarray_takevf(test.u.ex.sl));
+            break;
+        }
+
+        GCC_FALLTHROUGH
+
+    case BC_EXISTS_PRE_MIME:
     {
         const char **val;
 
         res = 1;
 
-        list_len = strarray_size(test.u.sl);
+        list_len = strarray_size(test.u.ex.sl);
 
         for (x = 0; x < list_len && res; x++) {
             const char *str;
 
-            str = strarray_nth(test.u.sl, x);
+            str = strarray_nth(test.u.ex.sl, x);
 
             if (requires & BFE_VARIABLES) {
                 str = parse_string(str, variables);
@@ -496,7 +809,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
             if (interp->getheader(m, str, &val) != SIEVE_OK) res = 0;
         }
 
-        free(strarray_takevf(test.u.sl));
+        free(strarray_takevf(test.u.ex.sl));
         break;
     }
 
@@ -559,6 +872,16 @@ static int eval_bc_test(sieve_interp_t *interp, void* m, void *sc,
         break;
 
     case BC_ADDRESS:
+        if (test.u.ae.mime.mime) {
+            res = eval_mime_test(interp, m, &test, variables, requires);
+            free(strarray_takevf(test.u.ae.sl));
+            free(strarray_takevf(test.u.ae.pl));
+            break;
+        }
+
+        GCC_FALLTHROUGH
+
+    case BC_ADDRESS_PRE_MIME:
     case BC_ADDRESS_PRE_INDEX:
     case BC_ENVELOPE:
     {
@@ -718,6 +1041,16 @@ envelope_err:
     }
 
     case BC_HEADER:
+        if (test.u.hhs.mime.mime) {
+            res = eval_mime_test(interp, m, &test, variables, requires);
+            free(strarray_takevf(test.u.hhs.sl));
+            free(strarray_takevf(test.u.hhs.pl));
+            break;
+        }
+
+        GCC_FALLTHROUGH
+
+    case BC_HEADER_PRE_MIME:
     case BC_HEADER_PRE_INDEX:
     {
         const char **val;
@@ -1598,6 +1931,8 @@ envelope_err:
         return SIEVE_RUN_ERROR;
     }
 
+    if (op == BC_HEADER) free(strarray_takevf(test.u.hhs.mime.params));
+
     *ip = i;
     return res;
 }
@@ -1659,6 +1994,16 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
     int is_incl = (impl_keep_p != NULL);
     int implicit_keep = is_incl ? *impl_keep_p : 1;
 
+    /* enclosing foreverypart loops, innermost last */
+    struct {
+        int body;       /* ip of the loop body */
+        int end;        /* ip past the loop */
+        unsigned part;  /* part being visited */
+        unsigned last;  /* part that follows the last one to visit */
+    } loops[BC_MAX_LOOPS];
+    int nloops = 0;
+    unsigned entry_part;
+
     sieve_bytecode_t *bc_cur = exe->bc_cur;
     bytecode_input_t *bc = (bytecode_input_t *) bc_cur->data;
     int ip = 0, ip_max = (bc_cur->len/sizeof(bytecode_input_t));
@@ -1668,6 +2013,9 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
         return SIEVE_RUN_ERROR;
     }
     bc_cur->is_executing = 1;
+
+    if (!is_incl) mime_reset(i);
+    entry_part = i->mime.part;
 
     /* Check that we
      * a) have bytecode
@@ -2250,6 +2598,72 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
             break;
 
 
+        case B_FOREVERYPART:
+        {
+            unsigned first, last;
+
+            if (nloops == BC_MAX_LOOPS) {
+                *errmsg = "Too many nested foreverypart loops";
+                res = SIEVE_RUN_ERROR;
+                break;
+            }
+
+            if (nloops) {
+                /* RFC 5703, 3: a nested loop visits the descendants
+                   of the part that the enclosing loop is visiting */
+                first = loops[nloops-1].part + 1;
+                last = mime_subtree_end(i, m, loops[nloops-1].part);
+            }
+            else {
+                first = 0;
+                last = arrayu64_size(mime_depths(i, m));
+            }
+
+            if (first >= last) {
+                ip = cmd.u.fep.end;
+                break;
+            }
+
+            loops[nloops].body = ip;
+            loops[nloops].end = cmd.u.fep.end;
+            loops[nloops].part = first;
+            loops[nloops].last = last;
+            nloops++;
+
+            i->mime.part = first;
+            break;
+        }
+
+
+        case B_NEXTPART:
+            if (!nloops) {
+                *errmsg = "Invalid sieve bytecode";
+                return SIEVE_FAIL;
+            }
+
+            if (++loops[nloops-1].part < loops[nloops-1].last) {
+                i->mime.part = loops[nloops-1].part;
+                ip = loops[nloops-1].body;
+            }
+            else {
+                nloops--;
+                i->mime.part = nloops ? loops[nloops-1].part : entry_part;
+            }
+            break;
+
+
+        case B_BREAK:
+            if (cmd.u.brk.loops < 1 || cmd.u.brk.loops > nloops) {
+                *errmsg = "Invalid sieve bytecode";
+                return SIEVE_FAIL;
+            }
+
+            nloops -= cmd.u.brk.loops;
+            ip = loops[nloops].end;
+            i->mime.part = nloops ? loops[nloops-1].part : entry_part;
+            break;
+
+
         case B_INCLUDE:
         {
             const char *script = cmd.u.inc.script;
@@ -2576,6 +2990,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
   done:
     bc_cur->is_executing = 0;
+    i->mime.part = entry_part;
 
     if (is_incl) {
         *impl_keep_p = implicit_keep;
@@ -2597,6 +3012,8 @@ int sieve_eval_bc(sieve_execute_t *exe, int *impl_keep_p, sieve_interp_t *i,
 
         implicit_keep = 0;
     }
+
+    if (!is_incl) mime_reset(i);
 
     return res;
 }

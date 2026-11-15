@@ -1,0 +1,28 @@
+Description:
+
+Adds the Sieve "foreverypart" and "mime" extensions (RFC 5703), so that
+scripts can loop over the MIME parts of a message and test the headers of
+each part, e.g. to find a body part with "Content-Disposition: reaction"
+(RFC 9078).
+
+
+Documentation:
+
+docsrc/rfc-support.rst
+
+
+Config changes:
+
+Changed: sieve_extensions (new values "foreverypart" and "mime", both
+enabled by default)
+
+
+Upgrade instructions:
+
+None.  Existing compiled scripts continue to work, but bytecode compiled
+by this version can't be run by older versions.
+
+
+GitHub issue:
+
+None.

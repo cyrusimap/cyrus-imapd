@@ -146,6 +146,12 @@ static int listvalidator(void *ic __attribute__((unused)),
     return ret;
 }
 
+static const sieve_mime_t stub_mime = {
+    (sieve_get_mimeparts *) &stub_generic,
+    (sieve_get_mimeheader *) &stub_generic,
+    (sieve_parse_mimeheader *) &stub_generic
+};
+
 EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
 {
     sieve_interp_t *interpreter = NULL;
@@ -178,6 +184,7 @@ EXPORTED sieve_interp_t *sieve_build_nonexec_interp()
     sieve_register_environment(interpreter,
                                (sieve_get_environment *) &stub_generic);
     sieve_register_body(interpreter, (sieve_get_body *) &stub_generic);
+    sieve_register_mime(interpreter, &stub_mime);
     sieve_register_include(interpreter, (sieve_get_include *) &stub_generic);
     sieve_register_logger(interpreter, (sieve_logger *) &stub_generic);
 
@@ -295,6 +302,7 @@ EXPORTED void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
         buf_free(&(*s)->sieveerr);
+        strarray_fini(&(*s)->loops);
         if ((*s)->cmds)
             free_tree((*s)->cmds);
         free(*s);

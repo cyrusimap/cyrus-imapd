@@ -1,0 +1,93 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mime_options ($self)
+{
+    xlog $self, "Install a script that tests MIME header elements";
+    $self->{instance}->install_sieve_script(<<'EOF'
+require ["mime", "foreverypart", "editheader", "relational",
+         "comparator-i;ascii-numeric", "encoded-character"];
+
+foreverypart {
+    if address :mime :domain "Content-From" "example.org" {
+        addheader "X-From" "yes";
+    }
+}
+
+if header :mime :anychild :param "filename" "Content-Disposition"
+          "r${unicode:E9}sum${unicode:E9}.pdf" {
+    addheader "X-Resume" "yes";
+}
+if header :mime :anychild :param "filename" "Content-Disposition"
+          "split.txt" {
+    addheader "X-Split" "yes";
+}
+if header :mime :anychild :count "eq" :comparator "i;ascii-numeric"
+          :param "charset" "Content-Type" "1" {
+    addheader "X-Charsets" "1";
+}
+if header :mime :anychild :count "eq" :comparator "i;ascii-numeric"
+          :param "charset" "Content-Type" "2" {
+    addheader "X-Charsets" "2";
+}
+if header :mime :type "Content-Type" "multipart" {
+    addheader "X-Top" "multipart";
+}
+if header :mime :anychild :subtype "Content-Disposition" "attachment" {
+    addheader "X-Subtype" "wrong";
+}
+if exists :mime :anychild "Content-MD5" {
+    addheader "X-MD5" "yes";
+}
+if exists :mime "Content-MD5" {
+    addheader "X-MD5-Top" "yes";
+}
+EOF
+    );
+
+    my $raw = <<'EOF';
+From: Some Person <some@example.com>
+To: Other Person <other@example.com>
+Subject: options
+Message-ID: <options@example.com>
+Date: Fri, 13 Nov 2026 12:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="b1"
+
+--b1
+Content-Type: text/plain; charset=us-ascii
+
+body
+--b1
+Content-Type: application/pdf
+Content-Disposition: attachment;
+ filename*=utf-8''r%C3%A9sum%C3%A9.pdf
+Content-MD5: Q2hlY2sgSW50ZWdyaXR5IQ==
+Content-From: Third Person <third@example.org>
+
+JVBERi0=
+--b1
+Content-Type: text/plain; charset=utf-8
+Content-Disposition: inline; filename*0="split"; filename*1=".txt"
+
+text
+--b1--
+EOF
+    $self->{instance}->deliver(Cassandane::Message->new(raw => $raw));
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->select("INBOX");
+    my $res = $imaptalk->fetch(1, '(BODY.PEEK[HEADER.FIELDS (X-FROM X-RESUME '
+        . 'X-SPLIT X-CHARSETS X-TOP X-SUBTYPE X-MD5 X-MD5-TOP)])');
+
+    # :count with :anychild counts each part on its own; RFC 2231 values
+    # are decoded and their continuations joined
+    $self->assert_cmp_deeply({
+        'x-from' => [ 'yes' ],
+        'x-resume' => [ 'yes' ],
+        'x-split' => [ 'yes' ],
+        'x-charsets' => [ '1' ],
+        'x-top' => [ 'multipart' ],
+        'x-md5' => [ 'yes' ],
+    }, $res->{1}{headers});
+}

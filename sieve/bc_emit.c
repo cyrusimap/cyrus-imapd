@@ -290,14 +290,17 @@ static int bc_test_emit(int fd, int *codep, int stopcodep, bytecode_info_t *bc)
     case BC_TRUE:
     case BC_FALSE:
     case BC_SIZE:
+    case BC_EXISTS_PRE_MIME:
     case BC_EXISTS:
     case BC_IHAVE:
     case BC_VALIDEXTLIST:
     case BC_VALIDNOTIFYMETHOD:
     case BC_NOTIFYMETHODCAPABILITY:
+    case BC_HEADER_PRE_MIME:
     case BC_HEADER:
     case BC_HASFLAG:
     case BC_STRING:
+    case BC_ADDRESS_PRE_MIME:
     case BC_ADDRESS:
     case BC_ENVELOPE:
     case BC_BODY:
@@ -466,6 +469,38 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
             break;
         }
 
+        case B_FOREVERYPART:
+        {
+            /* FOREVERYPART
+             *  pos of loop end (words)
+             *  name
+             *  loop body
+             *  NEXTPART
+             */
+            int loopend = bc->data[codep++].u.jump;
+            int endLoc = filelen;
+
+            /* leave space to store the location of the end of the loop */
+            if (lseek(fd, sizeof(int), SEEK_CUR) == -1) return -1;
+            filelen += sizeof(int);
+
+            ret = bc_string_emit(fd, &codep, bc);
+            if (ret < 0) return -1;
+            filelen += ret;
+
+            /* spew the loop body, including NEXTPART */
+            ret = bc_action_emit(fd, codep, loopend, bc, filelen);
+            if (ret < 0) return -1;
+            filelen += ret;
+
+            if (lseek(fd, endLoc, SEEK_SET) == -1) return -1;
+            if (write_int(fd, filelen/4) == -1) return -1;
+            if (lseek(fd, filelen, SEEK_SET) == -1) return -1;
+
+            codep = loopend;
+            break;
+        }
+
         case B_KEEP:
         case B_FILEINTO:
         case B_REDIRECT:
@@ -491,6 +526,8 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
         case B_SNOOZE:
         case B_PROCESSCAL:
         case B_IKEEP_TARGET:
+        case B_NEXTPART:
+        case B_BREAK:
             /* Spew the action parameters */
             ret = bc_params_emit(fd, &codep, stopcodep, bc);
             if (ret < 0) return -1;
