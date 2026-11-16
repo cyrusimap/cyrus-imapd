@@ -1,0 +1,57 @@
+#!perl
+use Cassandane::Tiny;
+
+# Joining or leaving a group changes what the member can see without changing
+# any mailbox ACL, so SETUSERGROUP and UNSETUSERGROUP emit the AclChange
+# events themselves: one per owner whose mailboxes the group can read.
+
+sub _usergroup_aclchange_events ($self) {
+    return [
+        grep { $_->{event} eq q{AclChange} }
+        map  { decode_json($_->{MESSAGE}) }
+        $self->{instance}->getnotify->@*
+    ];
+}
+
+sub test_usergroup_aclchange
+    :Mboxgroups :ReverseACLs
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('other');
+    $admintalk->create('user.other.Shared') or die;
+    $admintalk->setacl('user.other', 'group:team', 'lr') or die;
+    $admintalk->setacl('user.other.Shared', 'group:team', 'lrs') or die;
+
+    $self->{instance}->getnotify();
+
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:team');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $events = $self->_usergroup_aclchange_events();
+    $self->assert_cmp_deeply(
+        [ superhashof({
+            aclSubject => 'cassandane',
+            aclRights  => re(qr/r/),
+        }) ],
+        $events,
+        'join: one event for the owner',
+    );
+
+    $admintalk->_imap_cmd('UNSETUSERGROUP', 0, '', 'cassandane', 'group:team');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $events = $self->_usergroup_aclchange_events();
+    $self->assert_cmp_deeply(
+        [ superhashof({ aclSubject => 'cassandane' }) ],
+        $events,
+        'leave: one event for the owner',
+    );
+    $self->assert(! exists $events->[0]{aclRights}, 'leave: no aclRights');
+
+    # A group that can't read anything emits nothing
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:none');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_cmp_deeply([], $self->_usergroup_aclchange_events());
+}

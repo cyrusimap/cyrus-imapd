@@ -77,6 +77,9 @@ static mbname_t *mbname_from_dbname(const char *dbname);
 static char *mbname_dbname(const mbname_t *mbname);
 static char *mboxname_from_dbname(const char *dbname);
 static char *mboxname_to_dbname(const char *intname);
+static void notify_usergroup_change(const char *userid,
+                                    const char *group,
+                                    int val);
 
 cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -3614,8 +3617,10 @@ EXPORTED int mboxlist_set_usergroup(const char *userid, const char *group, int v
 
     cyrusdb_commit(mbdb, tid);
 
-    if (!silent)
+    if (!silent) {
         r = mboxlist_update_raclmodseq(userid);
+        notify_usergroup_change(userid, group, val);
+    }
 
     return r;
 }
@@ -4548,6 +4553,56 @@ static int racl_cb(void *rock,
     struct raclrock *raclrock = (struct raclrock *)rock;
     strarray_appendm(raclrock->list, xstrndup(key + raclrock->prefixlen, keylen - raclrock->prefixlen));
     return 0;
+}
+
+/* A usergroup change gives or takes userid's access to every user's mailbox
+ * that the group can read without changing its ACL, so nothing else emits an
+ * AclChange for it. Emit one per owner, with userid as the identifier and
+ * the group's rights, or no rights if userid left the group: listeners treat
+ * an AclChange as a change to the owner's whole account. */
+static void notify_usergroup_change(const char *userid,
+                                    const char *group,
+                                    int val)
+{
+    struct buf prefix = BUF_INITIALIZER;
+    strarray_t dbnames = STRARRAY_INITIALIZER;
+    strarray_t owners = STRARRAY_INITIALIZER;
+    struct raclrock raclrock = { 0, &dbnames };
+
+    mboxlist_racl_key(/*isuser*/ 1, group, NULL, &prefix);
+    raclrock.prefixlen = buf_len(&prefix);
+    cyrusdb_foreach(mbdb,
+                    buf_base(&prefix),
+                    buf_len(&prefix),
+                    NULL,
+                    racl_cb,
+                    &raclrock,
+                    NULL);
+
+    for (int i = 0; i < strarray_size(&dbnames); i++) {
+        char *name = mboxname_from_dbname(strarray_nth(&dbnames, i));
+        char *owner = mboxname_to_userid(name);
+        struct mailbox *mailbox = NULL;
+
+        if (owner && !strarray_contains(&owners, owner)
+            && !mailbox_open_irl(name, &mailbox))
+        {
+            strarray_append(&owners, owner);
+            strarray_t *acl = strarray_split(mailbox_acl(mailbox), "\t", 0);
+            notify_acl_change(mailbox,
+                              userid,
+                              val ? acl_pairs_rights(acl, group) : NULL);
+            strarray_free(acl);
+            mailbox_close(&mailbox);
+        }
+
+        free(owner);
+        free(name);
+    }
+
+    strarray_fini(&owners);
+    strarray_fini(&dbnames);
+    buf_free(&prefix);
 }
 
 static int mboxlist_racl_matches(struct db *db,
