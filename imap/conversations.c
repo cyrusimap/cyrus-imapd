@@ -896,11 +896,6 @@ EXPORTED int conversations_get_msgid(struct conversations_state *state,
     return r;
 }
 
-/*
- * Normalise a subject string, to a form which can be used for deciding
- * whether a message belongs in the same conversation as it's antecedent
- * messages.
- */
 EXPORTED void conversation_normalise_subject(struct buf *s)
 {
     static int initialised_res = 0;
@@ -910,13 +905,32 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
     int r;
 
     if (!initialised_res) {
-        r = regcomp(&whitespace_re, "([ \t\r\n]+|\xC2\xA0)", REG_EXTENDED);
+        r = regcomp(&whitespace_re, "[ \t\r\n]+", REG_EXTENDED);
         assert(r == 0);
         r = regcomp(&bracket_re, "(\\[[^]\\[]*])|(^[^\\[]*])|(\\[[^]]*$)", REG_EXTENDED);
         assert(r == 0);
-        r = regcomp(&relike_token_re, "^[ \t]*[^ \t\r\n\f]+:", REG_EXTENDED);
+        r = regcomp(&relike_token_re, "^[ \t]*[^ \t\r\n\f]+[ \t]*:", REG_EXTENDED);
         assert(r == 0);
         initialised_res = 1;
+    }
+
+    /* ASCII stays ASCII in steps 1-3, so normalization can't change it */
+    bool is_ascii = true;
+    for (const uint8_t *c = (const uint8_t *) buf_cstring(s); *c; c++) {
+        if (*c > 0x7f) {
+            is_ascii = false;
+            break;
+        }
+    }
+
+    /* step 0 is to NFKC-normalize, so that compatibility forms such as
+     * the full-width colon and ideographic space match as ASCII */
+    if (!is_ascii) {
+        char *nfkc = charset_utf8_normalize_nfkc(buf_cstring(s));
+        if (nfkc) {
+            buf_free(s);
+            buf_initmcstr(s, nfkc);
+        }
     }
 
     /* step 1 is to remove anything within (maybe unmatched) square brackets */
@@ -927,23 +941,16 @@ EXPORTED void conversation_normalise_subject(struct buf *s)
     while (buf_replace_one_re(s, &relike_token_re, NULL))
         ;
 
-    /* step 3 is eliminating whitespace. */
+    /* step 3 is eliminating whitespace, which step 0 mapped to ASCII */
     buf_replace_all_re(s, &whitespace_re, NULL);
 
-    /* step 4 is to NFC-normalize any non-ASCII codepoints */
-    bool is_ascii = true;
-    for (const uint8_t *c = (const uint8_t *) buf_cstring(s); *c; c++) {
-        if (*c > 0x7f) {
-            is_ascii = false;
-            break;
-        }
-    }
-
+    /* step 4 is to NFC-normalize again, as steps 1-3 may have moved
+     * combining marks next to a different base character */
     if (!is_ascii) {
-        char *tmp = charset_utf8_normalize(buf_cstring(s));
-        if (tmp) {
+        char *nfc = charset_utf8_normalize(buf_cstring(s));
+        if (nfc) {
             buf_free(s);
-            buf_initmcstr(s, tmp);
+            buf_initmcstr(s, nfc);
         }
     }
 }

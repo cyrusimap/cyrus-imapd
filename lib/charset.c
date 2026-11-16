@@ -3009,7 +3009,7 @@ EXPORTED char *charset_utf8_to_searchform(const char *s, int flags)
     return ret;
 }
 
-EXPORTED char *charset_utf8_normalize(const char *src)
+static char *utf8_normalize(const char *src, bool compat)
 {
     int32_t srclen = strlen(src);
     UChar *uni = NULL;
@@ -3045,9 +3045,10 @@ EXPORTED char *charset_utf8_normalize(const char *src)
         goto done;
     }
 
-    /* Normalize the UChars to NFC */
+    /* Normalize the UChars to NFC or NFKC */
     err = U_ZERO_ERROR;
-    const UNormalizer2 *norm = unorm2_getNFCInstance(&err);
+    const UNormalizer2 *norm =
+        compat ? unorm2_getNFKCInstance(&err) : unorm2_getNFCInstance(&err);
     if (!norm || U_FAILURE(err)) {
         goto done;
     }
@@ -3076,7 +3077,7 @@ EXPORTED char *charset_utf8_normalize(const char *src)
         uni = NULL;
     }
 
-    /* Convert the NFC UChars back to UTF-8 */
+    /* Convert the normalized UChars back to UTF-8 */
     err = U_ZERO_ERROR;
     u_strToUTF8(ret, 0, &retlen, nfc, nfclen, &err);
     if (U_FAILURE(err) && err != U_BUFFER_OVERFLOW_ERROR) {
@@ -3094,6 +3095,16 @@ done:
     free(uni);
     free(nfc);
     return ret;
+}
+
+EXPORTED char *charset_utf8_normalize(const char *src)
+{
+    return utf8_normalize(src, false);
+}
+
+EXPORTED char *charset_utf8_normalize_nfkc(const char *src)
+{
+    return utf8_normalize(src, true);
 }
 
 EXPORTED int charset_to_utf8(struct buf *dst, const char *src, size_t len, charset_t charset, int encoding)

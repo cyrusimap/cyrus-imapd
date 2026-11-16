@@ -1619,6 +1619,38 @@ static void test_utf8_normalize(void)
 #undef TESTCASE
 }
 
+static void test_utf8_normalize_nfkc(void)
+{
+#define TESTCASE(in, want) \
+    { \
+        char *s = charset_utf8_normalize_nfkc(in); \
+        CU_ASSERT_PTR_NOT_NULL(s); \
+        CU_ASSERT_STRING_EQUAL(s, want); \
+        free(s); \
+    }
+
+    TESTCASE("Hello, World", "Hello, World");
+
+    /* ANGSTROM SIGN (U+212B) to U+00C5, as for NFC */
+    TESTCASE("\xE2\x84\xAB", "\xC3\x85");
+
+    /* FULLWIDTH LATIN CAPITAL LETTER R (U+FF32)
+     * FULLWIDTH LATIN SMALL LETTER E (U+FF45)
+     * FULLWIDTH COLON (U+FF1A)
+     * IDEOGRAPHIC SPACE (U+3000) */
+    TESTCASE("\xEF\xBC\xB2\xEF\xBD\x85\xEF\xBC\x9A\xE3\x80\x80", "Re: ");
+
+    /* NO-BREAK SPACE (U+00A0) */
+    TESTCASE("a\xC2\xA0" "b", "a b");
+
+    /* LATIN SMALL LIGATURE FI (U+FB01) */
+    TESTCASE("\xEF\xAC\x81", "fi");
+
+#undef TESTCASE
+
+    CU_ASSERT_PTR_NULL(charset_utf8_normalize_nfkc("\xFF"));
+}
+
 static void test_count_validutf8(void)
 {
     /* These tests are specific for the charset implementation in Cyrus.

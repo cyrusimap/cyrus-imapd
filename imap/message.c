@@ -3673,7 +3673,6 @@ static void normalise_subject_v1(struct buf *s)
     buf_replace_all_re(s, &whitespace_re, NULL);
 }
 
-
 static void extract_convsubject(const struct index_record *record,
                                 struct buf *msubject,
                                 void (*normalise)(struct buf*))
@@ -3699,6 +3698,7 @@ EXPORTED char *message_extract_convsubject(const struct index_record *record)
 struct message_subject {
     char *raw;
     char *normalized;
+    char *normalized_v2;
     char *normalized_v1;
     char *normalized_v0;
 };
@@ -3722,6 +3722,7 @@ static void message_subject_fini(struct message_subject *subj)
 {
     free(subj->raw);
     free(subj->normalized);
+    free(subj->normalized_v2);
     free(subj->normalized_v1);
     free(subj->normalized_v0);
 }
@@ -3748,16 +3749,34 @@ static const char *message_subject_v1(struct message_subject *subj)
     return subj->normalized_v1;
 }
 
+/* Version 2 is the version 1 form, NFC-normalised */
+static const char *message_subject_v2(struct message_subject *subj)
+{
+    if (!subj->normalized_v2 && subj->raw) {
+        const char *v1 = message_subject_v1(subj);
+        subj->normalized_v2 = charset_utf8_normalize(v1);
+        if (!subj->normalized_v2)
+            subj->normalized_v2 = xstrdup(v1);
+    }
+    return subj->normalized_v2;
+}
+
 static bool message_subject_matchconv(struct message_subject *subj,
                                       conversation_t *conv)
 {
-    if (conv->version > 1) {
-        return !strcmpsafe(subj->normalized, conv->subject);
+    if (!strcmpsafe(subj->normalized, conv->subject)) {
+        return true;
     }
-    else {
-        return !strcmpsafe(message_subject_v1(subj), conv->subject) ||
-               !strcmpsafe(message_subject_v0(subj), conv->subject);
+
+    /* Recalculation used to bump the version of records without
+     * renormalizing their subject, so try all legacy forms on them. */
+    if (conv->version < 3) {
+        return !strcmpsafe(message_subject_v2(subj), conv->subject)
+               || !strcmpsafe(message_subject_v1(subj), conv->subject)
+               || !strcmpsafe(message_subject_v0(subj), conv->subject);
     }
+
+    return false;
 }
 
 static int extract_convdata(struct conversations_state *state,
