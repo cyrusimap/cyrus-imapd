@@ -17,19 +17,11 @@ struct plugin
 {
     const char *name;
     union {
-        sasl_auxprop_init_t *auxprop_init_fn;
         sasl_canonuser_init_t *canonuser_init_fn;
         sasl_client_plug_init_t *client_init_fn;
         sasl_server_plug_init_t *server_init_fn;
     };
 };
-
-static const struct plugin auxprop_plugins[] =
-{
-    /* none by default */
-};
-static const size_t n_auxprop_plugins = sizeof(auxprop_plugins)
-                                        / sizeof(auxprop_plugins[0]);
 
 static const struct plugin canonuser_plugins[] =
 {
@@ -74,12 +66,6 @@ EXPORTED int _sasl_load_plugins(const add_plugin_list_t *entrypoints)
             for (i = 0; i < n_client_plugins; i++) {
                 const struct plugin *p = &client_plugins[i];
                 r = sasl_client_add_plugin(p->name, p->client_init_fn);
-            }
-        }
-        else if (!strcmp(ep->entryname, "sasl_auxprop_plug_init")) {
-            for (i = 0; i < n_auxprop_plugins; i++) {
-                const struct plugin *p = &auxprop_plugins[i];
-                r = sasl_auxprop_add_plugin(p->name, p->auxprop_init_fn);
             }
         }
         else if (!strcmp(ep->entryname, "sasl_canonuser_init")) {

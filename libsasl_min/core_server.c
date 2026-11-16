@@ -93,10 +93,6 @@ static void server_dispose(sasl_conn_t *pconn)
 
     _sasl_free_utils(&s_conn->sparams->utils);
 
-    if (s_conn->sparams->propctx) {
-        prop_dispose(&s_conn->sparams->propctx);
-    }
-
     if (s_conn->appname) {
         sasl_FREE(s_conn->appname);
     }
@@ -381,9 +377,6 @@ static int server_done(void)
         mechlist = NULL;
     }
 
-    /* Free the auxprop plugins */
-    _sasl_auxprop_free();
-
     global_callbacks.callbacks = NULL;
     global_callbacks.appname = NULL;
 
@@ -475,7 +468,6 @@ EXPORTED int sasl_server_init(const sasl_callback_t *callbacks,
 
     const add_plugin_list_t ep_list[] = {
         { "sasl_server_plug_init",  (add_plugin_t *) sasl_server_add_plugin    },
-        { "sasl_auxprop_plug_init", (add_plugin_t *) sasl_auxprop_add_plugin   },
         { "sasl_canonuser_init",    (add_plugin_t *) sasl_canonuser_add_plugin },
         { NULL,                     NULL                                       }
     };
@@ -635,13 +627,7 @@ EXPORTED int sasl_server_new(const char *service,
 
     utils->checkpass = &_sasl_checkpass;
 
-    /* Setup the propctx -> We'll assume the default size */
-    serverconn->sparams->propctx = prop_new(0);
-    if (!serverconn->sparams->propctx) {
-        result = SASL_NOMEM;
-        goto done_error;
-    }
-
+    serverconn->sparams->propctx = NULL;
     serverconn->sparams->service = (*pconn)->service;
     serverconn->sparams->servicelen = (unsigned) strlen((*pconn)->service);
 
@@ -748,7 +734,7 @@ EXPORTED int sasl_server_new(const char *service,
         serverconn->mech_length = mechlist->mech_length;
     }
 
-    serverconn->sparams->canon_user = &_sasl_canon_user_lookup;
+    serverconn->sparams->canon_user = &_sasl_canon_user;
     serverconn->sparams->props = serverconn->base.props;
     serverconn->sparams->flags = flags;
 
@@ -1530,7 +1516,7 @@ static int _sasl_checkpass(sasl_conn_t *conn,
         }
     }
 
-    /* figure out how to check (i.e. auxprop or saslauthd or pwcheck) */
+    /* figure out how to check (i.e. saslauthd or alwaystrue) */
     if (_sasl_getcallback(conn,
                           SASL_CB_GETOPT,
                           (sasl_callback_ft *) &getopt,
@@ -1679,7 +1665,7 @@ EXPORTED int sasl_user_exists(sasl_conn_t *conn,
         service = conn->service;
     }
 
-    /* figure out how to check (i.e. auxprop or saslauthd or pwcheck) */
+    /* figure out how to check (i.e. saslauthd or alwaystrue) */
     if (_sasl_getcallback(conn,
                           SASL_CB_GETOPT,
                           (sasl_callback_ft *) &getopt,
@@ -1885,7 +1871,7 @@ static void _sasl_print_mechanism(server_sasl_mechanism_t *m,
 }
 
 /* Dump information about available server plugins (separate functions should be
-   used for canon and auxprop plugins */
+   used for canonuser plugins */
 EXPORTED int sasl_server_plugin_info(
     const char
         *c_mech_list, /* space separated mechanism list or NULL for ALL */

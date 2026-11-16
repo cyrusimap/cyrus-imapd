@@ -153,26 +153,6 @@ static int plain_server_mech_step(void *conn_context __attribute__((unused)),
     /* We need to do this after calling verify_user just in case verify_user
      * needed to get auxprops itself */
     if (canon_flags == 0) {
-        const struct propval *pr;
-        int i;
-
-        pr = params->utils->prop_get(params->propctx);
-        if (!pr) {
-            return SASL_FAIL;
-        }
-
-        /* params->utils->checkpass() might have fetched authorization identity
-         * related properties for the wrong user name. Free these values. */
-        for (i = 0; pr[i].name; i++) {
-            if (pr[i].name[0] == '*') {
-                continue;
-            }
-
-            if (pr[i].values) {
-                params->utils->prop_erase(params->propctx, pr[i].name);
-            }
-        }
-
         result = params->canon_user(params->utils->conn,
                                     author,
                                     0,

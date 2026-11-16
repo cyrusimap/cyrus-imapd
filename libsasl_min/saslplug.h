@@ -126,34 +126,6 @@ typedef struct sasl_utils
     /* spare function pointer */
     int *(*spare_fptr)(void);
 
-    /* auxiliary property utilities */
-    struct propctx *(*prop_new)(unsigned estimate);
-    int (*prop_dup)(struct propctx *src_ctx, struct propctx **dst_ctx);
-    int (*prop_request)(struct propctx *ctx, const char **names);
-    const struct propval *(*prop_get)(struct propctx *ctx);
-    int (*prop_getnames)(struct propctx *ctx,
-                         const char **names,
-                         struct propval *vals);
-    void (*prop_clear)(struct propctx *ctx, int requests);
-    void (*prop_dispose)(struct propctx **ctx);
-    int (*prop_format)(struct propctx *ctx,
-                       const char *sep,
-                       int seplen,
-                       char *outbuf,
-                       unsigned outmax,
-                       unsigned *outlen);
-    int (*prop_set)(struct propctx *ctx,
-                    const char *name,
-                    const char *value,
-                    int vallen);
-    int (*prop_setvals)(struct propctx *ctx,
-                        const char *name,
-                        const char **values);
-    void (*prop_erase)(struct propctx *ctx, const char *name);
-    int (*auxprop_store)(sasl_conn_t *conn,
-                         struct propctx *ctx,
-                         const char *user);
-
     /* for additions which don't require a version upgrade; set to 0 */
     int (*spare_fptr1)(void);
     int (*spare_fptr2)(void);
@@ -792,8 +764,8 @@ typedef void sasl_server_info_callback_t(server_sasl_mechanism_t *m,
                                          sasl_info_callback_stage_t stage,
                                          void *rock);
 
-/* Dump information about available server plugins (separate functions are
-   used for canon and auxprop plugins) */
+/* Dump information about available server plugins (separate function is
+   used for canonuser plugin) */
 LIBSASL_API int sasl_server_plugin_info(const char *mech_list,
                                         sasl_server_info_callback_t *info_cb,
                                         void *info_cb_rock);
@@ -875,93 +847,6 @@ typedef int sasl_canonuser_init_t(const sasl_utils_t *utils,
  */
 LIBSASL_API int sasl_canonuser_add_plugin(const char *plugname,
                                           sasl_canonuser_init_t *canonuserfunc);
-
-/******************************************************
- * auxiliary property plug-in -- added cjn 1999-09-29 *
- ******************************************************/
-
-typedef struct sasl_auxprop_plug
-{
-    /* optional features of plugin (none defined yet, set to 0) */
-    int features;
-
-    /* spare integer, must be set to 0 */
-    int spare_int1;
-
-    /* global state for plugin */
-    void *glob_context;
-
-    /* free global state for plugin (OPTIONAL) */
-    void (*auxprop_free)(void *glob_context, const sasl_utils_t *utils);
-
-    /* fill in fields of an auxiliary property context
-     *  last element in array has id of SASL_AUX_END
-     *  elements with non-0 len should be ignored.
-     */
-    int (*auxprop_lookup)(void *glob_context,
-                          sasl_server_params_t *sparams,
-                          unsigned flags,
-                          const char *user,
-                          unsigned ulen);
-
-    /* name of the auxprop plugin */
-    char *name;
-
-    /* store the fields/values of an auxiliary property context (OPTIONAL)
-     *
-     * if ctx is NULL, just check if storing properties is enabled
-     *
-     * returns
-     *  SASL_OK         on success
-     *  SASL_FAIL       on failure
-     */
-    int (*auxprop_store)(void *glob_context,
-                         sasl_server_params_t *sparams,
-                         struct propctx *ctx,
-                         const char *user,
-                         unsigned ulen);
-} sasl_auxprop_plug_t;
-
-/* auxprop lookup flags */
-#define SASL_AUXPROP_OVERRIDE                                                  \
-    0x01 /* if clear, ignore auxiliary properties                              \
-          * with non-zero len field.  If set,                                  \
-          * override value of those properties */
-#define SASL_AUXPROP_AUTHZID                                                   \
-    0x02 /* if clear, we are looking up the                                    \
-          * authid flags (prefixed with *), otherwise                          \
-          * we are looking up the authzid flags                                \
-          * (no prefix) */
-
-/* NOTE: Keep in sync with SASL_CU_<XXX> flags */
-#define SASL_AUXPROP_VERIFY_AGAINST_HASH 0x10
-
-#define SASL_AUXPROP_PLUG_VERSION 8
-
-/* default name for auxprop plug-in entry point is "sasl_auxprop_init"
- *  similar to sasl_server_plug_init model, except only returns one
- *  sasl_auxprop_plug_t structure;
- */
-typedef int sasl_auxprop_init_t(const sasl_utils_t *utils,
-                                int max_version,
-                                int *out_version,
-                                sasl_auxprop_plug_t **plug,
-                                const char *plugname);
-
-/* add an auxiliary property plug-in
- */
-LIBSASL_API int sasl_auxprop_add_plugin(const char *plugname,
-                                        sasl_auxprop_init_t *auxpropfunc);
-
-typedef void auxprop_info_callback_t(sasl_auxprop_plug_t *m,
-                                     sasl_info_callback_stage_t stage,
-                                     void *rock);
-
-/* Dump information about available auxprop plugins (separate functions are
-   used for canon and server authentication plugins) */
-LIBSASL_API int auxprop_plugin_info(const char *mech_list,
-                                    auxprop_info_callback_t *info_cb,
-                                    void *info_cb_rock);
 
 #ifdef __cplusplus
 }

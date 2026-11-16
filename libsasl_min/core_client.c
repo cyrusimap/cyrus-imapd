@@ -550,7 +550,7 @@ EXPORTED int sasl_client_new(const char *service,
 
     /* Setup the non-lazy parts of cparams, the rest is done in
      * sasl_client_start */
-    conn->cparams->canon_user = &_sasl_canon_user_lookup;
+    conn->cparams->canon_user = &_sasl_canon_user;
     conn->cparams->flags = flags;
     conn->cparams->prompt_supp = (*pconn)->callbacks;
 
