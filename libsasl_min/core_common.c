@@ -1767,22 +1767,6 @@ EXPORTED sasl_utils_t *_sasl_alloc_utils(
 
     utils->seterror = &sasl_seterror;
 
-#ifndef macintosh
-    /* Aux Property Utilities */
-    utils->prop_new = &prop_new;
-    utils->prop_dup = &prop_dup;
-    utils->prop_request = &prop_request;
-    utils->prop_get = &prop_get;
-    utils->prop_getnames = &prop_getnames;
-    utils->prop_clear = &prop_clear;
-    utils->prop_dispose = &prop_dispose;
-    utils->prop_format = &prop_format;
-    utils->prop_set = &prop_set;
-    utils->prop_setvals = &prop_setvals;
-    utils->prop_erase = &prop_erase;
-    utils->auxprop_store = &sasl_auxprop_store;
-#endif
-
     /* Spares */
     utils->spare_fptr = NULL;
     utils->spare_fptr1 = utils->spare_fptr2 = NULL;

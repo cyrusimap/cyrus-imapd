@@ -435,40 +435,11 @@ sasl_string_list_t *_sasl_server_mechs(void);
  */
 extern const char *sasl_config_getstring(const char *key, const char *def);
 
-/* checkpw.c */
-extern int _sasl_auxprop_verify_apop(sasl_conn_t *conn,
-                                     const char *userstr,
-                                     const char *challenge,
-                                     const char *response,
-                                     const char *user_realm);
-
-/* Auxprop Plugin (sasldb.c) */
-extern int sasldb_auxprop_plug_init(const sasl_utils_t *utils,
-                                    int max_version,
-                                    int *out_version,
-                                    sasl_auxprop_plug_t **plug,
-                                    const char *plugname);
-
-/*
- * auxprop.c
- */
-extern int _sasl_auxprop_add_plugin(void *p, void *library);
-extern void _sasl_auxprop_free(void);
-extern int _sasl_auxprop_lookup(sasl_server_params_t *sparams,
-                                unsigned flags,
-                                const char *user,
-                                unsigned ulen);
-
 /*
  * canonusr.c
  */
 void _sasl_canonuser_free(void);
 extern int _sasl_canon_user(sasl_conn_t *conn,
-                            const char *user,
-                            unsigned ulen,
-                            unsigned flags,
-                            sasl_out_params_t *oparams);
-int _sasl_canon_user_lookup(sasl_conn_t *conn,
                             const char *user,
                             unsigned ulen,
                             unsigned flags,

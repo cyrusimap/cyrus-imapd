@@ -62,9 +62,6 @@
  *                    mechanism similar to CRAM-MD5 mechanism; optional)
  *  sasl_user_exists  Check if user exists
  *  sasl_setpass      Change a password or add a user entry
- *  sasl_auxprop_request  Request auxiliary properties
- *  sasl_auxprop_getctx   Get auxiliary property context for connection
- *  sasl_auxprop_store    Store a set of auxiliary properties
  *
  * Basic client model:
  *  1. client calls sasl_client_init() at startup to load plug-ins
@@ -137,7 +134,13 @@
 
 #include <stddef.h> /* For size_t */
 
-#include "libsasl_min/prop.h"
+#define LIBSASL_API extern
+#define LIBSASL_VAR extern
+
+/* This implementation doesn't support auxiliary properties, but
+ * the API still needs a type for the unused parameter
+ */
+struct propctx;
 
 /*************
  * Basic API *
@@ -659,11 +662,6 @@ typedef int sasl_server_userdb_checkpass_t(sasl_conn_t *conn,
 #define SASL_CU_EXTERNALLY_VERIFIED 0x04
 
 #define SASL_CU_OVERRIDE 0x08 /* mapped to SASL_AUXPROP_OVERRIDE */
-
-/* The following CU flags are passed "as is" down to auxprop lookup */
-#define SASL_CU_ASIS_MASK 0xFFF0
-/* NOTE: Keep in sync with SASL_AUXPROP_<XXX> flags */
-#define SASL_CU_VERIFY_AGAINST_HASH 0x10
 
 typedef int sasl_canon_user_t(sasl_conn_t *conn,
                               void *context,
@@ -1208,79 +1206,6 @@ LIBSASL_API int sasl_setpass(sasl_conn_t *conn,
 #define SASL_SET_CURMECH_ONLY                                                  \
     0x08 /* set the mechanism specific password only.                          \
             fail if no current mechanism */
-
-/*********************************************************
- * Auxiliary Property Support -- added by cjn 1999-09-29 *
- *********************************************************/
-
-#define SASL_AUX_END NULL /* last auxiliary property */
-
-#define SASL_AUX_ALL "*" /* A special flag to signal user deletion */
-
-/* traditional Posix items (should be implemented on Posix systems) */
-#define SASL_AUX_PASSWORD_PROP "userPassword" /* User Password */
-#define SASL_AUX_PASSWORD                                                      \
-    "*" SASL_AUX_PASSWORD_PROP           /* User Password (of authid) */
-#define SASL_AUX_UIDNUM "uidNumber"      /* UID number for the user */
-#define SASL_AUX_GIDNUM "gidNumber"      /* GID for the user */
-#define SASL_AUX_FULLNAME "gecos"        /* full name of the user, unix-style */
-#define SASL_AUX_HOMEDIR "homeDirectory" /* home directory for user */
-#define SASL_AUX_SHELL "loginShell"      /* login shell for the user */
-
-/* optional additional items (not necessarily implemented) */
-/* single preferred mail address for user canonically-quoted
- * RFC821/822 syntax */
-#define SASL_AUX_MAILADDR "mail"
-/* path to unix-style mailbox for user */
-#define SASL_AUX_UNIXMBX "mailMessageStore"
-/* SMTP mail channel name to use if user authenticates successfully */
-#define SASL_AUX_MAILCHAN "mailSMTPSubmitChannel"
-
-/* Request a set of auxiliary properties
- *  conn         connection context
- *  propnames    list of auxiliary property names to request ending with
- *               NULL.
- *
- * Subsequent calls will add items to the request list.  Call with NULL
- * to clear the request list.
- *
- * errors
- *  SASL_OK       -- success
- *  SASL_BADPARAM -- bad count/conn parameter
- *  SASL_NOMEM    -- out of memory
- */
-LIBSASL_API int sasl_auxprop_request(sasl_conn_t *conn, const char **propnames);
-
-/* Returns current auxiliary property context.
- * Use functions in prop.h to access content
- *
- *  if authentication hasn't completed, property values may be empty/NULL
- *
- *  properties not recognized by active plug-ins will be left empty/NULL
- *
- *  returns NULL if conn is invalid.
- */
-LIBSASL_API struct propctx *sasl_auxprop_getctx(sasl_conn_t *conn);
-
-/* Store the set of auxiliary properties for the given user.
- * Use functions in prop.h to set the content.
- *
- *  conn         connection context
- *  ctx          property context from prop_new()/prop_request()/prop_set()
- *  user         NUL terminated user
- *
- * Call with NULL 'ctx' to see if the backend allows storing properties.
- *
- * errors
- *  SASL_OK       -- success
- *  SASL_NOMECH   -- can not store some/all properties
- *  SASL_BADPARAM -- bad conn/ctx/user parameter
- *  SASL_NOMEM    -- out of memory
- *  SASL_FAIL     -- failed to store
- */
-LIBSASL_API int sasl_auxprop_store(sasl_conn_t *conn,
-                                   struct propctx *ctx,
-                                   const char *user);
 
 /**********************
  * security layer API *

@@ -332,7 +332,6 @@ LIBSASL_API = \
 
 lib_libsasl_min_la_SOURCES = \
     $(LIBSASL_API) \
-    libsasl_min/core_auxprop.c \
     libsasl_min/core_canonuser.c \
     libsasl_min/core_checkpw.c \
     libsasl_min/core_client.c \

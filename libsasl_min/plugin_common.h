@@ -43,21 +43,6 @@
                                     plugcount);                                \
     }
 
-#define SASL_AUXPROP_PLUG_INIT(x)                                              \
-    extern sasl_auxprop_init_t x##_auxprop_plug_init;                          \
-    PLUG_API int sasl_auxprop_plug_init(const sasl_utils_t *utils,             \
-                                        int maxversion,                        \
-                                        int *out_version,                      \
-                                        sasl_auxprop_plug_t **plug,            \
-                                        const char *plugname)                  \
-    {                                                                          \
-        return x##_auxprop_plug_init(utils,                                    \
-                                     maxversion,                               \
-                                     out_version,                              \
-                                     plug,                                     \
-                                     plugname);                                \
-    }
-
 #define SASL_CANONUSER_PLUG_INIT(x)                                            \
     extern sasl_canonuser_init_t x##_canonuser_plug_init;                      \
     PLUG_API int sasl_canonuser_init(const sasl_utils_t *utils,                \
