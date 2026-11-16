@@ -551,7 +551,10 @@ EXPORTED void buf_initm(struct buf *buf, char *base, int len)
  */
 EXPORTED void buf_initmcstr(struct buf *buf, char *str)
 {
-    buf_initm(buf, str, strlen(str));
+    size_t len = strlen(str);
+    /* count the NUL, so that an empty string gets freed */
+    buf_initm(buf, str, len + 1);
+    buf->len = len;
 }
 
 /*
