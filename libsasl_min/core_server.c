@@ -2040,109 +2040,16 @@ EXPORTED int sasl_user_exists(sasl_conn_t *conn,
     RETURN(conn, result);
 }
 
-/* check if an apop exchange is valid
- *  (note this is an optional part of the SASL API)
- *  if challenge is NULL, just check if APOP is enabled
- * inputs:
- *  challenge     -- challenge which was sent to client
- *  challen       -- length of challenge, 0 = strlen(challenge)
- *  response      -- client response, "<user> <digest>" (RFC 1939)
- *  resplen       -- length of response, 0 = strlen(response)
- * returns
- *  SASL_OK       -- success
- *  SASL_BADAUTH  -- authentication failed
- *  SASL_BADPARAM -- missing challenge
- *  SASL_BADPROT  -- protocol error (e.g., response in wrong format)
- *  SASL_NOVERIFY -- user found, but no verifier
- *  SASL_NOMECH   -- mechanism not supported
- *  SASL_NOUSER   -- user not found
- */
+/* This implementation doesn't provide sasl_checkapop */
 EXPORTED int sasl_checkapop(sasl_conn_t *conn,
-                            const char *challenge,
+                            const char *challenge __attribute__((unused)),
                             unsigned challen __attribute__((unused)),
-                            const char *response,
+                            const char *response __attribute__((unused)),
                             unsigned resplen __attribute__((unused)))
 {
-    sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn;
-    char *user, *user_end;
-    const char *password_request[] = { SASL_AUX_PASSWORD, NULL };
-    size_t user_len;
-    int result;
-
-    if (_sasl_server_active == 0) {
-        return SASL_NOTINIT;
-    }
-
-    /* check if it's just a query if we are enabled */
-    if (!challenge) {
-        return SASL_OK;
-    }
-
-    /* check params */
-    if (!conn) {
-        return SASL_BADPARAM;
-    }
-    if (!response) {
-        PARAMERROR(conn);
-    }
-
-    /* Parse out username and digest.
-     *
-     * Per RFC 1939, response must be "<user> <digest>", where
-     * <digest> is a 16-octet value which is sent in hexadecimal
-     * format, using lower-case ASCII characters.
-     */
-    user_end = strrchr(response, ' ');
-    if (!user_end || strspn(user_end + 1, "0123456789abcdef") != 32) {
-        sasl_seterror(conn, 0, "Bad Digest");
-        RETURN(conn, SASL_BADPROT);
-    }
-
-    user_len = (size_t) (user_end - response);
-    user = sasl_ALLOC(user_len + 1);
-    memcpy(user, response, user_len);
-    user[user_len] = '\0';
-
-    result = prop_request(s_conn->sparams->propctx, password_request);
-    if (result != SASL_OK) {
-        sasl_FREE(user);
-        RETURN(conn, result);
-    }
-
-    /* erase the plaintext password */
-    s_conn->sparams->utils->prop_erase(s_conn->sparams->propctx,
-                                       password_request[0]);
-
-    /* canonicalize the username and lookup any associated properties */
-    result = _sasl_canon_user_lookup(conn,
-                                     user,
-                                     user_len,
-                                     SASL_CU_AUTHID | SASL_CU_AUTHZID,
-                                     &(conn->oparams));
-    sasl_FREE(user);
-
-    if (result != SASL_OK) {
-        RETURN(conn, result);
-    }
-
-    /* Do APOP verification */
-    result = _sasl_auxprop_verify_apop(conn,
-                                       conn->oparams.authid,
-                                       challenge,
-                                       user_end + 1,
-                                       s_conn->user_realm);
-
-    /* Do authorization */
-    if (result == SASL_OK) {
-        result = do_authorization((sasl_server_conn_t *) conn);
-    }
-    else {
-        /* If verification failed, we don't want to encourage getprop to work */
-        conn->oparams.user = NULL;
-        conn->oparams.authid = NULL;
-    }
-
-    RETURN(conn, result);
+    sasl_seterror(conn, SASL_NOLOG,
+        "sasl_checkapop called, but was disabled at compile time");
+    RETURN(conn, SASL_NOMECH);
 }
 
 /* It would be nice if we can show other information like Author, Company, Year, plugin version */
