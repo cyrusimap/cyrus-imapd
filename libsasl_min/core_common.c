@@ -1526,41 +1526,6 @@ static int _sasl_syslog(void *context, int priority, const char *message)
     return SASL_OK;
 }
 
-static int _sasl_getsimple(void *context,
-                           int id,
-                           const char **result,
-                           size_t *len)
-{
-    const char *userid;
-
-    if (!context || !result) {
-        return SASL_BADPARAM;
-    }
-
-    switch (id) {
-    case SASL_CB_AUTHNAME:
-        userid = getenv("USER");
-        if (userid != NULL) {
-            *result = userid;
-            if (len) {
-                *len = strlen(userid);
-            }
-            return SASL_OK;
-        }
-        userid = getenv("USERNAME");
-        if (userid != NULL) {
-            *result = userid;
-            if (len) {
-                *len = strlen(userid);
-            }
-            return SASL_OK;
-        }
-        return SASL_FAIL;
-    default:
-        return SASL_BADPARAM;
-    }
-}
-
 static int _sasl_proxy_policy(sasl_conn_t *conn,
                               void *context __attribute__((unused)),
                               const char *requested_user,
@@ -1660,10 +1625,6 @@ EXPORTED int _sasl_getcallback(sasl_conn_t *conn,
     switch (callbackid) {
     case SASL_CB_LOG:
         *pproc = SASL_CB_PROC_PTR &_sasl_syslog;
-        *pcontext = conn;
-        return SASL_OK;
-    case SASL_CB_AUTHNAME:
-        *pproc = SASL_CB_PROC_PTR &_sasl_getsimple;
         *pcontext = conn;
         return SASL_OK;
     case SASL_CB_PROXY_POLICY:
