@@ -1,8 +1,0 @@
-Name: sasl_auto_transition
-Type: SWITCH
-Default-Value: 0
-Last-Modified: UNRELEASED
-For-Documentation-Only: 1
-SASL-Option: auto_transition
-
-Not clear whether this is useful, this might disappear...

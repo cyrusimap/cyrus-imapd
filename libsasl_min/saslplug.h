@@ -538,15 +538,6 @@ typedef struct sasl_server_params
     sasl_security_properties_t props;
     sasl_ssf_t external_ssf; /* external SSF active */
 
-    /* Pointer to the function which takes the plaintext passphrase and
-     *  transitions a user to non-plaintext mechanisms via setpass calls.
-     *  (NULL = auto transition not enabled/supported)
-     *
-     *  If passlen is 0, it defaults to strlen(pass).
-     *  returns 0 if no entry added, 1 if entry added
-     */
-    int (*transition)(sasl_conn_t *conn, const char *pass, unsigned passlen);
-
     /* Canonicalize a user name from on-wire to internal format
      *  added cjn 1999-09-21
      *  Must be called once user name acquired if canon_user is non-NULL.
@@ -695,33 +686,6 @@ typedef struct sasl_server_plug
      *  mech_dispose must be called on all mechanisms first
      */
     void (*mech_free)(void *glob_context, const sasl_utils_t *utils);
-
-    /* set a password (optional)
-     *  glob_context  -- global context
-     *  sparams       -- service, middleware utilities, etc. props ignored
-     *  user          -- user name
-     *  pass          -- password/passphrase (NULL = disable/remove/delete)
-     *  passlen       -- length of password/passphrase
-     *  oldpass       -- old password/passphrase (NULL = transition)
-     *  oldpasslen    -- length of password/passphrase
-     *  flags         -- see above
-     *
-     * returns:
-     *  SASL_NOCHANGE -- no change was needed
-     *  SASL_NOUSER   -- no entry for user
-     *  SASL_NOVERIFY -- no mechanism compatible entry for user
-     *  SASL_PWLOCK   -- password locked
-     *  SASL_DIABLED  -- account disabled
-     *  etc.
-     */
-    int (*setpass)(void *glob_context,
-                   sasl_server_params_t *sparams,
-                   const char *user,
-                   const char *pass,
-                   unsigned passlen,
-                   const char *oldpass,
-                   unsigned oldpasslen,
-                   unsigned flags);
 
     /* query which mechanisms are available for user
      *  glob_context  -- context

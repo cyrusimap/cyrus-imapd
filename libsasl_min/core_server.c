@@ -49,251 +49,16 @@ static mech_list_t *mechlist = NULL; /* global var which holds the list */
 
 static sasl_global_callbacks_t global_callbacks;
 
-/* set the password for a user
- *  conn        -- SASL connection
- *  user        -- user name
- *  pass        -- plaintext password, may be NULL to remove user
- *  passlen     -- length of password, 0 = strlen(pass)
- *  oldpass     -- NULL will sometimes work
- *  oldpasslen  -- length of password, 0 = strlen(oldpass)
- *  flags       -- see flags below
- *
- * returns:
- *  SASL_NOCHANGE  -- proper entry already exists
- *  SASL_NOMECH    -- no authdb supports password setting as configured
- *  SASL_NOVERIFY  -- user exists, but no settable password present
- *  SASL_DISABLED  -- account disabled
- *  SASL_PWLOCK    -- password locked
- *  SASL_WEAKPASS  -- password too weak for security policy
- *  SASL_NOUSERPASS -- user-supplied passwords not permitted
- *  SASL_FAIL      -- OS error
- *  SASL_BADPARAM  -- password too long
- *  SASL_OK        -- successful
- */
-
+/* This implementation does not support setting user passwords */
 EXPORTED int sasl_setpass(sasl_conn_t *conn,
-                          const char *user,
-                          const char *pass,
-                          unsigned passlen,
-                          const char *oldpass,
-                          unsigned oldpasslen,
-                          unsigned flags)
+                          const char *user __attribute__((unused)),
+                          const char *pass __attribute__((unused)),
+                          unsigned passlen __attribute__((unused)),
+                          const char *oldpass __attribute__((unused)),
+                          unsigned oldpasslen __attribute__((unused)),
+                          unsigned flags __attribute__((unused)))
 {
-    int result = SASL_OK, tmpresult;
-    sasl_server_conn_t *s_conn = (sasl_server_conn_t *) conn;
-    const char *password_request[] = { SASL_AUX_PASSWORD_PROP, NULL };
-    const char *user_delete_request[] = { SASL_AUX_PASSWORD_PROP,
-                                          SASL_AUX_ALL,
-                                          NULL };
-    sasl_server_userdb_setpass_t *setpass_cb = NULL;
-    void *context = NULL;
-    int tried_setpass = 0;
-    int failed = 0;
-    mechanism_t *sm;
-    server_sasl_mechanism_t *m;
-    char *current_mech;
-
-    if (!_sasl_server_active || !mechlist) {
-        return SASL_NOTINIT;
-    }
-
-    /* check params */
-    if (!conn) {
-        return SASL_BADPARAM;
-    }
-    if (conn->type != SASL_CONN_SERVER) {
-        PARAMERROR(conn);
-    }
-
-    if ((!(flags & SASL_SET_DISABLE) && passlen == 0)
-        || ((flags & SASL_SET_CREATE) && (flags & SASL_SET_DISABLE)))
-    {
-        PARAMERROR(conn);
-    }
-
-    /* Check that we have an active SASL mechanism */
-    if (sasl_getprop(conn, SASL_MECHNAME, (const void **) &current_mech)
-        != SASL_OK)
-    {
-        current_mech = NULL;
-    }
-
-    if ((flags & SASL_SET_CURMECH_ONLY) && (current_mech == NULL)) {
-        sasl_seterror(conn, SASL_NOLOG, "No current SASL mechanism available");
-        RETURN(conn, SASL_BADPARAM);
-    }
-
-    /* Do we want to store SASL_AUX_PASSWORD_PROP (plain text)?  and
-     * Do we have an auxprop backend that can store properties?
-     */
-    if ((flags & SASL_SET_DISABLE || !(flags & SASL_SET_NOPLAIN))
-        && sasl_auxprop_store(NULL, NULL, NULL) == SASL_OK)
-    {
-
-        tried_setpass++;
-
-        if (flags & SASL_SET_DISABLE) {
-            pass = NULL;
-            passlen = 0;
-            result =
-                prop_request(s_conn->sparams->propctx, user_delete_request);
-        }
-        else {
-            result = prop_request(s_conn->sparams->propctx, password_request);
-        }
-        if (result == SASL_OK) {
-            /* NOTE: When deleting users, this will work in a backward compatible way */
-            result = prop_set(s_conn->sparams->propctx,
-                              SASL_AUX_PASSWORD_PROP,
-                              pass,
-                              passlen);
-        }
-        if (result == SASL_OK && flags & SASL_SET_DISABLE) {
-            result = prop_set(s_conn->sparams->propctx, SASL_AUX_ALL, NULL, 0);
-        }
-        if (result == SASL_OK) {
-            result = sasl_auxprop_store(conn, s_conn->sparams->propctx, user);
-        }
-        if (result != SASL_OK) {
-            _sasl_log(conn,
-                      SASL_LOG_ERR,
-                      "setpass failed for %s: %s",
-                      user,
-                      sasl_errstring(result, NULL, NULL));
-            failed++;
-        }
-        else {
-            _sasl_log(conn, SASL_LOG_NOTE, "setpass succeeded for %s", user);
-        }
-    }
-
-    /* We want to preserve the current value of result, so we use tmpresult below */
-
-    /* call userdb callback function */
-    tmpresult = _sasl_getcallback(conn,
-                                  SASL_CB_SERVER_USERDB_SETPASS,
-                                  (sasl_callback_ft *) &setpass_cb,
-                                  &context);
-    if (tmpresult == SASL_OK && setpass_cb) {
-
-        tried_setpass++;
-
-        tmpresult = setpass_cb(conn,
-                               context,
-                               user,
-                               pass,
-                               passlen,
-                               s_conn->sparams->propctx,
-                               flags);
-        if (tmpresult != SASL_OK) {
-            if (tmpresult == SASL_CONSTRAINT_VIOLAT) {
-                if (result == SASL_OK) {
-                    result = tmpresult;
-                }
-            }
-            else {
-                result = tmpresult;
-            }
-            _sasl_log(conn,
-                      SASL_LOG_ERR,
-                      "setpass callback failed for %s: %s",
-                      user,
-                      sasl_errstring(tmpresult, NULL, NULL));
-            failed++;
-        }
-        else {
-            _sasl_log(conn,
-                      SASL_LOG_NOTE,
-                      "setpass callback succeeded for %s",
-                      user);
-        }
-    }
-
-    /* now we let the mechanisms set their secrets */
-    for (sm = s_conn->mech_list; sm; sm = sm->next) {
-        m = &sm->m;
-
-        if (!m->plug->setpass) {
-            /* can't set pass for this mech */
-            continue;
-        }
-
-        /* Invoke only one setpass for the currently selected mechanism,
-           if SASL_SET_CURMECH_ONLY is specified */
-        if ((flags & SASL_SET_CURMECH_ONLY)
-            && (strcmp(current_mech, m->plug->mech_name) != 0))
-        {
-            continue;
-        }
-
-        tried_setpass++;
-
-        tmpresult = m->plug->setpass(m->plug->glob_context,
-                                     ((sasl_server_conn_t *) conn)->sparams,
-                                     user,
-                                     pass,
-                                     passlen,
-                                     oldpass,
-                                     oldpasslen,
-                                     flags);
-        if (tmpresult == SASL_OK) {
-            _sasl_log(conn,
-                      SASL_LOG_NOTE,
-                      "%s: set secret for %s",
-                      m->plug->mech_name,
-                      user);
-
-            m->condition = SASL_OK; /* if we previously thought the
-                                       mechanism didn't have any user secrets
-                                       we now think it does */
-        }
-        else if (tmpresult == SASL_NOCHANGE) {
-            _sasl_log(conn,
-                      SASL_LOG_NOTE,
-                      "%s: secret not changed for %s",
-                      m->plug->mech_name,
-                      user);
-        }
-        else if (tmpresult == SASL_CONSTRAINT_VIOLAT) {
-            _sasl_log(conn,
-                      SASL_LOG_ERR,
-                      "%s: failed to set secret for %s: constrain violation",
-                      m->plug->mech_name,
-                      user);
-            if (result == SASL_OK) {
-                result = tmpresult;
-            }
-            failed++;
-        }
-        else {
-            result = tmpresult;
-            _sasl_log(conn,
-                      SASL_LOG_ERR,
-                      "%s: failed to set secret for %s: %s (%m)",
-                      m->plug->mech_name,
-                      user,
-                      sasl_errstring(tmpresult, NULL, NULL)
-            );
-            failed++;
-        }
-    }
-
-    if (!tried_setpass) {
-        _sasl_log(conn,
-                  SASL_LOG_WARN,
-                  "secret not changed for %s: "
-                  "no writable auxprop plugin or setpass callback found",
-                  user);
-    }
-    else if (result == SASL_CONSTRAINT_VIOLAT) {
-        /* If not all setpass failed with SASL_CONSTRAINT_VIOLAT -
-           ignore SASL_CONSTRAINT_VIOLAT */
-        if (failed < tried_setpass) {
-            result = SASL_OK;
-        }
-    }
-
-    RETURN(conn, result);
+    RETURN(conn, SASL_NOMECH);
 }
 
 /* local mechanism which disposes of server */
@@ -781,69 +546,6 @@ EXPORTED int sasl_server_init(const sasl_callback_t *callbacks,
     return ret;
 }
 
-/*
- * Once we have the users plaintext password we
- * may want to transition them. That is put entries
- * for them in the passwd database for other
- * stronger mechanism
- *
- * for example PLAIN -> CRAM-MD5
- */
-static int _sasl_transition(sasl_conn_t *conn,
-                            const char *pass,
-                            unsigned passlen)
-{
-    const char *dotrans = "n";
-    sasl_getopt_t *getopt;
-    int result = SASL_OK;
-    void *context;
-    unsigned flags = 0;
-
-    if (!conn) {
-        return SASL_BADPARAM;
-    }
-
-    if (!conn->oparams.authid) {
-        PARAMERROR(conn);
-    }
-
-    /* check if this is enabled: default to false */
-    if (_sasl_getcallback(conn,
-                          SASL_CB_GETOPT,
-                          (sasl_callback_ft *) &getopt,
-                          &context)
-        == SASL_OK)
-    {
-        getopt(context, NULL, "auto_transition", &dotrans, NULL);
-        if (dotrans == NULL) {
-            dotrans = "n";
-        }
-    }
-
-    if (!strcmp(dotrans, "noplain")) {
-        flags |= SASL_SET_NOPLAIN;
-    }
-
-    if (flags || *dotrans == '1' || *dotrans == 'y'
-        || (*dotrans == 'o' && dotrans[1] == 'n') || *dotrans == 't')
-    {
-        /* ok, it's on! */
-        _sasl_log(conn,
-                  SASL_LOG_NOTE,
-                  "transitioning user %s to auxprop database",
-                  conn->oparams.authid);
-        result = sasl_setpass(conn,
-                              conn->oparams.authid,
-                              pass,
-                              passlen,
-                              NULL,
-                              0,
-                              SASL_SET_CREATE | flags);
-    }
-
-    RETURN(conn, result);
-}
-
 /* create context for a single SASL connection
  *  service        -- registered name of the service using SASL (e.g. "imap")
  *  serverFQDN     -- Fully qualified domain name of server.  NULL means use
@@ -878,7 +580,7 @@ EXPORTED int sasl_server_new(const char *service,
     sasl_utils_t *utils;
     sasl_getopt_t *getopt;
     void *context;
-    const char *log_level, *auto_trans;
+    const char *log_level;
     const char *mlist = NULL;
     int plus = 0;
 
@@ -975,7 +677,7 @@ EXPORTED int sasl_server_new(const char *service,
 
     serverconn->sparams->callbacks = callbacks;
 
-    log_level = auto_trans = NULL;
+    log_level = NULL;
     if (_sasl_getcallback(*pconn,
                           SASL_CB_GETOPT,
                           (sasl_callback_ft *) &getopt,
@@ -983,21 +685,11 @@ EXPORTED int sasl_server_new(const char *service,
         == SASL_OK)
     {
         getopt(context, NULL, "log_level", &log_level, NULL);
-        getopt(context, NULL, "auto_transition", &auto_trans, NULL);
         getopt(context, NULL, "mech_list", &mlist, NULL);
     }
     serverconn->sparams->log_level = log_level ? atoi(log_level) : SASL_LOG_ERR;
 
     serverconn->sparams->utils = utils;
-
-    if (auto_trans
-        && (*auto_trans == '1' || *auto_trans == 'y' || *auto_trans == 't'
-            || (*auto_trans == 'o' && auto_trans[1] == 'n')
-            || !strcmp(auto_trans, "noplain"))
-        && sasl_auxprop_store(NULL, NULL, NULL) == SASL_OK)
-    {
-        serverconn->sparams->transition = &_sasl_transition;
-    }
 
     /* if we have a mech_list, create ordered list of avail mechs for this conn */
     if (mlist) {
@@ -1872,9 +1564,6 @@ static int _sasl_checkpass(sasl_conn_t *conn,
                 mech++;
             }
         }
-        else if (!is_mech(mech, "auxprop") && s_conn->sparams->transition) {
-            s_conn->sparams->transition(conn, pass, passlen);
-        }
     }
 
     if (result == SASL_NOMECH) {
@@ -2091,10 +1780,9 @@ static void _sasl_print_mechanism(server_sasl_mechanism_t *m,
     printf(", \tAPI version: %d\n", m->version);
 
     if (m->plug != NULL) {
-        printf("\tSASL mechanism: %s, best SSF: %d, supports setpass: %s\n",
+        printf("\tSASL mechanism: %s, best SSF: %d, supports setpass: no\n",
                m->plug->mech_name,
-               m->plug->max_ssf,
-               (m->plug->setpass != NULL) ? "yes" : "no");
+               m->plug->max_ssf);
 
         printf("\tsecurity flags:");
 

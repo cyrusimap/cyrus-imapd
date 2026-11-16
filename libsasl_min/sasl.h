@@ -627,22 +627,6 @@ typedef int sasl_server_userdb_checkpass_t(sasl_conn_t *conn,
                                            struct propctx *propctx);
 #define SASL_CB_SERVER_USERDB_CHECKPASS (0x8005)
 
-/* callback to store/change a plaintext password in the user database
- *  user          -- NUL terminated user name with user@realm syntax
- *  pass          -- password to store (may not be NUL terminated)
- *  passlen       -- length of password to store
- *  propctx       -- auxiliary properties (not stored)
- *  flags         -- see SASL_SET_* flags below (SASL_SET_CREATE optional)
- */
-typedef int sasl_server_userdb_setpass_t(sasl_conn_t *conn,
-                                         void *context,
-                                         const char *user,
-                                         const char *pass,
-                                         unsigned passlen,
-                                         struct propctx *propctx,
-                                         unsigned flags);
-#define SASL_CB_SERVER_USERDB_SETPASS (0x8006)
-
 /* callback for a server-supplied user canonicalization function.
  *
  * This function is called directly after the mechanism has the
