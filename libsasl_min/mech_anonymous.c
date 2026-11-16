@@ -121,7 +121,6 @@ static sasl_server_plug_t anonymous_server_plugins[] = {
         &anonymous_server_mech_step,        /* mech_step */
         NULL,                               /* mech_dispose */
         NULL,                               /* mech_free */
-        NULL,                               /* setpass */
         NULL,                               /* user_query */
         NULL,                               /* idle */
         NULL,                               /* mech_avail */

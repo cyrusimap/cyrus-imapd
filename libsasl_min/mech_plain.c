@@ -207,7 +207,6 @@ static sasl_server_plug_t plain_server_plugins[] = {
         &plain_server_mech_step,                              /* mech_step */
         NULL,                                                 /* mech_dispose */
         NULL,                                                 /* mech_free */
-        NULL,                                                 /* setpass */
         NULL,                                                 /* user_query */
         NULL,                                                 /* idle */
         NULL,                                                 /* mech_avail */

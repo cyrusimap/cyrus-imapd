@@ -151,7 +151,6 @@ static sasl_server_plug_t external_server_plugins[] = {
         &external_server_mech_step,                           /* mech_step */
         NULL,                                                 /* mech_dispose */
         NULL,                                                 /* mech_free */
-        NULL,                                                 /* setpass */
         NULL,                                                 /* user_query */
         NULL,                                                 /* idle */
         &external_server_mech_avail,                          /* mech_avail */
