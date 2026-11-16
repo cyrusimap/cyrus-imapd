@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee that keeps read access but gains or loses write access sees
+# isReadOnly change in its session, so the session state must change too.
+sub test_sessionstate_rights
+    :ReverseACLs
+    ($self)
+{
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+
+    my $request = {
+        using => ['urn:ietf:params:jmap:core'],
+        methodCalls => [['Core/echo', { }, 'R1']],
+    };
+    my $state = $jmap->request($request)->wrapper_properties->{sessionState};
+    $self->assert_not_null($state);
+
+    # Widen to read-write
+    $admintalk->setacl("user.other", "cassandane", "lrswitedn") or die;
+    my $newstate = $jmap->request($request)->wrapper_properties->{sessionState};
+    $self->assert_str_not_equals($state, $newstate);
+    $state = $newstate;
+
+    # Narrow back to read-only
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+    $newstate = $jmap->request($request)->wrapper_properties->{sessionState};
+    $self->assert_str_not_equals($state, $newstate);
+    $state = $newstate;
+
+    # Setting the same rights again changes nothing
+    $admintalk->setacl("user.other", "cassandane", "lr") or die;
+    $newstate = $jmap->request($request)->wrapper_properties->{sessionState};
+    $self->assert_str_equals($state, $newstate);
+}

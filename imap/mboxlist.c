@@ -1353,6 +1353,19 @@ static int user_can_read(const strarray_t *aclbits, const char *user)
     return 0;
 }
 
+/* The rights granted to identifier in an ACL split on tabs into alternating
+ * identifier and rights strings, or NULL if it has no entry. */
+static const char *acl_pairs_rights(const strarray_t *pairs,
+                                    const char *identifier)
+{
+    for (int i = 0; i + 1 < strarray_size(pairs); i += 2) {
+        if (!strcmp(strarray_nth(pairs, i), identifier)) {
+            return strarray_nth(pairs, i + 1);
+        }
+    }
+    return NULL;
+}
+
 EXPORTED int mboxlist_update_raclmodseq(const char *userid)
 {
     char *inbox = mboxname_user_mbox(userid, NULL);
@@ -1431,10 +1444,18 @@ static int mboxlist_update_racl(const char *dbname, const mbentry_t *oldmbentry,
     if (newusers) {
         for (i = 0; i+1 < strarray_size(newusers); i+=2) {
             const char *acluser = strarray_nth(newusers, i);
-            if (!strpbrk(strarray_nth(newusers, i+1), "lr")) continue;
+            const char *rights = strarray_nth(newusers, i+1);
+            if (!strpbrk(rights, "lr")) continue;
             if (!strcmpsafe(userid, acluser)) continue;
             if (strarray_contains(config_admins, acluser)) continue;
-            if (user_can_read(oldusers, acluser)) continue;
+            if (user_can_read(oldusers, acluser)) {
+                /* The racl entry stays, but the JMAP session shows other
+                 * rights too (isReadOnly), so its state must still change */
+                if (!silent &&
+                    strcmp(acl_pairs_rights(oldusers, acluser), rights))
+                    mboxlist_update_raclmodseq_wrapper(acluser, touched_users);
+                continue;
+            }
             mboxlist_racl_key(!!userid, acluser, dbname, &buf);
             r = cyrusdb_store(mbdb, buf.s, buf.len, "", 0, txn);
             if (r) goto done;
@@ -3876,19 +3897,6 @@ EXPORTED int mboxlist_updateacl_raw(const char *name, const char *newacl)
 
     user_nslock_release(&user_nslock);
     return r;
-}
-
-/* The rights granted to identifier in an ACL split on tabs into alternating
- * identifier and rights strings, or NULL if it has no entry. */
-static const char *acl_pairs_rights(const strarray_t *pairs,
-                                    const char *identifier)
-{
-    for (int i = 0; i + 1 < strarray_size(pairs); i += 2) {
-        if (!strcmp(strarray_nth(pairs, i), identifier)) {
-            return strarray_nth(pairs, i + 1);
-        }
-    }
-    return NULL;
 }
 
 static void notify_acl_change(struct mailbox *mailbox,
