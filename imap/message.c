@@ -3694,7 +3694,10 @@ EXPORTED char *message_extract_convsubject(const struct index_record *record)
     return NULL;
 }
 
+/* Normalised forms of a message subject.  The legacy forms are
+ * computed on demand, as only records of older versions need them. */
 struct message_subject {
+    char *raw;
     char *normalized;
     char *normalized_v1;
     char *normalized_v0;
@@ -3705,27 +3708,44 @@ static struct message_subject message_subject_init(const char *subject)
     struct message_subject subj = { 0 };
     if (!subject) return subj;
 
+    subj.raw = xstrdup(subject);
+
     struct buf buf = BUF_INITIALIZER;
     buf_setcstr(&buf, subject);
     conversation_normalise_subject(&buf);
     subj.normalized = buf_release(&buf);
-
-    buf_setcstr(&buf, subject);
-    normalise_subject_v0(&buf);
-    subj.normalized_v0 = buf_release(&buf);
-
-    buf_setcstr(&buf, subject);
-    normalise_subject_v1(&buf);
-    subj.normalized_v1 = buf_release(&buf);
 
     return subj;
 }
 
 static void message_subject_fini(struct message_subject *subj)
 {
+    free(subj->raw);
     free(subj->normalized);
     free(subj->normalized_v1);
     free(subj->normalized_v0);
+}
+
+static const char *message_subject_v0(struct message_subject *subj)
+{
+    if (!subj->normalized_v0 && subj->raw) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, subj->raw);
+        normalise_subject_v0(&buf);
+        subj->normalized_v0 = buf_release(&buf);
+    }
+    return subj->normalized_v0;
+}
+
+static const char *message_subject_v1(struct message_subject *subj)
+{
+    if (!subj->normalized_v1 && subj->raw) {
+        struct buf buf = BUF_INITIALIZER;
+        buf_setcstr(&buf, subj->raw);
+        normalise_subject_v1(&buf);
+        subj->normalized_v1 = buf_release(&buf);
+    }
+    return subj->normalized_v1;
 }
 
 static bool message_subject_matchconv(struct message_subject *subj,
@@ -3735,8 +3755,8 @@ static bool message_subject_matchconv(struct message_subject *subj,
         return !strcmpsafe(subj->normalized, conv->subject);
     }
     else {
-        return !strcmpsafe(subj->normalized_v1, conv->subject) ||
-               !strcmpsafe(subj->normalized_v0, conv->subject);
+        return !strcmpsafe(message_subject_v1(subj), conv->subject) ||
+               !strcmpsafe(message_subject_v0(subj), conv->subject);
     }
 }
 
