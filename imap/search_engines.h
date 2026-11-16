@@ -152,6 +152,18 @@ struct search_text_receiver {
 #define SEARCH_INDEXLEVEL_BEST SEARCH_INDEXLEVEL_ATTACH
 #define SEARCH_INDEXLEVEL_MAX (SEARCH_INDEXLEVEL_PARTIAL - 1)
     int (*end_message)(search_text_receiver_t *, uint8_t indexlevel);
+    /** @brief Raises the highest createdmodseq that the search index covers.
+     *
+     *  @p createdmodseq is the createdmodseq of a message of the current
+     *  mailbox that is_indexed reported as indexed. It is ignored if it is
+     *  not higher than the current value. Must be called between
+     *  begin_mailbox and end_mailbox, and only if all messages of this
+     *  mailbox update that needed indexing got indexed.
+     *
+     *  This hook is optional: a search engine may leave it NULL.
+     */
+    void (*update_highest_createdmodseq)(search_text_receiver_t *,
+                                         modseq_t createdmodseq);
     int (*end_mailbox)(search_text_receiver_t *, struct mailbox *);
     int (*flush)(search_text_receiver_t *);
     int (*audit_mailbox)(search_text_receiver_t *, bitvector_t *unindexed);

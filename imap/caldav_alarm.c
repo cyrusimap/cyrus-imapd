@@ -1587,7 +1587,7 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
 
     /* Append the message to the mailbox */
     struct append_metadata meta = {
-        &record->internaldate, savedate, /*cmodseq*/ 0,
+        &record->internaldate, savedate, record->createdmodseq,
         flags, &annots, /*nolink*/ 0
     };
     r = append_fromstage_full(&as, &body, stage, &meta);

@@ -7660,6 +7660,7 @@ static int _snippet_get(jmap_req_t *req, json_t *filter,
             _snippet_tr_end_part,
             _snippet_tr_end_bodypart,
             _snippet_tr_end_message,
+            NULL, /* update_highest_createdmodseq */
             _snippet_tr_end_mailbox,
             _snippet_tr_flush,
             _snippet_tr_audit_mailbox,
