@@ -48,10 +48,6 @@ extensions = [
 ]
 
 extensions.append('sphinxlocal.roles.cyrusman')
-extensions.append('sphinxlocal.builders.gitstamp')
-
-gitstamp_fmt = "%b %d %Y"
-
 extensions.append('sphinxlocal.sitemap')
 
 # We publish master branch at /dev
