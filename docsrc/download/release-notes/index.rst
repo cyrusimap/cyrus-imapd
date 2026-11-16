@@ -26,19 +26,31 @@ Its documentation can be found at :cyrus-dev:`/`.
     there will generally be **large breaking changes** occurring between
     releases in this series.
 
-Series 3.14
+Series 3.15
 ~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
-    3.13/index
+    3.15/index
 
 Supported Versions
 ------------------
 
 The latest stable version is |imap_stable_release_notes|.  Its documentation
 can be found at :cyrus-stable:`/`.
+
+Series 3.14
+~~~~~~~~~~~
+
+Documentation at :cyrus-3.14:`/`.
+
+.. toctree::
+    :maxdepth: 1
+
+    3.14/index
+    3.13/index
+
 
 Series 3.12
 ~~~~~~~~~~~
