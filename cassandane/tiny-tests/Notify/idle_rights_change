@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+# A NOTIFY client in IDLE isn't polled, but still sees a rights change on
+# the selected mailbox within an idle period, without any mailbox event.
+sub test_idle_rights_change
+    :needs_component_idled :NoAltNameSpace
+    ($self)
+{
+    $self->{instance}->{config}->set(imapidlepoll => '1');
+    $self->{instance}->add_start(name => 'idled', argv => [ 'idled' ]);
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $folder = 'user.sharer.shared';
+
+    xlog $self, "sharer shares a mailbox with cassandane read-write";
+    $self->{instance}->create_user('sharer');
+    my $sharer = $svc->create_store(username => 'sharer')->get_client();
+    $sharer->create($folder) or die;
+    $sharer->setacl($folder, cassandane => 'lrswipkxtecdn') or die;
+
+    my $store = $svc->create_store();
+    my $talk = $store->get_client();
+
+    $talk->_imap_cmd('NOTIFY', 0, '', 'SET',
+                     '(SELECTED (MessageNew MessageExpunge))');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_str_equals('read-write', $talk->select($folder));
+    $talk->clear_response_code('read-write');
+
+    $store->idle_begin() or die "IDLE failed: $@";
+
+    xlog $self, "sharer removes cassandane's write rights";
+    $sharer->setacl($folder, cassandane => 'lr') or die;
+
+    my $res = $store->idle_response({}, 5);
+    $self->assert($res, "received an unsolicited response");
+    $self->assert_not_null($talk->get_response_code('read-only'));
+
+    $store->idle_end({});
+}
