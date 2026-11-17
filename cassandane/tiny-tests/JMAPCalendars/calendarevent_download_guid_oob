@@ -1,0 +1,52 @@
+#!perl
+use Cassandane::Tiny;
+use MIME::Base64 qw(encode_base64url decode_base64url);
+
+sub test_calendarevent_download_guid_oob ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $default_cal_id = $self->default_user->calendars->default->id;
+
+    xlog $self, "create a calendar event";
+
+    my $res = $jmap->request([
+        ['CalendarEvent/set', {
+            create => {
+                "1" => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    uid => 'event1uid1',
+                    title => "event1",
+                    start => "2019-01-01T09:00:00",
+                    timeZone => "Europe/Vienna",
+                    duration => "PT1H",
+                },
+            }
+        }, 'R1'],
+    ]);
+    my $blobid = $res->single_sentence->arguments->{created}{1}{blobId};
+    $self->assert_not_null($blobid);
+
+    xlog $self, "rewrite the trailing GUID with an over-long hex string";
+
+    my $prefix = substr($blobid, 0, 1);
+    my $raw = decode_base64url(substr($blobid, 1));
+    $self->assert_matches(qr/\[[0-9a-f]{40}\]\z/, $raw);
+
+    # The value is in the form:
+    #   M<mboxid>:<uid>...S<subpart>[<guid>]
+    #
+    # We want to replace the <guid> with something too long to be valid.  This
+    # is the defect we're regression testing: we read too many bytes, then
+    # parsed them as a guid into a too-small buffer.
+    my $overlong = 'ff' x 36;
+    $raw =~ s/\[[0-9a-f]{40}\]\z/[$overlong]/;
+    my $crafted_blobid = $prefix . encode_base64url($raw, '');
+
+    xlog $self, "download the crafted blob: must be rejected, not crash the worker";
+
+    my $download = $jmap->Download('cassandane', $crafted_blobid);
+    $self->assert_str_equals('400', $download->{status});
+}

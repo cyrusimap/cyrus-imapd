@@ -216,7 +216,14 @@ EXPORTED const char *message_guid_encode_short(const struct message_guid *guid, 
 
 EXPORTED int message_guid_decode(struct message_guid *guid, const char *text)
 {
-    int r = hex_to_bin(text, 0, &guid->value);
+    /* hex_to_bin() writes one byte per two input hex digits with no bound on
+     * the destination, so reject any text that is not exactly the GUID size
+     * before it can overflow guid->value */
+    if (!text || strlen(text) != 2 * MESSAGE_GUID_SIZE) {
+        message_guid_set_null(guid);
+        return 0;
+    }
+    int r = hex_to_bin(text, 2 * MESSAGE_GUID_SIZE, &guid->value);
     guid->status = (r > 0 ? GUID_NONNULL : GUID_NULL);
     return (r == MESSAGE_GUID_SIZE);
 }
