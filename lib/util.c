@@ -30,6 +30,10 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 
+#include <openssl/asn1.h>
+#include <openssl/crypto.h>
+#include <openssl/x509.h>
+
 #include "assert.h"
 #include "byteorder.h"
 #include "libconfig.h"
@@ -40,6 +44,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xsha1.h"
+#include "xstrlcpy.h"
 #include "xunlink.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
@@ -1625,4 +1630,26 @@ EXPORTED void _xsyslog_ev(int saved_errno, int priority, const char *event,
     logfmt_emit(&lf, priority);
 
     errno = saved_errno;
+}
+
+EXPORTED int tls_x509_name_get_text(const X509_NAME *name, int nid,
+                                    char *buf, size_t len)
+{
+    if (!len) return -1;
+    buf[0] = '\0';
+
+    int loc = X509_NAME_get_index_by_NID(name, nid, -1);
+    if (loc < 0) return -1;
+
+    const X509_NAME_ENTRY *ne = X509_NAME_get_entry(name, loc);
+    if (!ne) return -1;
+
+    unsigned char *utf8 = NULL;
+    int n = ASN1_STRING_to_UTF8(&utf8, X509_NAME_ENTRY_get_data(ne));
+    if (n < 0) return -1;
+
+    strlcpy(buf, (const char *) utf8, len);
+    OPENSSL_free(utf8);
+
+    return n;
 }

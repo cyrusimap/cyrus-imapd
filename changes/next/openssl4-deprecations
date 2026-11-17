@@ -1,0 +1,25 @@
+Description:
+
+Cyrus builds against OpenSSL 4.0 as well as 3.x.  Certificate common names
+that aren't plain ASCII are now converted to UTF-8 before being logged or
+used as the SASL EXTERNAL identity.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
