@@ -33,7 +33,7 @@ Message-Id: <cyr-2993-poc\@cassandane.local>
 Content-Type: application/sieve; charset=utf-8
 Content-Length: 6
 Content-Disposition: attachment;
-	filename="cyr2993poc.sieve"
+  filename="cyr2993poc.sieve"
 MIME-Version: 1.0
 
 keep;
