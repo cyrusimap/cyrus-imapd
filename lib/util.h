@@ -611,4 +611,17 @@ __attribute__((weak, alias("wrap_clock_gettime"), visibility("default")))
 extern int cyrus_gettime(clockid_t, struct timespec *);
 #endif
 
+struct X509_name_st;
+
+/**
+ * Copy the first @p nid entry of the X509_NAME @p name into @p buf as a
+ * NUL-terminated UTF-8 string, truncated to fit @p len bytes.  Replaces
+ * X509_NAME_get_text_by_NID(), which OpenSSL 4.0 deprecates.
+ *
+ * @return the untruncated length, or -1 if there is no such entry (in
+ *         which case @p buf is set to the empty string if @p len > 0)
+ */
+extern int tls_x509_name_get_text(const struct X509_name_st *name, int nid,
+                                  char *buf, size_t len);
+
 #endif /* INCLUDED_UTIL_H */

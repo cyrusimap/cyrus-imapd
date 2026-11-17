@@ -1797,8 +1797,8 @@ EXPORTED int tls_start_clienttls(struct imclient *imclient,
      */
     peer = SSL_get_peer_certificate(imclient->tls_conn);
     if (peer) {
-        X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
-                                  NID_commonName, peer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_subject_name(peer),
+                               NID_commonName, peer_CN, CCERT_BUFSIZ);
         tls_peer_CN = peer_CN;
     }
 

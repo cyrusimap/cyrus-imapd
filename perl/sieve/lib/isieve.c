@@ -349,7 +349,8 @@ int isieve_starttls(isieve_t *obj,
             goto tlserr;
         }
     }
-    else if (!SSL_set1_host(obj->tls_conn, obj->serverFQDN)
+    else if (!X509_VERIFY_PARAM_set1_host(SSL_get0_param(obj->tls_conn),
+                                         obj->serverFQDN, 0)
              || !SSL_set_tlsext_host_name(obj->tls_conn, obj->serverFQDN))
     {
         goto tlserr;
