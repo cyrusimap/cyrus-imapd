@@ -651,11 +651,11 @@ static int tls_start_clienttls(unsigned *layer, char **authid)
      */
     peer = SSL_get_peer_certificate(tls_conn);
     if (peer != NULL) {
-        X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
-                                  NID_commonName, peer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_subject_name(peer),
+                               NID_commonName, peer_CN, CCERT_BUFSIZ);
         tls_peer_CN = peer_CN;
-        X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
-                                  NID_commonName, issuer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_issuer_name(peer),
+                               NID_commonName, issuer_CN, CCERT_BUFSIZ);
         if (verbose==1)
             printf("subject_CN=%s, issuer_CN=%s\n", peer_CN, issuer_CN);
         tls_issuer_CN = issuer_CN;
