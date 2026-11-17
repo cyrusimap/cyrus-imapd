@@ -1,0 +1,64 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_sharewith_requires_admin
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    # Mailbox/set only recognizes shareWith if the client asked for JMAP Mail
+    # Sharing.  Without this, every request below is rejected as
+    # invalidProperties and the test passes no matter what the ACL check
+    # does. -- rjbs, 2026-08-20
+    $jmap->AddUsing('urn:ietf:params:jmap:mail:share');
+
+    # sharer is the mailbox owner; cassandane is the would-be attacker.
+    my $sharer = $self->{instance}->create_user("sharer");
+    my $sharer_inbox = $sharer->mailboxes->inbox;
+
+    $sharer_inbox->share_with(cassandane => [ qw(mayReadItems) ]);
+
+    my %acl_before = $admin->getacl("user.sharer");
+
+    xlog $self, "as cassandane, try to grant 'third' admin rights on sharer's INBOX";
+    my $set = $jmap->request([[
+        'Mailbox/set' => {
+            accountId => "sharer",
+            update => {
+                $sharer_inbox->id => {
+                    shareWith => {
+                        third      => { mayShare => JSON::true },
+                        cassandane => { mayShare => JSON::true },
+                    },
+                },
+            },
+        },
+    ]])->single_sentence("Mailbox/set")->arguments;
+
+    xlog $self, "Mailbox/set must not report success";
+    $self->assert_null($set->{updated}{ $sharer_inbox->id });
+    $self->assert_str_equals('forbidden',
+        $set->{notUpdated}{ $sharer_inbox->id }{type});
+
+    # The error alone proves nothing!  Before the fix, Mailbox/set wrote the
+    # new ACL and *then* reported "forbidden" when it failed to provision the
+    # new sharee's upload collection.  The ACL is the test. -- rjbs, 2026-08-20
+    $sharer_inbox->clear_properties;
+
+    my $sharing = $sharer_inbox->properties->{shareWith};
+
+    $self->assert(
+      ! exists $sharing->{third},
+      "no sharing added for 'third'",
+    );
+
+    $self->assert(
+      ! $sharing->{cassandane}{mayShare},
+      "cassandane hasn't got mayShare"
+    );
+
+    my %acl_after = $admin->getacl("user.sharer");
+    $self->assert_cmp_deeply(\%acl_before, \%acl_after);
+}

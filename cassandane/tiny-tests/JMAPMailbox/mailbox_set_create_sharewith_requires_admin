@@ -1,0 +1,63 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_set_create_sharewith_requires_admin
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    # Mailbox/set only recognizes shareWith if the client asked for JMAP Mail
+    # Sharing.  Without this, the create below is rejected as
+    # invalidProperties whether or not the rights are checked, and the test
+    # proves nothing. -- rjbs, 2026-08-20
+    $jmap->AddUsing('urn:ietf:params:jmap:mail:share');
+
+    # sharer is the mailbox owner; cassandane is the would-be attacker.
+    $self->{instance}->create_user("sharer");
+
+    # Give cassandane enough to create a top-level mailbox in sharer's
+    # account but no admin (a) bit, so she has no business setting ACLs.
+    # The 'i' bit is required so that has_shared_rw_rights() in
+    # _create_upload_collection passes when jmap_set_sharewith eventually
+    # touches sharer's JMAP upload folder; without it the create reports
+    # forbidden but the mailbox has already been created with the bad ACL.
+    $admin->setacl("user.sharer", "cassandane", "lrwki") or die;
+
+    my %acl_before = $admin->getacl("user.sharer");
+
+    # Note: no parentId -- with parentId set to the INBOX's id JMAP would
+    # create user.sharer.INBOX.evilchild (children-of-INBOX namespace), which
+    # is a funny corner. Omitting parentId makes this a top-level mailbox,
+    # i.e. user.sharer.evilchild -- the natural place for a new folder.
+    my $cassandane_creates = sub ($name, %extra) {
+        return $jmap->request([[
+            'Mailbox/set' => {
+                accountId => "sharer",
+                create => { "1" => { name => $name, %extra } },
+            },
+        ]])->single_sentence("Mailbox/set")->arguments;
+    };
+
+    xlog $self, "as cassandane, create a top-level mailbox in sharer's account with shareWith";
+    my $set = $cassandane_creates->("evilchild",
+        shareWith => { cassandane => { mayShare => JSON::true } });
+
+    xlog $self, "Mailbox/set must not report success";
+    $self->assert_null($set->{created}{1});
+    $self->assert_str_equals('invalidProperties', $set->{notCreated}{1}{type});
+
+    xlog $self, "the mailbox must not exist, and no ACL may have been written";
+    $self->assert_cmp_deeply([], [ $admin->list('', 'user.sharer.evilchild') ]);
+
+    my %acl_after = $admin->getacl("user.sharer");
+    $self->assert_cmp_deeply(\%acl_before, \%acl_after);
+
+    # If cassandane couldn't have created the mailbox at all, the assertions
+    # above would hold for the wrong reason. -- rjbs, 2026-08-20
+    xlog $self, "as a control, the same create without shareWith succeeds";
+    $set = $cassandane_creates->("goodchild");
+    $self->assert_null($set->{notCreated}{1});
+    $self->assert_not_null($set->{created}{1});
+}
