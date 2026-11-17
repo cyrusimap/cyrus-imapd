@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+# Removing a user from the group that grants access takes effect on their
+# session that already has the mailbox selected.
+sub test_group_revoke_selected
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $folder = 'user.sharer.shared';
+
+    xlog $self, "a mailbox readable only through a group";
+    $admintalk->create('user.sharer') or die;
+    $admintalk->create($folder) or die;
+    $admintalk->setacl($folder, admin => 'lrswipkxtecdan') or die;
+    $admintalk->setacl($folder, 'group:readers' => 'lr') or die;
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:readers');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->{adminstore}->set_folder($folder);
+    $self->make_message('Message A', store => $self->{adminstore}) or die;
+
+    my $talk = $self->{store}->get_client();
+    $talk->examine($folder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->fetch('1', '(flags)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "cassandane leaves the group";
+    $admintalk->_imap_cmd('UNSETUSERGROUP', 0, '',
+                          'cassandane', 'group:readers');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $talk->fetch('1', '(flags)');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/permission denied/i, $talk->get_last_error());
+}

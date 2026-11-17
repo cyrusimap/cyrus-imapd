@@ -1,0 +1,190 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Test revoking and restoring rights while mailbox is selected
+#
+sub test_revoke_restore
+    :NoAltNameSpace
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $folder = 'user.archive.cassandane.sent';
+
+    # Add message to INBOX
+    $self->make_message("Message X");
+
+    # Add message to $folder
+    $self->{adminstore}->set_folder($folder);
+    $self->make_message("Message A", store => $self->{adminstore});
+
+    # Set ACL to full read-write
+    $admintalk->setacl($folder, "cassandane", "lrswipkxtean");
+
+    # Examine mailbox - should be read-only
+    my $res = $talk->examine($folder);
+    $self->assert_str_equals('read-only', $res);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->clear_response_code('read-only');
+
+    # Store \Flagged should be disallowed
+    $res = $talk->store('1', '-flags', '(\\flagged)');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    # Idle updates should be allowed
+    $store->idle_begin()
+        or die "IDLE failed: $@";
+
+    my $msg = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg, user => 'archive+cassandane.sent');
+
+    $store->idle_response({}, 1);
+    $self->assert_num_equals(2, $talk->get_response_code('exists'));
+    $talk->clear_response_code('exists');
+    $store->idle_end({});
+
+    # Remove 'r' right
+    $admintalk->setacl($folder, "cassandane", "-r");
+
+    # Polled updates should be disallowed
+    $msg = $self->{gen}->generate(subject => "Message 2");
+    $self->{instance}->deliver($msg, user => 'archive+cassandane.sent');
+
+    $res = $talk->noop();
+    $store->idle_response({}, 3);
+    $self->assert_null($talk->get_response_code('exists'));
+
+    # Idle updates should be disallowed
+    $store->idle_begin()
+        or die "IDLE failed: $@";
+
+    $msg = $self->{gen}->generate(subject => "Message 3");
+    $self->{instance}->deliver($msg, user => 'archive+cassandane.sent');
+
+    $store->idle_response({}, 3);
+    $self->assert_null($talk->get_response_code('exists'));
+    $store->idle_end({});
+
+    # Any read command should be disallowed
+    $res = $talk->fetch('1', '(flags)');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    $res = $talk->copy('1', 'INBOX');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    $res = $talk->search('all');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    $res = $talk->sort('(size)', 'us-ascii', 'all');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    $res = $talk->thread('references', 'us-ascii', 'all');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    my @results;
+    my %handlers =
+    (
+        esearch => sub
+        {
+            my (undef, $esearch) = @_;
+            push(@results, $esearch);
+        },
+    );
+
+    $res = $talk->_imap_cmd('ESEARCH', 0, 'esearch', 'ALL');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(0, scalar @results);
+
+    @results = ();
+    $res = $talk->_imap_cmd('ESEARCH', 0, \%handlers, #'esearch',
+                            'IN', '(PERSONAL SELECTED)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_num_equals(1, scalar @results);
+    $self->assert_str_equals('INBOX', $results[0][0][3]);
+
+    $res = $talk->_imap_cmd('UIDBATCHES', 0, 0, '10');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    # Add 'r' right
+    $admintalk->setacl($folder, "cassandane", "+r");
+
+    # Select mailbox - should be read-write
+    $res = $talk->select($folder);
+    $self->assert_str_equals('read-write', $res);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->clear_response_code('read-write');
+
+    # Should be allowed to set flags
+    $res = $talk->store('1', '+flags', '(\\seen \\flagged \\deleted)');
+    $self->assert_not_null($res);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Remove ALL write rights
+    $admintalk->setacl($folder, "cassandane", "-switen");
+
+    # Any write command should be disallowed
+    $res = $talk->store('1', '-flags', '(\\seen)');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    # Mailbox should be reported as read-only
+    $self->assert_not_null($talk->get_response_code('read-only'));
+    $talk->clear_response_code('read-only');
+
+    $res = $talk->store('1', '-flags', '(\\flagged)');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    $res = $talk->store('1', '-flags', '(\\deleted)');
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    $res = $talk->expunge();
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+
+    # Re-Select mailbox - should be read-only
+    $res = $talk->unselect();
+    $res = $talk->select($folder);
+    $self->assert_str_equals('read-only', $res);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->clear_response_code('read-only');
+
+    # Add 't' right
+    $admintalk->setacl($folder, "cassandane", "+t");
+
+    # Should be allowed to unset \Deleted
+    $res = $talk->store('1', '-flags', '(\\deleted)');
+    $self->assert_not_null($res);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    # Mailbox should be reported as read-write
+    $self->assert_not_null($talk->get_response_code('read-write'));
+    $talk->clear_response_code('read-write');
+
+    # Expunge should still be disallowed
+    $res = $talk->expunge();
+    $self->assert_null($res); # means it failed
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/permission denied/i);
+}
