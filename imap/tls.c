@@ -1433,10 +1433,10 @@ static int start_servertls(int readfd, int writefd, int timeout,
 
         if (X509_digest(peer, EVP_md5(), md, &n))
             bin_to_hex(md, n, fingerprint, BH_UPPER|BH_SEPARATOR('_'));
-        X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
-                          NID_commonName, peer_CN, CCERT_BUFSIZ);
-        X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
-                          NID_commonName, issuer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_subject_name(peer),
+                               NID_commonName, peer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_issuer_name(peer),
+                               NID_commonName, issuer_CN, CCERT_BUFSIZ);
         /* tls_loglevel decides how much of the certificate is logged */
         int level = var_imapd_tls_loglevel;
         xsyslog_ev(LOG_DEBUG, "tls.peer.cert.received",
@@ -1964,10 +1964,10 @@ HIDDEN int tls_start_clienttls(int readfd, int writefd,
         char issuer_CN[CCERT_BUFSIZ];
         char peer_CN[CCERT_BUFSIZ];
 
-        X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
-                                  NID_commonName, peer_CN, CCERT_BUFSIZ);
-        X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
-                                  NID_commonName, issuer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_subject_name(peer),
+                               NID_commonName, peer_CN, CCERT_BUFSIZ);
+        tls_x509_name_get_text(X509_get_issuer_name(peer),
+                               NID_commonName, issuer_CN, CCERT_BUFSIZ);
         xsyslog_ev(LOG_DEBUG, "tls.peer.cert.received",
                    var_proxy_tls_loglevel >= 3
                        ? lf_s("tls.peer.subject_cn", peer_CN) : lf_skip(),
