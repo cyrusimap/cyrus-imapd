@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_accountid_annot_rename_delete
+    :NoAltNamespace :AllowMoves
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/accountid';
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('other');
+    $admintalk->setmetadata('user.other', $entry, 'u2b59f9f4');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog $self, "Renaming the user keeps the account and its accountid";
+    $admintalk->rename('user.other', 'user.renamed');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    my $res = $admintalk->getmetadata('user.renamed', $entry);
+    $self->assert_str_equals('u2b59f9f4', $res->{'user.renamed'}{$entry});
+    $admintalk->setmetadata('user.cassandane', $entry, 'u2b59f9f4');
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+
+    xlog $self, "Deleting the user frees its accountid";
+    $admintalk->setacl('user.renamed', 'admin', 'lrswipkxtecdan');
+    $admintalk->delete('user.renamed');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $admintalk->setmetadata('user.cassandane', $entry, 'u2b59f9f4');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+}

@@ -83,6 +83,7 @@ struct mboxlist_entry {
     /* extra fields */
     char *uniqueid;
     char *jmapid;
+    char *accountid; /* INBOX only: the owner's OBJECTID+ ACCOUNTID, if set */
     /* legacy upgrade support */
     char *legacy_specialuse;
     /* replication support */
@@ -90,7 +91,7 @@ struct mboxlist_entry {
 };
 
 #define MBENTRY_INITIALIZER  { NULL, NULL, 0, 0, 0, 0, 0, NULL, NULL, NULL, \
-                               NULL, NULL, NULL, PTRARRAY_INITIALIZER }
+                               NULL, NULL, NULL, NULL, PTRARRAY_INITIALIZER }
 
 typedef struct mboxlist_entry mbentry_t;
 
@@ -157,6 +158,18 @@ char *mboxlist_find_specialuse(const char *use, const char *userid);
  */
 char *mboxlist_find_uniqueid(const char *uniqueid, const char *userid,
                              const struct auth_state *auth_state);
+/**
+ * Look up the INBOX whose accountid is 'accountid'.
+ *
+ * Only a live INBOX that still holds the accountid matches, so a stale U
+ * record is never trusted.
+ *
+ * @param accountid  an accountid set on some INBOX
+ * @param entryptr   NULL, or receives the INBOX's mbentry to free
+ * @return 0, or IMAP_MAILBOX_NONEXISTENT if no INBOX holds it
+ */
+int mboxlist_lookup_by_accountid(const char *accountid, mbentry_t **entryptr);
+
 char *mboxlist_find_jmapid(const char *jmapid, const char *userid,
                            const struct auth_state *auth_state);
 

@@ -34,6 +34,7 @@ u.username              the userid the event happened for or on behalf of
 ### mbox. - a mailbox
 
 mbox                    placeholder for "no mailbox"; value is always ~null~
+mbox.accountid          an INBOX's accountid, the owner's OBJECTID+ ACCOUNTID
 mbox.acl                the mailbox ACL, in its stored form
 mbox.cache.crc          the CRC recorded in a cache record
 mbox.cache.crc.written  the CRC actually written when a cache record was rebuilt
