@@ -1,0 +1,45 @@
+Description:
+
+A JMAP sharee with mayWriteOwn on another user's calendar can now update or
+destroy only the events that the sharee organizes.  Previously,
+CalendarEvent/set compared each event's organizer against the calendar owner's
+addresses rather than the sharee's, so every event in the calendar counted as
+the sharee's own, and the sharee could rewrite owner-controlled fields (title,
+timing, location, etc.) of any of them, or destroy them.
+
+Reported by: Michael Lynch (mtlynch.io).
+
+
+CVE number:
+
+CVE-2026-61914
+Tracked as GitHub security advisory GHSA-45q6-9pg6-h3xw.
+
+
+CVE description:
+
+Write-own calendar share permits altering any event
+
+An authenticated JMAP user permitted to change only their own events in
+another user's shared calendar could modify or delete any event in that
+calendar.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
