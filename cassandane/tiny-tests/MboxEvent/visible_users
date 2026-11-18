@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+# vnd.cmu.visibleUsers lists the users who can read the mailbox, with groups
+# expanded to their members, so a pusher can find them without access to the
+# group memberships.  Identifiers that can't be listed (anyone, anonymous) and
+# admins are left out.
+sub test_visible_users
+    :Mboxgroups
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('other');
+    for my $member (qw( alice bob )) {
+        $admintalk->_imap_cmd('SETUSERGROUP', 0, '', $member, 'group:team');
+        $self->assert_str_equals('ok',
+                                 $admintalk->get_last_completion_response());
+    }
+
+    $self->assert_visible_users('read', {
+        acl     => [ bob => 'lr' ],
+        visible => [qw( bob other )],
+    });
+
+    $self->assert_visible_users('lookup only', {
+        acl     => [ bob => 'l' ],
+        visible => [qw( other )],
+    });
+
+    $self->assert_visible_users('group', {
+        acl     => [ 'group:team' => 'lr' ],
+        visible => [qw( alice bob other )],
+    });
+
+    $self->assert_visible_users('group and member', {
+        acl     => [ bob => 'lr', 'group:team' => 'lr' ],
+        visible => [qw( alice bob other )],
+    });
+
+    $self->assert_visible_users('anyone', {
+        acl     => [ anyone => 'lr', anonymous => 'lr' ],
+        visible => [qw( other )],
+    });
+}
