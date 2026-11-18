@@ -1251,8 +1251,8 @@ EXPORTED char *mailbox_visible_users(const struct mailbox *mailbox)
         // only readable
         if (!strchr(val, 'r')) goto done;
         // not admin or special name
-        if (strcmp(name, "anyone")) goto done;
-        if (strcmp(name, "anonymous")) goto done;
+        if (!strcmp(name, "anyone")) goto done;
+        if (!strcmp(name, "anonymous")) goto done;
         if (strarray_contains(config_admins, name)) goto done;
         // OK, this belongs
         if (strncmp(name, "group:", 6)) {
