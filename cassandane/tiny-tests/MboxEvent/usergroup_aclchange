@@ -95,3 +95,43 @@ sub test_usergroup_aclchange_excluded_first
         events  => [ superhashof({ aclSubject => 'cassandane' }) ],
     });
 }
+
+# Setting a membership that is already in place, or removing one that
+# isn't, changes nobody's access, so it emits nothing.
+sub test_usergroup_aclchange_noop
+    :Mboxgroups :ReverseACLs
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('other');
+    $admintalk->setacl('user.other', 'group:team', 'lr') or die;
+
+    $self->{instance}->getnotify();
+
+    my $event = superhashof({ aclSubject => 'cassandane' });
+
+    $self->assert_usergroup_aclchange('join', {
+        command => 'SETUSERGROUP',
+        group   => 'group:team',
+        events  => [ $event ],
+    });
+
+    $self->assert_usergroup_aclchange('join again', {
+        command => 'SETUSERGROUP',
+        group   => 'group:team',
+        events  => [],
+    });
+
+    $self->assert_usergroup_aclchange('leave', {
+        command => 'UNSETUSERGROUP',
+        group   => 'group:team',
+        events  => [ $event ],
+    });
+
+    $self->assert_usergroup_aclchange('leave again', {
+        command => 'UNSETUSERGROUP',
+        group   => 'group:team',
+        events  => [],
+    });
+}
