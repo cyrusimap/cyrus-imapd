@@ -113,6 +113,23 @@ sub test_calendarevent_set_writeown_bypass ($self)
         title => "Owner's Private Reminder",
     });
 
+    xlog $self, 'owner creates an event that the sharee organizes';
+    my $own_id = $victim_creates_event->({
+        title                    => "Sharee's Meeting",
+        organizerCalendarAddress => 'mailto:cassandane@example.com',
+        participants             => {
+            cassandane => {
+                calendarAddress => 'mailto:cassandane@example.com',
+            },
+        },
+    });
+
+    xlog $self, 'sharee may retitle the event they organize';
+    my $own_set = $sharee_retitles_event->($own_id, 'Retitled By Organizer');
+    $self->assert(exists $own_set->{updated}{$own_id});
+    $self->assert_str_equals('Retitled By Organizer',
+        $victim_event_title->($own_id));
+
     xlog $self, 'as a control, re-share the calendar as mayWriteAll';
     $victim_cal->share_with(
         cassandane => [ qw( mayReadItems mayWriteAll ) ],
