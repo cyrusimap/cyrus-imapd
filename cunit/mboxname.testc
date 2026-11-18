@@ -1200,6 +1200,15 @@ static void test_policycheck_domain(void)
                     mboxname_policycheck("example.com.!user.foo", 0));
     CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
                     mboxname_policycheck("spa ce.com!user.foo", 0));
+
+    /* the same rules, on a bare domain */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_domain("example.com"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_domain("Example.COM"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_domain("../example.com"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_domain(""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_domain(NULL));
 }
 
 static void test_policycheck_userid(void)
@@ -1235,6 +1244,57 @@ static void test_policycheck_userid(void)
 
     /* nor to a shared mailbox that merely starts with something similar */
     CU_ASSERT_EQUAL(0, mboxname_policycheck("users.a*b", 0));
+
+    /* a userid may hold '.', but may not be a relative path component */
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.first^last", 0));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.^foo", 0));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck("user.foo^", 0));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.^", 0));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck("user.^^", 0));
+}
+
+static void test_policycheck_localpart(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_localpart("foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_localpart("first.last"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_localpart("anyone"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_localpart(".foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_localpart("foo."));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_localpart(""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_localpart(NULL));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_localpart("."));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_localpart(".."));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_localpart("a/b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_localpart("a^b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_localpart("a*b"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_localpart("&AOQA9gD8-"));
+}
+
+static void test_policycheck_userid_string(void)
+{
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_userid("foo"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_userid("first.last@example.com"));
+    CU_ASSERT_EQUAL(0, mboxname_policycheck_userid("a@b@example.com"));
+
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_userid(NULL));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME, mboxname_policycheck_userid(""));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_userid("../v/victim"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_userid("@example.com"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_userid("foo@"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_userid("foo@../example.com"));
+    CU_ASSERT_EQUAL(IMAP_MAILBOX_BADNAME,
+                    mboxname_policycheck_userid("foo@a/b"));
 }
 
 

@@ -299,6 +299,32 @@ int mboxname_policycheck(const char *name, int flags);
  * the internal spelling of '.' */
 int mboxname_policycheck_component(const char *name, int flags);
 
+/**
+ * Check a domain: dot separated labels of lowercase letters, digits and
+ * hyphens, with no empty label and no label starting or ending in '-'.
+ *
+ * @return 0 if valid, else IMAP_MAILBOX_BADNAME
+ */
+int mboxname_policycheck_domain(const char *domain);
+
+/**
+ * Check the localpart of a userid, as it is spelled in the userid rather
+ * than in a mailbox name.  It must be a valid mailbox name component other
+ * than "." or "..", with none of the characters that auth_canonifyid()
+ * refuses.  "anyone" and "anonymous" are not rejected.
+ *
+ * @return 0 if valid, else IMAP_MAILBOX_BADNAME
+ */
+int mboxname_policycheck_localpart(const char *localpart);
+
+/**
+ * Check a userid: a localpart, optionally followed by '@' and a domain,
+ * split at the last '@' as mbname_from_userid() does.
+ *
+ * @return 0 if valid, else IMAP_MAILBOX_BADNAME
+ */
+int mboxname_policycheck_userid(const char *userid);
+
 void mboxname_todeleted(const char *name, char *result, int withtime);
 
 /*
