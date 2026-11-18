@@ -31,11 +31,11 @@ Cyrus annotations are based on :rfc:`5464`.
   threading is not required. If both sort and thread are not NIL, then
   threading should take precedence over sorting. (Draft RFC)
 
-* **/vendor/cmu/cyrus-imapd/accountid** - An account identifier for the user
-  whose INBOX this is.  Only an admin can set it, and only on an INBOX; the
-  value must be an ObjectID (1 to 255 characters from A-Z, a-z, 0-9, "_" and
-  "-") that no other INBOX holds.  It is kept in the INBOX's mailboxes.db
-  entry.
+* **/vendor/cmu/cyrus-imapd/accountid** - The OBJECTID+ ACCOUNTID of every
+  mailbox owned by the user whose INBOX this is, in place of their userid.
+  Only an admin can set it, and only on an INBOX; the value must be an
+  ObjectID (1 to 255 characters from A-Z, a-z, 0-9, "_" and "-") that no
+  other INBOX holds.  It is kept in the INBOX's mailboxes.db entry.
 
 * **/vendor/cmu/cyrus-imapd/condstore** - Enables the IMAP CONDSTORE extension
   (modification sequences) on the mailbox. (See :cyrusman:`cyradm(8)`)

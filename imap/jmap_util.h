@@ -217,8 +217,17 @@ extern void jmap_set_mailboxid(struct conversations_state *cstate,
 #define OBJECTID_SHARED_ACCOUNTID "anyone"
 
 /**
- * Fill the OBJECTID+ ACCOUNTID of a mailbox: its owner's userid, or
- * OBJECTID_SHARED_ACCOUNTID for a shared mailbox.
+ * Fill a user's OBJECTID+ ACCOUNTID: their INBOX's accountid if an admin
+ * has set one, else the userid.
+ *
+ * @param userid     the user, or NULL for OBJECTID_SHARED_ACCOUNTID
+ * @param accountid  receives the ACCOUNTID
+ */
+extern void jmap_user_accountid(const char *userid, struct buf *accountid);
+
+/**
+ * Fill the OBJECTID+ ACCOUNTID of a mailbox: jmap_user_accountid() of
+ * its owner, or OBJECTID_SHARED_ACCOUNTID for a shared mailbox.
  *
  * @param mboxname   internal name of the mailbox
  * @param accountid  receives the ACCOUNTID
