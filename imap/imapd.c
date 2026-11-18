@@ -309,23 +309,23 @@ enum {
     CAPA_STATE       = (1<<3),   /* depends on a server state variable        */
     CAPA_CONFIG      = (1<<4),   /* depends on an imapd.conf config switch    */
     CAPA_REVERSE     = (1<<5),   /* reverse state/switch logic                */
-    CAPA_COMPLEX     = (1<<6),   /* function to print "complex" capability    */
+    CAPA_FUNC        = (1<<6),   /* function to print a "complex" capability  */
     CAPA_VALUE       = (1<<7),   /* has a formatted value based on config opt */
     CAPA_MULTI       = (1<<8),   /* has multiple string values                */
 };
 
-#define CAPA_OMNIAUTH  (CAPA_PREAUTH|CAPA_POSTAUTH)
-#define CAPA_REVCONFIG (CAPA_CONFIG|CAPA_REVERSE)
+#define CAPA_OMNIAUTH  (CAPA_PREAUTH | CAPA_POSTAUTH)
+#define CAPA_REVCONFIG (CAPA_REVERSE | CAPA_CONFIG)
 
 struct capa_struct {
     const char *str;            /* capability name                            */
-    int mask;                   /* mask of CAPA_* flags                       */
+    unsigned mask;              /* mask of CAPA_* flags                       */
 
     /* availability/value(s) optionally based on one of the following:        */
     union {
         int *statep;            /* CAPA_STATE:   ptr to server state variable */
         enum imapopt config;    /* CAPA_CONFIG:  config switch option name    */
-        void (*complex)(void);  /* CAPA_COMPLEX: function to print capablity  */
+        void (*func)(void);     /* CAPA_FUNC:    function to print capability */
 
         struct {                /* CAPA_VALUE: prot_printf(fmt, *strp, *i64p) */
             const char *fmt;    /*   format using "%1$s" and/or "%2$" PRIi64  */
@@ -336,7 +336,7 @@ struct capa_struct {
 
         struct {                /* CAPA_MULTI:                                */
             const char **val;   /*   array of string values                   */
-            int num;            /*   number of values                         */
+            unsigned num;       /*   number of values                         */
         } multi;
     } u;
 };
@@ -365,9 +365,10 @@ static struct capa_struct base_capabilities[] = {
     { "ACL",                   CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
     { "ANNOTATE-EXPERIMENT-1", CAPA_POSTAUTH,           { 0 } }, /* RFC 5257 */
     { "APPENDLIMIT=",          CAPA_POSTAUTH|CAPA_VALUE,         /* RFC 7889 */
-      { .value = { "%1$s%2$" PRIi64, .i64p = &maxmsgsize } }  },
-    { "AUTH=",                 CAPA_OMNIAUTH|CAPA_COMPLEX,       /* RFC 9051 */
-      { .complex = &capa_auth }                               },
+      { .value = { .fmt = "%1$s%2$" PRIi64,
+                   .i64p = &maxmsgsize } }                    },
+    { "AUTH=",                 CAPA_OMNIAUTH|CAPA_FUNC,          /* RFC 9051 */
+      { .func = &capa_auth }                                  },
     { "BINARY",                CAPA_POSTAUTH,           { 0 } }, /* RFC 3516 */
     { "CATENATE",              CAPA_POSTAUTH,           { 0 } }, /* RFC 4469 */
     { "CHILDREN",              CAPA_POSTAUTH,           { 0 } }, /* RFC 3348 */
@@ -422,7 +423,8 @@ static struct capa_struct base_capabilities[] = {
     { "QRESYNC",               CAPA_POSTAUTH,           { 0 } }, /* RFC 7162 */
     { "QUOTA",                 CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     { "QUOTA=RES-",            CAPA_POSTAUTH|CAPA_MULTI,         /* RFC 9208 */
-      { .multi = { (const char **) quota_names, QUOTA_NUMRESOURCES } } },
+      { .multi = { (const char **) quota_names,
+                   QUOTA_NUMRESOURCES } }                     },
     { "QUOTASET",              CAPA_POSTAUTH,           { 0 } }, /* RFC 9208 */
     { "REPLACE",               CAPA_POSTAUTH,           { 0 } }, /* RFC 8508 */
     { "RIGHTS=kxten",          CAPA_POSTAUTH,           { 0 } }, /* RFC 4314 */
@@ -436,7 +438,7 @@ static struct capa_struct base_capabilities[] = {
     { "SORT=DISPLAY",          CAPA_POSTAUTH,           { 0 } }, /* RFC 5957 */
     { "SPECIAL-USE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 6154 */
     { "STARTTLS",              CAPA_PREAUTH|CAPA_STATE,          /* RFC 9051 */
-      { .statep = &imapd_starttls_allowed }                        },
+      { .statep = &imapd_starttls_allowed }                   },
     { "STATUS=SIZE",           CAPA_POSTAUTH,           { 0 } }, /* RFC 8438 */
     { "THREAD=ORDEREDSUBJECT", CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
     { "THREAD=REFERENCES",     CAPA_POSTAUTH,           { 0 } }, /* RFC 5256 */
@@ -459,7 +461,8 @@ static struct capa_struct base_capabilities[] = {
       { .config = IMAPOPT_ANNOTATION_ENABLE_LEGACY_COMMANDS } },
     { "DIGEST=SHA1",           CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "MUPDATE=",              CAPA_OMNIAUTH|CAPA_VALUE,         /* CY */
-      { .value = { "mupdate://%1$s/", .strp = &config_mupdate_server } } },
+      { .value = { .fmt = "mupdate://%1$s/",
+                   .strp = &config_mupdate_server } }         },
     { "NO_ATOMIC_RENAME",      CAPA_POSTAUTH,           { 0 } }, /* CY */
     { "SORT=MODSEQ",           CAPA_POSTAUTH,           { 0 } }, /* NS */
     { "SORT=UID",              CAPA_POSTAUTH,           { 0 } }, /* NS */
@@ -476,7 +479,7 @@ static struct capa_struct base_capabilities[] = {
       { .statep = &auth_is_mboxgroups }                       }, /* CY */
 
 /* keep this to mark the end of the list */
-    { 0,                       0,                       { 0 } }
+    { NULL,                    0,                       { 0 } }
 };
 
 
@@ -489,7 +492,7 @@ static void cmd_login(char *tag, char *user);
 static void cmd_authenticate(char *tag, char *authtype, char *resp);
 static void cmd_unauthenticate(char *tag);
 static void cmd_noop(char *tag, char *cmd);
-static void capa_response(int flags);
+static void capa_response(unsigned flags);
 static void cmd_capability(char *tag);
 static int  cmd_append(char *tag, char *name, const char *cur_name,
                        uint32_t replace_uid);
@@ -3970,13 +3973,13 @@ static void cmd_idle(char *tag)
 }
 
 
-static void capa_response(int flags)
+static void capa_response(unsigned flags)
 {
     const char *capa;
     int i;
 
     for (i = 0; (capa = base_capabilities[i].str); i++) {
-        int mask = base_capabilities[i].mask;
+        unsigned mask = base_capabilities[i].mask;
 
         /* Filter capabilities if requested */
         if (!(mask & CAPA_REQD) && capa_is_disabled(capa))
@@ -4000,15 +4003,15 @@ static void capa_response(int flags)
                 continue;
         }
 
-        if (mask & CAPA_COMPLEX) {
-            /* Complex capability */
-            base_capabilities[i].u.complex();
+        if (mask & CAPA_FUNC) {
+            /* Call the function to print the capability */
+            base_capabilities[i].u.func();
         }
         else {
             /* Print the capability */
             const char **strp = NULL, *s = "", *valfmt = "";
             int64_t *i64p = NULL, i64 = INT64_MIN;
-            int num = 1, n = 0;
+            unsigned num = 1, n = 0;
 
             if (mask & CAPA_VALUE) {
                 /* Capability with formatted value */
