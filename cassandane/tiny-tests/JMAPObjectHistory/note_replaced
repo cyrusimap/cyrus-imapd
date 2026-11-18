@@ -1,0 +1,90 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_replaced ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $old = {
+        version => ignore(),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+    };
+    my $live = { version => ignore(), replaced => undef };
+
+    my $res = $jmap->CallMethods([
+        ['Note/set', { create => { 1 => { title => 'A', body => 'one',
+                                         isHTML => JSON::false } } },
+         'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{1}{id};
+    $self->assert_not_null($id);
+
+    for my $update ({ title => 'B' }, { isFlagged => JSON::true }) {
+        $res = $jmap->CallMethods([
+            ['Note/set', { update => { $id => $update } }, 'R1'],
+        ]);
+        $self->assert(exists $res->[0][1]{updated}{$id});
+    }
+
+    $res = $jmap->CallMethods([
+        ['Note/get', { ids => [$id], includeReplaced => JSON::true,
+                       properties => ['title', 'body', 'isFlagged'] }, 'R1'],
+        ['Note/get', { ids => undef, includeReplaced => JSON::true,
+                       properties => ['title'] }, 'R2'],
+        ['Note/get', { ids => [$id], properties => ['title'] }, 'R3'],
+    ]);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [
+            { id => $id, title => 'A', body => 'one',
+              isFlagged => JSON::false, objectHistory => $old },
+            { id => $id, title => 'B', body => 'one',
+              isFlagged => JSON::false, objectHistory => $old },
+            { id => $id, title => 'B', body => 'one',
+              isFlagged => JSON::true, objectHistory => $live },
+        ],
+        notFound => [],
+        hasMoreHistory => JSON::false,
+    }, $res->[0][1]);
+    my @versions = map { $_->{objectHistory}{version} }
+                   $res->[0][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+    $self->assert($versions[1] < $versions[2]);
+
+    xlog $self, "properties apply to old versions; ids null lists all";
+    $self->assert_cmp_deeply([
+        { id => $id, title => 'A', objectHistory => $old },
+        { id => $id, title => 'B', objectHistory => $old },
+        { id => $id, title => 'B', objectHistory => $live },
+    ], $res->[1][1]{list});
+
+    xlog $self, "without the history arguments only the live version";
+    $self->assert_cmp_deeply([ { id => $id, title => 'B' } ],
+                             $res->[2][1]{list});
+
+    xlog $self, "historyAfter drops versions replaced before it";
+    $res = $jmap->CallMethods([
+        ['Note/get', { ids => [$id], includeReplaced => JSON::true,
+                       historyAfter => '2000-01-01T00:00:00Z',
+                       properties => ['title'] }, 'R1'],
+        ['Note/get', { ids => [$id], includeReplaced => JSON::true,
+                       historyAfter => '2100-01-01T00:00:00Z',
+                       properties => ['title'] }, 'R2'],
+    ]);
+    $self->assert_num_equals(3, scalar $res->[0][1]{list}->@*);
+    $self->assert_cmp_deeply([
+        { id => $id, title => 'B', objectHistory => $live },
+    ], $res->[1][1]{list});
+
+    xlog $self, "unlinked versions are gone";
+    $self->{instance}->run_command({ cyrus => 1 },
+                                   'cyr_expire', '-X' => '0', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['Note/get', { ids => [$id], includeReplaced => JSON::true,
+                       properties => ['title'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        { id => $id, title => 'B', objectHistory => $live },
+    ], $res->[0][1]{list});
+}

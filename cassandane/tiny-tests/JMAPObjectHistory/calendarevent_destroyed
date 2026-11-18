@@ -1,0 +1,113 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+    my $calId = $self->default_user->calendars->default->id;
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/set', { create => { e1 => {
+            calendarIds => { $calId => JSON::true },
+            version => '2.0',
+            title => 'one',
+            start => '2026-10-01T09:00:00',
+            timeZone => 'Europe/Vienna',
+            duration => 'PT1H',
+        } } }, 'R1'],
+    ]);
+    my $eventId = $res->[0][1]{created}{e1}{id};
+    $self->assert_not_null($eventId);
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            update => { $eventId => { title => 'two' } },
+        }, 'R1'],
+        ['CalendarEvent/set', { destroy => [$eventId] }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply([$eventId], $res->[1][1]{destroyed});
+
+    # Without includeDestroyed a destroyed event is not found
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { ids => [$eventId] }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+        }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$eventId], $res->[0][1]{notFound});
+    $self->assert_cmp_deeply([], $res->[1][1]{list});
+    $self->assert_cmp_deeply([$eventId], $res->[1][1]{notFound});
+
+    my $destroyed = {
+        version => code(sub { $_[0] > 0 }),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+    };
+
+    # includeDestroyed returns the final version only
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            properties => ['title', 'calendarIds'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        accountId => 'cassandane',
+        state => ignore(),
+        list => [ superhashof({
+            id => $eventId,
+            title => 'two',
+            calendarIds => { $calId => JSON::true },
+            objectHistory => $destroyed,
+        }) ],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, $res->[0][1]);
+
+    # With includeReplaced too, all versions, each one replaced
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({ id => $eventId, title => 'one',
+                      objectHistory => $destroyed }),
+        superhashof({ id => $eventId, title => 'two',
+                      objectHistory => $destroyed }),
+    ], $res->[0][1]{list});
+    $self->assert_cmp_deeply([], $res->[0][1]{notFound});
+    my @list = $res->[0][1]{list}->@*;
+    $self->assert($list[0]{objectHistory}{version}
+                  < $list[1]{objectHistory}{version});
+
+    # ids null finds destroyed events, too
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => undef,
+            includeDestroyed => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({ id => $eventId, title => 'two',
+                      objectHistory => $destroyed }),
+    ], $res->[0][1]{list});
+
+    # Once the expunged copies are cleaned up the history is gone
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '0');
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$eventId], $res->[0][1]{notFound});
+}

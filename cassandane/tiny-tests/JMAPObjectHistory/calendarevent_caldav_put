@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_caldav_put ($self)
+{
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $uid = 'a3fd5bd8-6d3b-4bb7-9d75-5d3a1b5a3a01';
+    my $href = "Default/$uid.ics";
+    my $ical = sub ($summary) {
+        return <<"ICAL";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:$uid
+DTSTAMP:20261001T000000Z
+DTSTART:20261001T090000Z
+DURATION:PT1H
+SUMMARY:$summary
+END:VEVENT
+END:VCALENDAR
+ICAL
+    };
+
+    # Each CalDAV PUT replaces the resource with a new version
+    foreach my $summary ('one', 'two') {
+        $caldav->Request('PUT', $href, $ical->($summary),
+                         'Content-Type' => 'text/calendar');
+    }
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/query', {}, 'R1'],
+    ]);
+    $self->assert_num_equals(1, scalar $res->[0][1]{ids}->@*);
+    my $eventId = $res->[0][1]{ids}[0];
+
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeReplaced => JSON::true,
+            properties => ['title', 'uid'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $eventId,
+            uid => $uid,
+            title => 'one',
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+            },
+        }),
+        superhashof({
+            id => $eventId,
+            uid => $uid,
+            title => 'two',
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => undef,
+            },
+        }),
+    ], $res->[0][1]{list});
+
+    # A CalDAV DELETE destroys the event
+    $caldav->Request('DELETE', $href);
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            includeDestroyed => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([
+        superhashof({
+            id => $eventId,
+            title => 'two',
+            objectHistory => {
+                version => code(sub { $_[0] > 0 }),
+                replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+            },
+        }),
+    ], $res->[0][1]{list});
+    $self->assert_cmp_deeply([], $res->[0][1]{notFound});
+}

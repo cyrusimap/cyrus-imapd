@@ -1,0 +1,109 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create two cards, update one and destroy it";
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', { create => {
+            c1 => { '@type' => 'Card', version => '1.0',
+                    name => { full => 'v1' } },
+            c2 => { '@type' => 'Card', version => '1.0',
+                    name => { full => 'other' } },
+        } }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{c1}{id};
+    my $otherId = $res->[0][1]{created}{c2}{id};
+    $self->assert_not_null($id);
+    $self->assert_not_null($otherId);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => { $id => { name => { full => 'v2' } } },
+        }, 'R1'],
+        ['ContactCard/set', { destroy => [$id] }, 'R2'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert_cmp_deeply([$id], $res->[1][1]{destroyed});
+
+    my $replaced = { version => ignore(), replaced => re(qr/^\d{4}-/) };
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', { ids => [$id], properties => ['name'] }, 'R1'],
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+        }, 'R2'],
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+        }, 'R3'],
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+        }, 'R4'],
+        ['ContactCard/get', {
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+        }, 'R5'],
+    ]);
+
+    xlog $self, "without history arguments the card is not found";
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[0][1]{notFound});
+
+    xlog $self, "includeDestroyed returns the final version";
+    $self->assert_cmp_deeply({
+        list => [
+            { id => $id, name => superhashof({ full => 'v2' }),
+              addressBookIds => ignore(), objectHistory => $replaced },
+        ],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, { map { $_ => $res->[1][1]{$_} } qw(list notFound hasMoreHistory) });
+
+    xlog $self, "includeReplaced as well returns all retained versions";
+    $self->assert_cmp_deeply({
+        list => [
+            { id => $id, name => superhashof({ full => 'v1' }),
+              addressBookIds => ignore(), objectHistory => $replaced },
+            { id => $id, name => superhashof({ full => 'v2' }),
+              addressBookIds => ignore(), objectHistory => $replaced },
+        ],
+        notFound => [],
+    }, { map { $_ => $res->[2][1]{$_} } qw(list notFound) });
+    my @versions = map { $_->{objectHistory}{version} } $res->[2][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+
+    xlog $self, "includeReplaced alone does not return destroyed cards";
+    $self->assert_cmp_deeply([], $res->[3][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[3][1]{notFound});
+
+    xlog $self, "ids null with includeDestroyed returns destroyed cards";
+    $self->assert_cmp_deeply(
+        bag(
+            superhashof({ id => $id, objectHistory => $replaced }),
+            superhashof({ id => $otherId,
+                          objectHistory => superhashof({ replaced => undef }) }),
+        ),
+        $res->[4][1]{list},
+    );
+
+    xlog $self, "unlinked versions are gone";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '0');
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[0][1]{notFound});
+}

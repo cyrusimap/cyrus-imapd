@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_history_limit ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/set', { create => {
+            a => { name => 'A' },
+            b => { name => 'B' },
+        } }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar keys $res->[0][1]{created}->%*);
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { includeReplaced => JSON::true,
+                          properties => ['name'] }, 'R1'],
+    ]);
+    my $total = scalar $res->[0][1]{list}->@*;
+    $self->assert_num_equals(3, $total);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreHistory});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { includeReplaced => JSON::true,
+                          historyLimit => 2,
+                          properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_num_equals(2, scalar $res->[0][1]{list}->@*);
+    $self->assert_equals(JSON::true, $res->[0][1]{hasMoreHistory});
+
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { includeReplaced => JSON::true,
+                          historyLimit => $total,
+                          properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_num_equals($total, scalar $res->[0][1]{list}->@*);
+    $self->assert_equals(JSON::false, $res->[0][1]{hasMoreHistory});
+}

@@ -1,0 +1,25 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_fallback_no_history
+    :want_smtpdaemon
+    ($self)
+{
+    my $jmap = $self->{jmap};
+
+    # Identity retains no history: the live version is version 1
+    my $res = $jmap->CallMethods([
+        ['Identity/get', { includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({
+            list => [ superhashof({
+                id => 'cassandane',
+                objectHistory => { version => 1, replaced => undef },
+            }) ],
+            notFound => [],
+            hasMoreHistory => jfalse,
+        }),
+        $res->[0][1],
+    );
+}

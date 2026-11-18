@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_args_require_capability ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $using = [ grep { $_ ne 'urn:ietf:params:jmap:object-history' }
+                  $self->jmap_default_using->@* ];
+
+    for my $arg (qw(includeReplaced includeDestroyed)) {
+        my $res = $jmap->CallMethods([
+            ['Mailbox/get', { $arg => JSON::true }, 'R1'],
+        ], $using);
+        $self->assert_cmp_deeply(
+            [ 'error', { type => 'invalidArguments', arguments => [$arg] },
+              'R1' ],
+            $res->[0],
+        );
+    }
+
+    # without the history arguments, no history properties appear
+    my $res = $jmap->CallMethods([['Mailbox/get', {}, 'R1']]);
+    $self->assert_null($res->[0][1]{hasMoreHistory});
+    $self->assert_null($res->[0][1]{list}[0]{objectHistory});
+}

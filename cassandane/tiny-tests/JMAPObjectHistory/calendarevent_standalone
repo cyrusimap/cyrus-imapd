@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_standalone ($self)
+{
+    my $jmap = $self->{jmap};
+    my $caldav = $self->{caldav};
+
+    my $uid = '0b7c7bd2-bd4b-4a6c-8d36-6a3a4cb1c3a2';
+    my $href = "Default/$uid.ics";
+    my $ical = sub ($summary) {
+        return <<"ICAL";
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Cassandane//EN
+BEGIN:VEVENT
+UID:$uid
+RECURRENCE-ID:20261001T090000Z
+DTSTAMP:20261001T000000Z
+DTSTART:20261001T090000Z
+DURATION:PT1H
+SUMMARY:first $summary
+END:VEVENT
+BEGIN:VEVENT
+UID:$uid
+RECURRENCE-ID:20261008T090000Z
+DTSTAMP:20261001T000000Z
+DTSTART:20261008T090000Z
+DURATION:PT1H
+SUMMARY:second $summary
+END:VEVENT
+END:VCALENDAR
+ICAL
+    };
+
+    foreach my $summary ('one', 'two') {
+        $caldav->Request('PUT', $href, $ical->($summary),
+                         'Content-Type' => 'text/calendar');
+    }
+
+    my $res = $jmap->CallMethods([
+        ['CalendarEvent/get', { properties => ['title'] }, 'R1'],
+    ]);
+    my %idof = map { $_->{title} => $_->{id} } $res->[0][1]{list}->@*;
+    $self->assert_not_null($idof{'first two'});
+    $self->assert_not_null($idof{'second two'});
+
+    # Each standalone instance has its own history
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/get', {
+            ids => [ $idof{'first two'}, $idof{'second two'} ],
+            includeReplaced => JSON::true,
+            properties => ['title'],
+        }, 'R1'],
+    ]);
+    my $replaced = {
+        version => code(sub { $_[0] > 0 }),
+        replaced => re(qr/^\d{4}-\d\d-\d\dT/),
+    };
+    my $live = {
+        version => code(sub { $_[0] > 0 }),
+        replaced => undef,
+    };
+    $self->assert_cmp_deeply(bag(
+        superhashof({ id => $idof{'first two'}, title => 'first one',
+                      objectHistory => $replaced }),
+        superhashof({ id => $idof{'first two'}, title => 'first two',
+                      objectHistory => $live }),
+        superhashof({ id => $idof{'second two'}, title => 'second one',
+                      objectHistory => $replaced }),
+        superhashof({ id => $idof{'second two'}, title => 'second two',
+                      objectHistory => $live }),
+    ), $res->[0][1]{list});
+}

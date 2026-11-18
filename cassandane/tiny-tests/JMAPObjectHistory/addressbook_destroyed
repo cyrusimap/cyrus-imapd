@@ -1,0 +1,97 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_addressbook_destroyed ($self)
+{
+    my $jmap = $self->{jmap};
+
+    my $res = $jmap->CallMethods([
+        ['AddressBook/set', { create => { b => { name => 'B' } } }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{b}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "live addressbooks carry objectHistory";
+    $res = $jmap->CallMethods([
+        ['AddressBook/get', {
+            properties => ['name'],
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        superbagof(superhashof({
+            id => $id, name => 'B',
+            objectHistory => { version => ignore(), replaced => undef },
+        })),
+        $res->[0][1]{list},
+    );
+    my ($live) = grep { $_->{id} eq $id } $res->[0][1]{list}->@*;
+    my $liveVersion = $live->{objectHistory}{version};
+
+    $res = $jmap->CallMethods([
+        ['AddressBook/set', { destroy => [$id] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([$id], $res->[0][1]{destroyed});
+
+    $res = $jmap->CallMethods([
+        ['AddressBook/get', { ids => [$id], properties => ['name'] }, 'R1'],
+        ['AddressBook/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+        }, 'R2'],
+        ['AddressBook/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+        }, 'R3'],
+        ['AddressBook/get', {
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+        }, 'R4'],
+        ['AddressBook/get', {
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+            historyAfter => '2999-01-01T00:00:00Z',
+        }, 'R5'],
+    ]);
+
+    xlog $self, "without history arguments the addressbook is not found";
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[0][1]{notFound});
+    $self->assert(!exists $res->[0][1]{hasMoreHistory});
+
+    xlog $self, "includeDestroyed returns the deleted addressbook";
+    my $destroyed = {
+        id => $id, name => 'B',
+        objectHistory => { version => ignore(), replaced => re(qr/^\d{4}-/) },
+    };
+    $self->assert_cmp_deeply([ $destroyed ], $res->[1][1]{list});
+    $self->assert_cmp_deeply([], $res->[1][1]{notFound});
+    $self->assert($res->[1][1]{list}[0]{objectHistory}{version} > $liveVersion);
+
+    xlog $self, "includeReplaced alone does not";
+    $self->assert_cmp_deeply([], $res->[2][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[2][1]{notFound});
+
+    xlog $self, "ids null returns live and destroyed addressbooks";
+    $self->assert_cmp_deeply(
+        superbagof($destroyed, superhashof({
+            objectHistory => { version => ignore(), replaced => undef },
+        })),
+        $res->[3][1]{list},
+    );
+    $self->assert(!grep { $_->{id} eq $id } $res->[4][1]{list}->@*);
+
+    xlog $self, "removing the deleted mailbox removes its history";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-D' => '0');
+    $res = $jmap->CallMethods([
+        ['AddressBook/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeDestroyed => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([], $res->[0][1]{list});
+    $self->assert_cmp_deeply([$id], $res->[0][1]{notFound});
+}

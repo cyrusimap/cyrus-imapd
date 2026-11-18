@@ -1,0 +1,108 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_card_replaced ($self)
+{
+    my $jmap = $self->{jmap};
+    my $carddav = $self->{carddav};
+    my $uid = '5a3d2c80-8a0a-4a4f-9d7c-3f4c0d1d6a01';
+
+    xlog $self, "create a card and update it over JMAP and CardDAV";
+    my $res = $jmap->CallMethods([
+        ['ContactCard/set', { create => { c1 => {
+            '@type' => 'Card',
+            version => '1.0',
+            uid => $uid,
+            name => { full => 'v1' },
+        } } }, 'R1'],
+    ]);
+    my $id = $res->[0][1]{created}{c1}{id};
+    my $href = $res->[0][1]{created}{c1}{'cyrusimap.org:href'};
+    $self->assert_not_null($id);
+
+    $res = $jmap->CallMethods([
+        ['ContactCard/set', {
+            update => { $id => { name => { full => 'v2' } } },
+        }, 'R1'],
+    ]);
+    $self->assert(exists $res->[0][1]{updated}{$id});
+
+    my $vcard = join("\r\n",
+        'BEGIN:VCARD', 'VERSION:4.0', "UID:$uid", 'FN:v3', 'END:VCARD', '');
+    $carddav->Request('PUT', $href, $vcard, 'Content-Type' => 'text/vcard');
+
+    xlog $self, "a request without history arguments is unchanged";
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', { ids => [$id], properties => ['name'] }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $id, name => superhashof({ full => 'v3' }),
+            addressBookIds => ignore() } ],
+        $res->[0][1]{list},
+    );
+    $self->assert(!exists $res->[0][1]{hasMoreHistory});
+
+    xlog $self, "includeReplaced returns every version, live one last";
+    my $replaced = { version => ignore(), replaced => re(qr/^\d{4}-/) };
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply({
+        list => [
+            { id => $id, name => superhashof({ full => 'v1' }),
+              addressBookIds => ignore(), objectHistory => $replaced },
+            { id => $id, name => superhashof({ full => 'v2' }),
+              addressBookIds => ignore(), objectHistory => $replaced },
+            { id => $id, name => superhashof({ full => 'v3' }),
+              addressBookIds => ignore(),
+              objectHistory => { version => ignore(), replaced => undef } },
+        ],
+        notFound => [],
+        hasMoreHistory => jfalse,
+    }, { map { $_ => $res->[0][1]{$_} } qw(list notFound hasMoreHistory) });
+
+    my @versions = map { $_->{objectHistory}{version} } $res->[0][1]{list}->@*;
+    $self->assert($versions[0] < $versions[1]);
+    $self->assert($versions[1] < $versions[2]);
+
+    xlog $self, "historyAfter filters replaced versions only";
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+            historyAfter => '2999-01-01T00:00:00Z',
+        }, 'R1'],
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+            historyAfter => '2000-01-01T00:00:00Z',
+        }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({ objectHistory => { version => $versions[2],
+                                           replaced => undef } }) ],
+        $res->[0][1]{list},
+    );
+    $self->assert_num_equals(3, scalar $res->[1][1]{list}->@*);
+
+    xlog $self, "unlinked versions are gone";
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X' => '0');
+    $res = $jmap->CallMethods([
+        ['ContactCard/get', {
+            ids => [$id],
+            properties => ['name'],
+            includeReplaced => JSON::true,
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ superhashof({ name => superhashof({ full => 'v3' }),
+                        objectHistory => superhashof({ replaced => undef }) }) ],
+        $res->[0][1]{list},
+    );
+}

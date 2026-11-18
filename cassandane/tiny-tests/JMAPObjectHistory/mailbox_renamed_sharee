@@ -1,0 +1,34 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_mailbox_renamed_sharee ($self)
+{
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('foo');
+    $admintalk->create('user.foo.Hidden') or die;
+    $admintalk->create('user.foo.Hidden.Old') or die;
+    $admintalk->rename('user.foo.Hidden.Old', 'user.foo.New') or die;
+    $admintalk->setacl('user.foo', 'cassandane', 'lr') or die;
+    $admintalk->setacl('user.foo.New', 'cassandane', 'lr') or die;
+
+    my $res = $jmap->CallMethods([
+        ['Mailbox/get', { accountId => 'foo' }, 'R1'],
+    ]);
+    my ($new) = grep { $_->{name} eq 'New' } $res->[0][1]{list}->@*;
+    $self->assert_not_null($new);
+
+    # A sharee only sees the current version: former names may reveal
+    # mailboxes hidden from them
+    $res = $jmap->CallMethods([
+        ['Mailbox/get', { accountId => 'foo', ids => [ $new->{id} ],
+                          properties => [ 'name', 'parentId' ],
+                          includeReplaced => JSON::true }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $new->{id}, name => 'New', parentId => undef,
+            objectHistory => { version => ignore(), replaced => undef } } ],
+        $res->[0][1]{list},
+    );
+}

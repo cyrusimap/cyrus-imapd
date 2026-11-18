@@ -112,6 +112,23 @@ int sieve_script_rename(struct mailbox *mailbox,
 int sieve_script_fetch(struct mailbox *mailbox,
                        const struct sieve_data *sdata, struct buf *content);
 
+/**
+ * Call @p cb for each retained old version of a script in @p mailbox: an
+ * expunged record whose message file has not been unlinked yet.
+ *
+ * @param id  only versions of this script id, or all scripts if NULL
+ *
+ * Each sieve_data describes that record: id and name from its headers,
+ * contentid from its body, isactive from its \\Flagged flag, modseq and
+ * lastupdated from its expunge, alive 0 and rowid 0.  Its strings are only
+ * valid during the callback.  A non-zero return from @p cb stops the
+ * iteration and is returned.
+ */
+int sieve_script_foreach_version(struct mailbox *mailbox,
+                                 const char *id,
+                                 sieve_cb_t *cb,
+                                 void *rock);
+
 int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr,
                         int silent);
 
