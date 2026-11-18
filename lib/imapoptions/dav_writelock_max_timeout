@@ -1,7 +1,7 @@
 Name: dav_writelock_max_timeout
 Type: DURATION
 Default-Value: 5m
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 The longest lifetime granted to a WebDAV write lock (RFC 4918).  A LOCK
 request may ask for a lifetime in its Timeout header, either as

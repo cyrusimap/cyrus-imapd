@@ -1,7 +1,7 @@
 Name: search_fuzzy_always
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 Whether to enable :rfc:`6203` FUZZY search for all IMAP SEARCH. If turned
 on, search attributes will be searched using FUZZY search by default.  If

@@ -1,8 +1,8 @@
 Name: jmap_require_accountid
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
-Deprecated-Since: UNRELEASED
+Last-Modified: 3.14.0
+Deprecated-Since: 3.14.0
 
 This option once allowed a JMAP method call to omit the "accountId"
 argument, which was then taken to mean the authenticated user's own
