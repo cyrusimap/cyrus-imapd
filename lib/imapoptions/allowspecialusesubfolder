@@ -1,7 +1,7 @@
 Name: allowspecialusesubfolder
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 If enabled, allows special-use folders anywhere in a user's namespace.
 

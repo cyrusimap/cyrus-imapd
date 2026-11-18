@@ -2,7 +2,7 @@ Name: compact_ids
 Type: ENUM
 Allowed-Values: per-user always
 Default-Value: per-user
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 Whether compact JMAP object ids are enabled for a user.
 

@@ -10,6 +10,6 @@ Allowed-Values: bodyStructure clientAddress diskUsed flagNames
  vnd.cmu.threadid vnd.cmu.visibleUsers vnd.fastmail.traceId
  vnd.fastmail.specialUse
 Default-Value: timestamp
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 Space-separated list of extra parameters to add to any appropriated event.

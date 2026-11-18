@@ -1,7 +1,7 @@
 Name: lmtp_strict_rfc2821
 Type: SWITCH
 Default-Value: 1
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 By default, lmtpd will be strict (per :rfc:`2821`) with regards to which
 envelope addresses are allowed.  If this option is set to false, 8bit

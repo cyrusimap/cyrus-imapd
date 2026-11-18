@@ -1,7 +1,7 @@
 Name: auth_notreplicaonly
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 If enabled, a user may not log in if ``replicaonly`` is set for the whole
 server, or if the user is marked replica-only with ``cyr_deny -r``.  Logins

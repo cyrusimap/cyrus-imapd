@@ -1,7 +1,7 @@
 Name: munge8bit
 Type: SWITCH
 Default-Value: 1
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 If enabled, lmtpd munges messages with 8-bit characters in the headers.
 The 8-bit characters are changed to \`X'.  If :imapdconf:`reject8bit` is

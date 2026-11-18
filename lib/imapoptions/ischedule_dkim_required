@@ -1,5 +1,5 @@
 Name: ischedule_dkim_required
 Type: SWITCH
 Default-Value: 1
-Last-Modified: UNRELEASED
-Deprecated-Since: UNRELEASED
+Last-Modified: 3.14.0
+Deprecated-Since: 3.14.0

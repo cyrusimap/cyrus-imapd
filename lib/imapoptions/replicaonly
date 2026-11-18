@@ -1,7 +1,7 @@
 Name: replicaonly
 Type: SWITCH
 Default-Value: 0
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 If enabled, marks the server as only being a replica: its data comes from
 replication, and local changes are refused as temporary failures.  IMAP

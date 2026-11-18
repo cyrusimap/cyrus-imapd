@@ -1,7 +1,7 @@
 Name: sync_batchsize
 Type: INT
 Default-Value: 8192
-Last-Modified: UNRELEASED
+Last-Modified: 3.14.0
 
 The number of changed records to send in a single mailbox replication by
 rolling sync_client.  If more records than this have been appended or
