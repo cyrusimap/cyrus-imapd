@@ -6410,6 +6410,7 @@ static void setcalendarevents_update(jmap_req_t *req,
     char *resource = NULL;
     strarray_t del_imapflags = STRARRAY_INITIALIZER;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+    strarray_t caller_sched_addrs = STRARRAY_INITIALIZER;
 
     struct updateevent update = {
         .event_patch = json_deep_copy(event_patch),
@@ -6463,6 +6464,20 @@ static void setcalendarevents_update(jmap_req_t *req,
             r = cdata->comp_flags.privacy == CAL_PRIVACY_SECRET ?
                 IMAP_NOTFOUND : IMAP_PERMISSION_DENIED;
             goto done;
+        }
+    }
+
+    /* Check write permission for sharees. */
+    if (strcmp(req->accountid, req->userid) &&
+            !jmap_hasrights_mbentry(req, mbentry, JACL_WRITEALL)) {
+        get_schedule_addresses(mbentry->name, req->userid, &caller_sched_addrs);
+        if (jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN)) {
+            int is_organizer = cdata->organizer &&
+                strarray_contains(&caller_sched_addrs, cdata->organizer);
+            if (!is_organizer) {
+                *err = json_pack("{s:s}", "type", "forbidden");
+                goto done;
+            }
         }
     }
 
@@ -6838,6 +6853,7 @@ done:
     jmap_parser_fini(&parser);
     strarray_fini(&del_imapflags);
     strarray_fini(&schedule_addresses);
+    strarray_fini(&caller_sched_addrs);
     mboxlist_entry_free(&mbentry);
     mboxlist_entry_free(&dstmbentry);
     free(resource);
@@ -6897,6 +6913,7 @@ static int setcalendarevents_destroy(jmap_req_t *req,
     json_t *old_event = NULL;
     struct index_record record;
     strarray_t schedule_addresses = STRARRAY_INITIALIZER;
+    strarray_t caller_sched_addrs = STRARRAY_INITIALIZER;
     mbentry_t *mbentry = NULL;
 
     // Determine if event is a standalone recurrence instance
@@ -6971,9 +6988,15 @@ static int setcalendarevents_destroy(jmap_req_t *req,
         goto done;
     }
     if (!jmap_hasrights_mbentry(req, mbentry, JACL_REMOVEITEMS)) {
+        /* JACL_WRITEOWN only covers events the caller organizes, so this must
+         * ask about the caller's schedule addresses.  The ones gathered above
+         * are the calendar owner's, which every event in their own calendar
+         * matches. -- rjbs, 2026-08-20 */
+        get_schedule_addresses(mboxname, req->userid, &caller_sched_addrs);
+        int is_organizer = cdata->organizer &&
+            strarray_contains(&caller_sched_addrs, cdata->organizer);
         if (!jmap_hasrights_mbentry(req, mbentry, JACL_WRITEOWN) ||
-                (cdata->organizer &&
-                 !strarray_contains(&schedule_addresses, cdata->organizer))) {
+                !is_organizer) {
             r = IMAP_PERMISSION_DENIED;
             goto done;
         }
@@ -7122,6 +7145,7 @@ done:
     if (newical) icalcomponent_free(newical);
     json_decref(old_event);
     strarray_fini(&schedule_addresses);
+    strarray_fini(&caller_sched_addrs);
     free(resource);
     free(mboxname);
     mboxlist_entry_free(&mbentry);
