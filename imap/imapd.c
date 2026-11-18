@@ -4989,12 +4989,25 @@ static mbentry_t *select_by_objectid(const struct select_objectid *objid,
     if (!objid->mailboxid) return NULL;
 
     /* without ACCOUNTID, the personal namespace's account */
-    const char *accountid = objid->accountid ? objid->accountid : imapd_userid;
+    struct buf my_accountid = BUF_INITIALIZER;
+    jmap_user_accountid(imapd_userid, &my_accountid);
+    const char *accountid =
+        objid->accountid ? objid->accountid : buf_cstring(&my_accountid);
+
+    /* an ACCOUNTID is its INBOX's accountid if an admin set one, or else
+     * the userid that scopes the account's mailbox ids */
+    mbentry_t *inbox = NULL;
+    char *scope = mboxlist_lookup_by_accountid(accountid, &inbox)
+                      ? xstrdup(accountid)
+                      : mboxname_to_userid(inbox->name);
+    mboxlist_entry_free(&inbox);
     mbentry_t *mbentry = NULL;
 
-    if (mboxlist_lookup_by_jmapid(accountid, objid->mailboxid,
-                                  &mbentry, NULL) &&
-        mboxlist_lookup_by_uniqueid(objid->mailboxid, &mbentry, NULL)) {
+    int r = mboxlist_lookup_by_jmapid(scope, objid->mailboxid, &mbentry, NULL);
+    if (r) r = mboxlist_lookup_by_uniqueid(objid->mailboxid, &mbentry, NULL);
+    free(scope);
+    if (r) {
+        buf_free(&my_accountid);
         return NULL;
     }
 
@@ -5012,6 +5025,7 @@ static mbentry_t *select_by_objectid(const struct select_objectid *objid,
         buf_free(&mailboxid);
         buf_free(&found_accountid);
     }
+    buf_free(&my_accountid);
 
     if (match && mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL &&
         !imapd_userisadmin && !imapd_want_dav()) {
