@@ -55,3 +55,43 @@ sub test_usergroup_aclchange
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
     $self->assert_cmp_deeply([], $self->_usergroup_aclchange_events());
 }
+
+sub assert_usergroup_aclchange ($self, $desc, $arg)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->_imap_cmd($arg->{command}, 0, '', 'cassandane', $arg->{group});
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->assert_cmp_deeply(
+        $arg->{events},
+        $self->_usergroup_aclchange_events(),
+        $desc,
+    );
+}
+
+# The owner's event must not depend on which of the group's mailboxes comes
+# first: notification is off for \Junk by default, and Junk sorts before Work.
+sub test_usergroup_aclchange_excluded_first
+    :Mboxgroups :ReverseACLs
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('other');
+    my $othertalk = $self->{instance}->get_service('imap')
+                         ->create_store(username => 'other')->get_client();
+    $othertalk->create('Junk') or die;
+    $othertalk->setmetadata('Junk', '/private/specialuse', '\\Junk')
+        or die;
+    $othertalk->create('Work') or die;
+    $admintalk->setacl('user.other.Junk', 'group:team', 'lr') or die;
+    $admintalk->setacl('user.other.Work', 'group:team', 'lr') or die;
+
+    $self->{instance}->getnotify();
+
+    $self->assert_usergroup_aclchange('join', {
+        command => 'SETUSERGROUP',
+        group   => 'group:team',
+        events  => [ superhashof({ aclSubject => 'cassandane' }) ],
+    });
+}
