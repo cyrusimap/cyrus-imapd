@@ -1,0 +1,25 @@
+Description:
+
+httpd no longer serves an HTML listing of the enabled well-known URIs at
+/.well-known/, which now returns 404 Not Found.  The well-known URIs
+themselves, such as /.well-known/caldav, still redirect as before.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
