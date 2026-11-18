@@ -1,7 +1,8 @@
 Description:
 
 The vnd.cmu.visibleUsers event parameter now lists the users who can read the
-mailbox.  It was always empty before, so it never appeared in events.
+mailbox, and is only sent when event_extra_params asks for it.  It was always
+empty before, so it never appeared in events.
 
 
 Documentation:
@@ -11,13 +12,13 @@ None beyond its name in the list of event_extra_params values.
 
 Config changes:
 
-None.
+event_extra_params: vnd.cmu.visibleUsers now takes effect.
 
 
 Upgrade instructions:
 
-Notification consumers that read vnd.cmu.visibleUsers will start receiving
-it on mailbox events.
+Add vnd.cmu.visibleUsers to event_extra_params to receive it on mailbox
+events.
 
 
 GitHub issue:

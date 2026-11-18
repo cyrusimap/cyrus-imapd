@@ -1,0 +1,26 @@
+#!perl
+use Cassandane::Tiny;
+
+# Listing readers costs a group lookup per group in the ACL, so events carry
+# visibleUsers only when event_extra_params asks for it.
+sub test_visible_users_not_requested
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(event_extra_params => 'timestamp');
+    $self->_start_instances();
+
+    my $admintalk = $self->{adminstore}->get_client();
+    $self->{instance}->create_user('other');
+    $self->{instance}->getnotify();
+
+    $admintalk->setacl('user.other', bob => 'lr') or die "setacl: $@";
+
+    my ($event) = grep { $_->{event} eq q{AclChange} }
+                  map  { decode_json($_->{MESSAGE}) }
+                  $self->{instance}->getnotify->@*;
+
+    $self->assert_not_null($event);
+    $self->assert(!exists $event->{'vnd.cmu.visibleUsers'},
+                  'no visibleUsers');
+}
