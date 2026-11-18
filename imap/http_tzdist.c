@@ -1026,6 +1026,7 @@ static int action_list(struct transaction_t *txn)
     int ret, precond;
     struct strlist *param;
     const char *pattern = NULL;
+    const char *changedsince_token = NULL;
     struct resp_body_t *resp_body = &txn->resp_body;
     struct zoneinfo info;
     time_t changedsince = 0, lastmod;
@@ -1033,9 +1034,6 @@ static int action_list(struct transaction_t *txn)
     double altitude = 0.0, uncertainty = 0.0;
     strarray_t *geo_tzids = NULL;
     json_t *root = NULL;
-
-    /* Get info record from the database */
-    if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
 
     /* Sanity check the parameters */
     if ((param = hash_lookup("pattern", &txn->req_qparams))) {
@@ -1098,21 +1096,28 @@ static int action_list(struct transaction_t *txn)
         }
     }
     else if ((param = hash_lookup("changedsince", &txn->req_qparams))) {
-        unsigned prefix = 0;
-
         if (param->next) {  /* once only */
             return json_error_response(txn, TZ_INVALID_CHANGEDSINCE,
                                        param, NULL);
         }
 
-        /* Parse and sanity check the changedsince token */
-        sscanf(param->s, "%u-" TIME_T_FMT, &prefix, &changedsince);
-        if (prefix != synctoken_prefix || changedsince > info.dtstamp) {
-            changedsince = 0;
-        }
+        changedsince_token = param->s;
     }
     else if (hash_count(&txn->req_qparams)) {
         return json_error_response(txn, TZ_INVALID_ACTION, NULL, NULL);
+    }
+
+    /* Get info record from the database */
+    if (zoneinfo_lookup_info(&info)) return HTTP_SERVER_ERROR;
+
+    /* From here on, we must free info before we return */
+    if (changedsince_token) {
+        /* Parse and sanity check the changedsince token */
+        unsigned int prefix = 0;
+        sscanf(changedsince_token, "%u-" TIME_T_FMT, &prefix, &changedsince);
+        if (prefix != synctoken_prefix || changedsince > info.dtstamp) {
+            changedsince = 0;
+        }
     }
 
     /* Generate ETag & Last-Modified from info record */
@@ -1171,7 +1176,14 @@ static int action_list(struct transaction_t *txn)
         }
 
         if (pattern) {
-            construct_hash_table(&tzids, 500, 1);
+            /* This hash table is used to de-duplicate results if a pattern
+             * lookup matches the same tzid more than once (ie aliases)
+             * It's not neeed for "list everything" because for that case
+             * zoneinfo_find's callback find_p sets frock->tzid_only, and that
+             * skips entries of type ZI_LINK (aliases)
+             * Hence a reasonable default size is "small", as we ought to
+             * optimise for glob-free patterns, or tight matches. */
+            construct_hash_table(&tzids, 0, 0);
             lrock.tztable = &tzids;
         }
 
