@@ -1974,6 +1974,49 @@ static int _policycheck_domain(const char *domain, size_t len)
  * modified UTF-7 too, which is why a userid is always plain ASCII. */
 #define BADUSERCHARS "&*:?"
 
+EXPORTED int mboxname_policycheck_domain(const char *domain)
+{
+    if (!domain) return IMAP_MAILBOX_BADNAME;
+
+    return _policycheck_domain(domain, strlen(domain));
+}
+
+EXPORTED int mboxname_policycheck_localpart(const char *localpart)
+{
+    if (!localpart || !*localpart) return IMAP_MAILBOX_BADNAME;
+
+    /* the localpart becomes a directory name in the spool and elsewhere */
+    if (!strcmp(localpart, ".") || !strcmp(localpart, ".."))
+        return IMAP_MAILBOX_BADNAME;
+
+    if (localpart[strcspn(localpart, BADUSERCHARS)])
+        return IMAP_MAILBOX_BADNAME;
+
+    return mboxname_policycheck_component(localpart, 0);
+}
+
+EXPORTED int mboxname_policycheck_userid(const char *userid)
+{
+    const char *at;
+    char *localpart;
+    int r;
+
+    if (!userid) return IMAP_MAILBOX_BADNAME;
+
+    /* split where mbname_from_userid() would */
+    at = strrchr(userid, '@');
+    if (!at) return mboxname_policycheck_localpart(userid);
+
+    r = mboxname_policycheck_domain(at + 1);
+    if (r) return r;
+
+    localpart = xstrndup(userid, at - userid);
+    r = mboxname_policycheck_localpart(localpart);
+    free(localpart);
+
+    return r;
+}
+
 /*
  * Apply site policy restrictions on mailbox names.
  * Restrictions are hardwired for now.
@@ -2055,9 +2098,8 @@ EXPORTED int mboxname_policycheck(const char *name, int flags)
         /* structural: without a domain prefix this would be the separator */
         else if (strchr(userid, '!'))
             r = IMAP_MAILBOX_BADNAME;
-        else if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY)
-                 && userid[strcspn(userid, BADUSERCHARS)])
-            r = IMAP_MAILBOX_BADNAME;
+        else if (!(flags & MBOXNAME_POLICY_SKIP_IDENTITY))
+            r = mboxname_policycheck_localpart(userid);
     }
 
     for (i = 0; !r && i < strarray_size(boxes); i++)
