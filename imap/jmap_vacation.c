@@ -528,7 +528,7 @@ static void vacation_update(struct jmap_req *req,
         /* Failure to upload or activate */
         if (err) {
             jerr = json_pack("{s:s s:s}",
-                             "type", "serverError", "description", err);
+                             "type", "serverFail", "description", err);
         }
         else {
             jerr = jmap_server_error(r);
