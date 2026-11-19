@@ -1,0 +1,124 @@
+#!perl
+use Cassandane::Tiny;
+
+# Mailbox/markAllEmailRead marks every email delivered so far as $seen for
+# the caller, in another account's mailboxes, without touching the owner's
+# seen state or email delivered afterwards.  Each email's modseq moves, so
+# every user's /changes reports it.
+sub test_mailbox_markallemailread
+    :NoAltNamespace :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester([
+        $self->jmap_default_using->@*,
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "share mailboxes: A may set seen, B may not, C has sharedseen";
+    $self->{instance}->create_user("other");
+    $admin->setacl("user.other", cassandane => 'lr') or die;
+    for my $name (qw(A B C)) {
+        $admin->create("user.other.$name") or die "create $name: $@";
+    }
+    $admin->setacl("user.other.A", cassandane => 'lrs') or die;
+    $admin->setacl("user.other.B", cassandane => 'lr') or die;
+    $admin->setacl("user.other.C", cassandane => 'lrs') or die;
+    $admin->setmetadata("user.other.C",
+        '/shared/vendor/cmu/cyrus-imapd/sharedseen', 'true');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    $self->{adminstore}->set_folder('user.other.A');
+    $self->make_message("msg $_", store => $self->{adminstore}) for 1..3;
+
+    my $res = $jmap->request([
+        [ 'Mailbox/get', { accountId => 'other', properties => ['name'] } ],
+    ]);
+    my %mboxid = map {; $_->{name} => $_->{id} }
+                 $res->single_sentence('Mailbox/get')->arguments->{list}->@*;
+
+    my sub seen_in_a {
+        my $res = $jmap->request([
+            [ 'Email/query', {
+                accountId => 'other',
+                filter => { inMailbox => $mboxid{A} },
+            }, 'R1' ],
+            [ 'Email/get', {
+                accountId => 'other',
+                properties => ['keywords'],
+                '#ids' => {
+                    resultOf => 'R1', name => 'Email/query', path => '/ids',
+                },
+            }, 'R2' ],
+        ]);
+        return [ map {; $_->{keywords}{'$seen'} ? 1 : 0 }
+                 $res->sentence_named('Email/get')->arguments->{list}->@* ];
+    }
+    $self->assert_cmp_deeply([0, 0, 0], seen_in_a());
+
+    my $owner = $self->{instance}->get_service('imap')
+                     ->create_store(username => 'other')->get_client();
+    $owner->examine('INBOX.A');
+    my sub owner_modseqs {
+        my $res = $owner->fetch('1:*', '(modseq)');
+        return { map {; $_ => $res->{$_}{modseq}[0] } keys %$res };
+    }
+    my $before = owner_modseqs();
+    $res = $jmap->request([
+        [ 'Email/get', { accountId => 'other', ids => [] } ],
+    ]);
+    my $state = $res->single_sentence('Email/get')->arguments->{state};
+
+    xlog $self, "mark all read, with errors reported per mailbox";
+    $res = $jmap->request([
+        [ 'Mailbox/markAllEmailRead', {
+            accountId => 'other',
+            mailboxIds => [ @mboxid{qw(A B C)}, 'nosuchmailbox', $mboxid{A} ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            accountId => 'other',
+            marked => [ $mboxid{A} ],
+            notMarked => {
+                $mboxid{B} => { type => 'forbidden' },
+                $mboxid{C} => superhashof({ type => 'forbidden' }),
+                nosuchmailbox => { type => 'notFound' },
+            },
+        },
+        $res->single_sentence('Mailbox/markAllEmailRead')->arguments,
+    );
+    $self->assert_cmp_deeply([1, 1, 1], seen_in_a());
+
+    xlog $self, "every email changed, for the caller and the owner";
+    $res = $jmap->request([
+        [ 'Email/changes', { accountId => 'other', sinceState => $state } ],
+    ]);
+    $self->assert_num_equals(3, scalar
+        $res->single_sentence('Email/changes')->arguments->{updated}->@*);
+    my $after = owner_modseqs();
+    $self->assert_num_gt($before->{$_}, $after->{$_}) for keys %$before;
+
+    xlog $self, "email delivered afterwards is unread";
+    $self->make_message("msg 4", store => $self->{adminstore});
+    $self->assert_cmp_deeply(bag(1, 1, 1, 0), seen_in_a());
+
+    xlog $self, "the owner's seen state is untouched";
+    my $flags = $owner->fetch('1:*', 'flags');
+    $self->assert_cmp_deeply([], [ grep {; /\\Seen/i }
+                                   map {; $_->{flags}->@* } values %$flags ]);
+
+    xlog $self, "the caller's own account isn't supported";
+    $res = $jmap->request([
+        [ 'Mailbox/markAllEmailRead', { mailboxIds => [] } ],
+    ]);
+    $self->assert_str_equals('accountNotSupportedByMethod',
+        $res->single_sentence->arguments->{type});
+
+    xlog $self, "mailboxIds is required";
+    $res = $jmap->request([
+        [ 'Mailbox/markAllEmailRead', { accountId => 'other' } ],
+    ]);
+    $self->assert_str_equals('invalidArguments',
+        $res->single_sentence->arguments->{type});
+}

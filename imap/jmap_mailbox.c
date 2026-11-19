@@ -27,6 +27,7 @@
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "msgrecord.h"
+#include "seen.h"
 #include "statuscache.h"
 #include "stristr.h"
 #include "sync_log.h"
@@ -45,6 +46,7 @@ static int jmap_mailbox_set(jmap_req_t *req);
 static int jmap_mailbox_changes(jmap_req_t *req);
 static int jmap_mailbox_query(jmap_req_t *req);
 static int jmap_mailbox_querychanges(jmap_req_t *req);
+static int jmap_mailbox_markallemailread(jmap_req_t *req);
 
 struct rolesort_data {
     const char *name;
@@ -101,6 +103,12 @@ static jmap_method_t jmap_mailbox_methods_standard[] = {
 
 // clang-format off
 static jmap_method_t jmap_mailbox_methods_nonstandard[] = {
+    {
+        "Mailbox/markAllEmailRead",
+        JMAP_MAIL_EXTENSION,
+        &jmap_mailbox_markallemailread,
+        JMAP_READ_WRITE
+    },
     { NULL, NULL, NULL, 0}
 };
 // clang-format on
@@ -4519,6 +4527,140 @@ static int jmap_mailbox_changes(jmap_req_t *req)
 
 done:
     jmap_changes_fini(&changes);
+    jmap_parser_fini(&parser);
+    return 0;
+}
+
+/* Make the caller's seen state for one mailbox every message it holds, and
+ * bump each message's modseq so that /changes reports it */
+static json_t *_mbox_markallread(jmap_req_t *req, const char *mboxid)
+{
+    struct mailbox *mailbox = NULL;
+    struct seen *seendb = NULL;
+    struct seendata sd = SEENDATA_INITIALIZER;
+    json_t *err = NULL;
+
+    const mbentry_t *mbentry = jmap_mbentry_by_mboxid(req, mboxid);
+    if (!mbentry || !jmap_hasrights_mbentry(req, mbentry, JACL_LOOKUP)) {
+        return json_pack("{s:s}", "type", "notFound");
+    }
+    if (!jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS | JACL_SETSEEN)) {
+        return json_pack("{s:s}", "type", "forbidden");
+    }
+
+    int r = mailbox_open_iwl(mbentry->name, &mailbox);
+    if (r) goto done;
+
+    /* only seen state kept in the caller's seen db can be set at once */
+    if (mailbox_internal_seen(mailbox, req->userid)) {
+        err = json_pack("{s:s s:s}", "type", "forbidden",
+                        "description", "seen state is shared");
+        goto done;
+    }
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0,
+                                                  ITER_SKIP_EXPUNGED);
+    const message_t *msg;
+    while (!r && (msg = mailbox_iter_step(iter))) {
+        struct index_record record = *msg_record(msg);
+        r = mailbox_rewrite_index_record(mailbox, &record);
+    }
+    mailbox_iter_done(&iter);
+    if (r) goto done;
+
+    r = seen_open(req->userid, SEEN_CREATE, &seendb);
+    if (!r) r = seen_lockread(seendb, mailbox_uniqueid(mailbox), &sd);
+    if (r) goto done;
+
+    struct buf seenuids = BUF_INITIALIZER;
+    if (mailbox->i.last_uid) buf_printf(&seenuids, "1:%u", mailbox->i.last_uid);
+    free(sd.seenuids);
+    sd.seenuids = buf_releasenull(&seenuids);
+    if (!sd.seenuids) sd.seenuids = xstrdup("");
+    if (sd.lastuid < mailbox->i.last_uid) sd.lastuid = mailbox->i.last_uid;
+    sd.lastread = time(NULL);
+    sd.lastchange = mailbox->i.last_appenddate.tv_sec;
+    r = seen_write(seendb, mailbox_uniqueid(mailbox), &sd);
+    if (!r) r = mailbox_commit(mailbox);
+
+done:
+    if (r && !err) err = jmap_server_error(r);
+    seen_close(&seendb);
+    seen_freedata(&sd);
+    mailbox_close(&mailbox);
+    return err;
+}
+
+/* The caller's seen state in each of another account's mailboxes becomes
+ * every message delivered so far.  That state lives in the caller's seen
+ * db, so it takes one write per mailbox; each message's record is still
+ * rewritten for its modseq, so that every user's /changes reports it. */
+static int jmap_mailbox_markallemailread(jmap_req_t *req)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *jmboxids = NULL;
+    const char *key;
+    json_t *val;
+    size_t i;
+
+    json_object_foreach(req->args, key, val) {
+        if (!strcmp(key, "accountId")) {
+            /* already handled in jmap_api() */
+        }
+        else if (!strcmp(key, "mailboxIds") && json_is_array(val)) {
+            json_t *jmboxid;
+            jmboxids = val;
+            json_array_foreach(jmboxids, i, jmboxid) {
+                if (!json_is_string(jmboxid)) {
+                    jmap_parser_invalid(&parser, "mailboxIds");
+                    break;
+                }
+            }
+        }
+        else {
+            jmap_parser_invalid(&parser, key);
+        }
+    }
+    if (!jmboxids) {
+        jmap_parser_invalid(&parser, "mailboxIds");
+    }
+
+    if (json_array_size(parser.invalid)) {
+        jmap_error(req, json_pack("{s:s s:O}", "type", "invalidArguments",
+                                  "arguments", parser.invalid));
+        goto done;
+    }
+
+    /* the owner's seen state is in the index, so not settable at once */
+    if (!strcmp(req->accountid, req->userid)) {
+        jmap_error(req, json_pack("{s:s}", "type",
+                                  "accountNotSupportedByMethod"));
+        goto done;
+    }
+
+    json_t *marked = json_array();
+    json_t *notmarked = json_object();
+    json_t *visited = json_object();
+
+    json_array_foreach(jmboxids, i, val) {
+        const char *mboxid = json_string_value(val);
+        if (json_object_get(visited, mboxid)) continue;
+        json_object_set(visited, mboxid, json_true());
+
+        json_t *err = _mbox_markallread(req, mboxid);
+        if (err) json_object_set_new(notmarked, mboxid, err);
+        else json_array_append(marked, val);
+    }
+    json_decref(visited);
+
+    if (!json_object_size(notmarked)) {
+        json_decref(notmarked);
+        notmarked = json_null();
+    }
+    jmap_ok(req, json_pack("{s:o s:o}", "marked", marked,
+                           "notMarked", notmarked));
+
+done:
     jmap_parser_fini(&parser);
     return 0;
 }
