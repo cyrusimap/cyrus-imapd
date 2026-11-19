@@ -1,0 +1,38 @@
+#!perl
+use Cassandane::Tiny;
+
+# A global script installed only in the global Sieve directory still runs,
+# and delivery doesn't create the shared #sieve mailbox for it.
+sub test_global_script_file_only
+    :MagicPlus :NoAltNameSpace
+    ($self)
+{
+    my $name = 'file-script';
+    $self->{instance}->install_sieve_script(<<~'EOF', username => undef, name => $name);
+      require "imap4flags";
+      keep :flags "\\flagged";
+      EOF
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $mboxname = 'shared-mailbox';
+    $admintalk->create($mboxname);
+    $admintalk->setacl($mboxname, anyone => 'lrswp');
+    $admintalk->setmetadata($mboxname,
+                            '/shared/vendor/cmu/cyrus-imapd/sieve', $name);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $msg = $self->{gen}->generate(subject => "Test Message");
+    $self->{instance}->deliver($msg, users => [ "" ], folder => $mboxname);
+
+    $admintalk->examine($mboxname);
+    my $res = $admintalk->fetch('1:*', '(FLAGS)');
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ flags => bag('\\Recent', '\\Flagged') }) },
+        $res);
+
+    my $dav = $self->{adminstore}->get_client(NoLogin => 1);
+    $dav->login("admin+dav", "secret");
+    my $list = $dav->list('', '#sieve');
+    $self->assert_str_equals('ok', $dav->get_last_completion_response());
+    $self->assert_cmp_deeply([], $list // []);
+}

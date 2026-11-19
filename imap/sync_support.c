@@ -3513,13 +3513,12 @@ static int sync_apply_mailbox(struct dlist *kin,
 
 #ifdef USE_SIEVE
         if (mbtype_isa(mbtype) == MBTYPE_SIEVE) {
-            /* Create sievedir for this user */
-            mbname_t *mbname = mbname_from_intname(mboxname);
-            const char *userid = mbname_userid(mbname);
+            /* Create sievedir for this user, or for global scripts */
+            char *userid = sieve_mboxname_owner(mboxname);
             const char *sieve_path = user_sieve_path(userid);
             struct stat sbuf;
 
-            mbname_free(&mbname);
+            free(userid);
 
             int r2 = stat(sieve_path, &sbuf);
             if (r2) {
