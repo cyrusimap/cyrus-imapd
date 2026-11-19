@@ -36,6 +36,7 @@
 #include "json_support.h"
 #include "jscalendar.h"
 #include "jmap_notif.h"
+#include "jmap_undo.h"
 #include "jmap_util.h"
 #include "search_query.h"
 #include "seen.h"
@@ -222,7 +223,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "CalendarEventNotification/set",
         JMAP_URN_CALENDARS,
         &jmap_calendareventnotification_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "CalendarEventNotification/changes",
@@ -258,7 +259,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "ParticipantIdentity/set",
         JMAP_URN_CALENDARS,
         &jmap_participantidentity_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "Principal/get",
@@ -288,7 +289,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "Principal/set",
         JMAP_URN_PRINCIPALS,
         &jmap_principal_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "Principal/getAvailability",
@@ -308,7 +309,7 @@ static jmap_method_t jmap_calendar_methods_standard[] = {
         "ShareNotification/set",
         JMAP_URN_PRINCIPALS,
         &jmap_sharenotification_set,
-        JMAP_NEED_CSTATE | JMAP_READ_WRITE
+        JMAP_NEED_CSTATE | JMAP_READ_WRITE | JMAP_SET_ATOMIC
     },
     {
         "ShareNotification/changes",
@@ -10406,6 +10407,58 @@ static json_t *principal_check_readonly(jmap_req_t *req,
     return err;
 }
 
+/* Write the calendar home's time zone annotations, or remove them if @tz is
+ * NULL.  Both are written or neither.  With @undo (atomic Principal/set),
+ * each write is a failpoint and the commit is checked. */
+static int principal_set_timezone(jmap_req_t *req,
+                                  const char *tzid,
+                                  icaltimezone *tz,
+                                  struct jmap_undo *undo)
+{
+    static const char *tzid_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
+    static const char *tz_annot =
+        DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
+    char *calhomename = caldav_mboxname(req->userid, NULL);
+    struct mailbox *mbox = NULL;
+    annotate_state_t *astate = NULL;
+    struct buf val = BUF_INITIALIZER;
+
+    int r = mailbox_open_iwl(calhomename, &mbox);
+    if (!r) {
+        r = mailbox_get_annotate_state(mbox, 0, &astate);
+    }
+    if (!r && undo) {
+        r = jmap_undo_failpoint(undo);
+    }
+    if (!r) {
+        /* An empty value removes the annotation */
+        buf_setcstr(&val, tz ? tzid : "");
+        r = annotate_state_writemask(astate, tzid_annot, req->userid, &val);
+    }
+    if (!r && undo) {
+        r = jmap_undo_failpoint(undo);
+    }
+    if (!r) {
+        icalcomponent *vtz = tz ? icaltimezone_get_component(tz) : NULL;
+        buf_setcstr(&val, vtz ? icalcomponent_as_ical_string(vtz) : "");
+        r = annotate_state_writemask(astate, tz_annot, req->userid, &val);
+    }
+    if (!r && undo) {
+        r = jmap_undo_failpoint(undo);
+        if (!r) {
+            r = mailbox_commit(mbox);
+        }
+    }
+    if (r && mbox) {
+        mailbox_abort(mbox);
+    }
+    mailbox_close(&mbox);
+    buf_free(&val);
+    free(calhomename);
+    return r;
+}
+
 static int jmap_principal_set(struct jmap_req *req)
 {
     struct jmap_parser argparser = JMAP_PARSER_INITIALIZER;
@@ -10436,7 +10489,9 @@ static int jmap_principal_set(struct jmap_req *req)
                 json_pack("{s:s}", "type", "forbidden"));
     }
 
-    /* update */
+    /* update: validate, then apply the one timeZone change below */
+    const char *tz_id = NULL, *tz_tzid = NULL;
+    icaltimezone *tz_tz = NULL;
     json_object_foreach(set.update, id, jarg) {
         /* Only allow updates for authenticated user principal */
         if (strcmp(id, req->userid)) {
@@ -10487,42 +10542,9 @@ static int jmap_principal_set(struct jmap_req *req)
                         "type", "invalidProperties", "properties", "timeZone"));
             continue;
         }
-
-        char *calhomename = caldav_mboxname(req->userid, NULL);
-        struct mailbox *mbox = NULL;
-        int r = mailbox_open_iwl(calhomename, &mbox);
-        if (!r) {
-            annotate_state_t *astate = NULL;
-            r = mailbox_get_annotate_state(mbox, 0, &astate);
-            if (!r) {
-                static const char *tzid_annot =
-                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone-id";
-                static const char *tz_annot =
-                    DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone";
-                icalcomponent *vtz =
-                    tz ? icaltimezone_get_component(tz) : NULL;
-
-                /* An empty value removes the annotation */
-                struct buf val = BUF_INITIALIZER;
-                buf_setcstr(&val, tz ? tzid : "");
-                r = annotate_state_writemask(astate, tzid_annot,
-                                             req->userid, &val);
-                buf_setcstr(&val,
-                            vtz ? icalcomponent_as_ical_string(vtz) : "");
-                int r2 = annotate_state_writemask(astate, tz_annot,
-                                                  req->userid, &val);
-                if (!r) r = r2;
-                buf_free(&val);
-            }
-            /* Both annotations or neither. */
-            if (r) mailbox_abort(mbox);
-        }
-        mailbox_close(&mbox);
-        free(calhomename);
-        if (!r) {
-            json_object_set_new(set.updated, id, json_object());
-        }
-        else json_object_set_new(set.not_updated, id, jmap_server_error(r));
+        tz_id = id;
+        tz_tzid = tzid;
+        tz_tz = tz;
     }
 
     /* destroy */
@@ -10530,6 +10552,37 @@ static int jmap_principal_set(struct jmap_req *req)
     json_array_foreach(set.destroy, i, jarg) {
         json_object_set_new(set.not_destroyed, json_string_value(jarg),
                 json_pack("{s:s}", "type", "forbidden"));
+    }
+
+    if (set.atomic) {
+        err = jmap_set_atomic_failure(&set);
+        if (err) {
+            jmap_error(req, err);
+            goto done;
+        }
+    }
+
+    if (tz_id) {
+        struct jmap_undo undo = JMAP_UNDO_INITIALIZER;
+        r = principal_set_timezone(req,
+                                   tz_tzid,
+                                   tz_tz,
+                                   set.atomic ? &undo : NULL);
+        jmap_undo_fini(&undo);
+        if (!r) {
+            json_object_set_new(set.updated, tz_id, json_object());
+        }
+        else if (set.atomic) {
+            xsyslog_ev(LOG_ERR, "jmap.principal.set.failed",
+                       lf_s("jmap.accountid", req->accountid),
+                       lf_err("error", r));
+            req->abort_cstate = true;
+            jmap_error(req, jmap_server_error(r));
+            goto done;
+        }
+        else {
+            json_object_set_new(set.not_updated, tz_id, jmap_server_error(r));
+        }
     }
 
     r = principal_currentstate(req, &set.new_state);
@@ -11409,6 +11462,104 @@ done:
     seqset_free(&seenuids);
 }
 
+static int notif_write_seen(struct seen *seendb,
+                            struct mailbox *notifmbox,
+                            seqset_t *seenuids)
+{
+    struct seendata sd = SEENDATA_INITIALIZER;
+    sd.seenuids = seqset_cstring(seenuids);
+    if (!sd.seenuids) {
+        sd.seenuids = xstrdup("");
+    }
+    sd.lastread = time(NULL);
+    sd.lastchange = sd.lastread;
+    sd.lastuid = seqset_last(seenuids);
+    int r = seen_write(seendb, mailbox_uniqueid(notifmbox), &sd);
+    seen_freedata(&sd);
+    return r;
+}
+
+/* A notification that an atomic notif_set will destroy. */
+struct notif_destroy
+{
+    const char *id;
+    struct index_record record;
+};
+
+struct notif_undo_seen
+{
+    struct seen *seendb;
+    const char *uniqueid;
+    struct seendata *sd;
+};
+
+static int notif_undo_seen(void *rock)
+{
+    struct notif_undo_seen *u = rock;
+    return seen_write(u->seendb, u->uniqueid, u->sd);
+}
+
+/* Destroy the planned notifications in @destroys and commit @notifmbox, or
+ * change nothing.  The seen.db write isn't part of the mailbox transaction,
+ * so a failure writes back @oldsd.  On failure, sets @errtype to the type
+ * of the method error. */
+static int notif_destroy_atomic(struct mailbox *notifmbox,
+                                bool set_seen,
+                                struct seen *seendb,
+                                seqset_t *seenuids,
+                                struct seendata *oldsd,
+                                dynarray_t *destroys,
+                                const char **errtype)
+{
+    struct jmap_undo undo = JMAP_UNDO_INITIALIZER;
+    struct notif_undo_seen useen = { seendb,
+                                     mailbox_uniqueid(notifmbox),
+                                     oldsd };
+    int r = 0;
+
+    for (int i = 0; !r && i < dynarray_size(destroys); i++) {
+        struct notif_destroy *d = dynarray_nth(destroys, i);
+
+        r = jmap_undo_failpoint(&undo);
+        if (r) {
+            break;
+        }
+        if (set_seen) {
+            if (seenuids) {
+                seqset_add(seenuids, d->record.uid, 1);
+            }
+            else {
+                d->record.system_flags |= FLAG_SEEN;
+            }
+        }
+        else {
+            d->record.internal_flags |= FLAG_INTERNAL_EXPUNGED;
+        }
+        r = mailbox_rewrite_index_record(notifmbox, &d->record);
+    }
+    if (!r && seenuids) {
+        r = jmap_undo_failpoint(&undo);
+        if (!r) {
+            r = notif_write_seen(seendb, notifmbox, seenuids);
+        }
+        if (!r) {
+            jmap_undo_push(&undo, notif_undo_seen, &useen, NULL);
+        }
+    }
+    if (!r) {
+        r = jmap_undo_failpoint(&undo);
+    }
+    if (!r) {
+        r = mailbox_commit(notifmbox);
+    }
+    if (r) {
+        *errtype = jmap_undo_rollback(&undo);
+        mailbox_abort(notifmbox);
+    }
+    jmap_undo_fini(&undo);
+    return r;
+}
+
 static void notif_set(struct jmap_req *req,
                       struct jmap_set *set,
                       const mbentry_t *notifmb,
@@ -11419,6 +11570,8 @@ static void notif_set(struct jmap_req *req,
     struct mailbox *notifmbox = NULL;
     struct seen *seendb = NULL;
     seqset_t *seenuids = NULL;
+    struct seendata oldsd = SEENDATA_INITIALIZER;
+    dynarray_t destroys = DYNARRAY_INITIALIZER(sizeof(struct notif_destroy));
     struct buf buf = BUF_INITIALIZER;
 
     buf_printf(&buf, MODSEQ_FMT, statemodseq);
@@ -11440,7 +11593,12 @@ static void notif_set(struct jmap_req *req,
                 json_pack("{s:s}", "type", "forbidden"));
     }
 
-    if (!json_array_size(set->destroy)) goto done;
+    if (!json_array_size(set->destroy)) {
+        if (set->atomic) {
+            *err = jmap_set_atomic_failure(set);
+        }
+        goto done;
+    }
 
     int r = mailbox_open_iwl(notifmb->name, &notifmbox);
     if (r) {
@@ -11457,8 +11615,7 @@ static void notif_set(struct jmap_req *req,
                     "description", buf_cstring(&buf));
             goto done;
         }
-        struct seendata sd = SEENDATA_INITIALIZER;
-        r = seen_lockread(seendb, mailbox_uniqueid(notifmbox), &sd);
+        r = seen_lockread(seendb, mailbox_uniqueid(notifmbox), &oldsd);
         if (r) {
             buf_setcstr(&buf, "can not read seen.db: ");
             buf_appendcstr(&buf, error_message(r));
@@ -11466,8 +11623,7 @@ static void notif_set(struct jmap_req *req,
                     "description", buf_cstring(&buf));
             goto done;
         }
-        seenuids = seqset_parse(sd.seenuids, NULL, sd.lastuid);
-        seen_freedata(&sd);
+        seenuids = seqset_parse(oldsd.seenuids, NULL, oldsd.lastuid);
     }
 
     int foldernum = conversation_folder_number(req->cstate,
@@ -11483,6 +11639,11 @@ static void notif_set(struct jmap_req *req,
         r = conversations_guid_foreach(req->cstate, id, find_notifuid_cb, &rock);
         if (rock.uid) {
             r = mailbox_find_index_record(notifmbox, rock.uid, &record);
+            if (!r && set->atomic) {
+                struct notif_destroy d = { id, record };
+                dynarray_append(&destroys, &d);
+                continue;
+            }
             if (!r) {
                 if (set_seen) {
                     if (seenuids) {
@@ -11508,16 +11669,40 @@ static void notif_set(struct jmap_req *req,
         }
     }
 
-    if (seenuids) {
-        /* Write seen.db */
-        struct seendata sd = SEENDATA_INITIALIZER;
-        sd.seenuids = seqset_cstring(seenuids);
-        if (!sd.seenuids) sd.seenuids = xstrdup("");
-        sd.lastread = time(NULL);
-        sd.lastchange = sd.lastread;
-        sd.lastuid = seqset_last(seenuids);
-        r = seen_write(seendb, mailbox_uniqueid(notifmbox), &sd);
-        seen_freedata(&sd);
+    if (set->atomic) {
+        *err = jmap_set_atomic_failure(set);
+        if (*err) {
+            goto done;
+        }
+
+        const char *errtype = NULL;
+        r = notif_destroy_atomic(notifmbox,
+                                 set_seen,
+                                 seendb,
+                                 seenuids,
+                                 &oldsd,
+                                 &destroys,
+                                 &errtype);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "jmap.notification.set.failed",
+                       lf_s("jmap.accountid", req->accountid),
+                       lf_mailbox(notifmbox),
+                       lf_err("error", r));
+            req->abort_cstate = true;
+            *err = json_pack("{s:s s:s}",
+                             "type",
+                             errtype,
+                             "description",
+                             error_message(r));
+            goto done;
+        }
+        for (int j = 0; j < dynarray_size(&destroys); j++) {
+            struct notif_destroy *d = dynarray_nth(&destroys, j);
+            json_array_append_new(set->destroyed, json_string(d->id));
+        }
+    }
+    else if (seenuids) {
+        r = notif_write_seen(seendb, notifmbox, seenuids);
         if (r) {
             buf_setcstr(&buf, "can not write seen.db: ");
             buf_appendcstr(&buf, error_message(r));
@@ -11532,11 +11717,15 @@ static void notif_set(struct jmap_req *req,
             buf_reset(&buf);
             goto done;
         }
+    }
+    if (seenuids) {
         /* seen.db won't bump the modseq, so force that here */
         mboxname_nextmodseq(notifmb->name, statemodseq, MBTYPE_JMAPNOTIFY, 0);
     }
 
 done:
+    dynarray_fini(&destroys);
+    seen_freedata(&oldsd);
     seqset_free(&seenuids);
     seen_close(&seendb);
     mailbox_close(&notifmbox);
@@ -12835,6 +13024,14 @@ static int jmap_participantidentity_set(struct jmap_req *req)
         json_object_set_new(set.not_destroyed,
                 json_string_value(jarg),
                 json_pack("{s:s}", "type", "forbidden"));
+    }
+
+    if (set.atomic) {
+        err = jmap_set_atomic_failure(&set);
+        if (err) {
+            jmap_error(req, err);
+            goto done;
+        }
     }
 
     set.new_state = modseqtoa(jmap_modseq(req, MBTYPE_CALENDAR, JMAP_MODSEQ_RELOAD));

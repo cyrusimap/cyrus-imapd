@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_principal_set_atomic_undo
+    :NoStartInstances
+    ($self)
+{
+    # The third write is the commit, after both time zone annotations.
+    $self->config_set(debug_jmap_atomic_failstep => 3);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Principal/set', {
+            update => { cassandane => { timeZone => 'Europe/London' } },
+        } ],
+        [ 'Principal/get', {
+            ids => [ 'cassandane' ], properties => [ 'timeZone' ],
+        } ],
+    ]);
+    my $before = $res->sentence(1)->arguments;
+    $self->assert_str_equals('Europe/London', $before->{list}[0]{timeZone});
+
+    $res = $jmap->request([
+        [ 'Principal/set', {
+            atomic => JSON::true,
+            update => { cassandane => { timeZone => 'Asia/Tokyo' } },
+        } ],
+        [ 'Principal/get', {
+            ids => [ 'cassandane' ], properties => [ 'timeZone' ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->sentence(0)->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.principal\.set\.failed});
+    # The folder modseq, and so the state, may advance; the value may not.
+    $self->assert_cmp_deeply($before->{list},
+                             $res->sentence(1)->arguments->{list});
+
+    $self->check_conversations();
+}
