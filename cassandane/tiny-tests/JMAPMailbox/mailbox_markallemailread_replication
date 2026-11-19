@@ -1,0 +1,55 @@
+#!perl
+use Cassandane::Tiny;
+
+# The sync CRC that Mailbox/markAllEmailRead leaves on the master matches
+# the replica's, so replication finds the mailboxes in agreement.
+sub test_mailbox_markallemailread_replication
+    :NoAltNamespace :JMAPExtensions :Replication
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester([
+        $self->jmap_default_using->@*,
+        'https://cyrusimap.org/ns/jmap/mail',
+    ]);
+    my $admin = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+    $admin->setacl("user.other", cassandane => 'lr') or die;
+    $admin->create("user.other.A") or die;
+    $admin->setacl("user.other.A", cassandane => 'lrs') or die;
+    $self->{adminstore}->set_folder('user.other.A');
+    $self->make_message("msg $_", store => $self->{adminstore}) for 1..3;
+    $self->run_replication(user => 'other');
+
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/synccrcs';
+    my sub synccrcs ($store) {
+        my $talk = $store->get_client();
+        return $talk->getmetadata('user.other.A', $entry)
+                    ->{'user.other.A'}{$entry};
+    }
+    my $before = synccrcs($self->{adminstore});
+
+    my $res = $jmap->request([
+        [ 'Mailbox/get', { accountId => 'other', properties => ['name'] } ],
+    ]);
+    my ($mboxid) = map {; $_->{id} } grep {; $_->{name} eq 'A' }
+                   $res->single_sentence('Mailbox/get')->arguments->{list}->@*;
+
+    $res = $jmap->request([
+        [ 'Mailbox/markAllEmailRead', {
+            accountId => 'other', mailboxIds => [ $mboxid ],
+        } ],
+    ]);
+    $self->assert_cmp_deeply([ $mboxid ],
+        $res->single_sentence('Mailbox/markAllEmailRead')
+            ->arguments->{marked});
+
+    $self->run_replication(user => 'other');
+    $self->run_replication(user => 'cassandane');
+    $self->check_replication('other');
+
+    xlog $self, "the master's CRC changed and matches the replica's";
+    my $master = synccrcs($self->{adminstore});
+    $self->assert_str_not_equals($before, $master);
+    $self->assert_str_equals($master, synccrcs($self->{replica_adminstore}));
+}

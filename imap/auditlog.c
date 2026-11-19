@@ -228,6 +228,25 @@ EXPORTED void auditlog_modseq(const struct mailbox *mailbox)
     auditlog_finish(&lf);
 }
 
+EXPORTED void auditlog_touched_bulk(const struct mailbox *mailbox,
+                                   const seqset_t *uids,
+                                   uint32_t count)
+{
+    struct logfmt lf = LOGFMT_INITIALIZER;
+    char *uidstr = seqset_cstring(uids);
+
+    auditlog_begin(&lf, "touched.bulk");
+
+    logfmt_push_mailbox(&lf, mailbox);
+    logfmt_pushf(&lf, "msg.count", "%" PRIu32, count);
+    logfmt_push(&lf, "msg.imapuids", uidstr ? uidstr : "");
+    logfmt_pushf(&lf, "mbox.highestmodseq", MODSEQ_FMT,
+                 mailbox->i.highestmodseq);
+
+    auditlog_finish(&lf);
+    free(uidstr);
+}
+
 EXPORTED void auditlog_proxy(const char *userid, const char *status)
 {
     struct logfmt lf = LOGFMT_INITIALIZER;

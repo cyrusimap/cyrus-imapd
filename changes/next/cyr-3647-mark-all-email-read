@@ -2,7 +2,10 @@ Description:
 
 The new ``Mailbox/markAllEmailRead`` JMAP method, part of the Cyrus Mail
 extension, marks all email in another user's mailboxes as seen for the
-caller in one call, rather than one ``Email/set`` update per email.
+caller in one call, rather than one ``Email/set`` update per email.  It
+logs one new ``auditlog.touched.bulk`` line per mailbox, with the number
+and uids of the emails changed, in place of an ``auditlog.touched`` line
+per email.
 
 
 Documentation:
