@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_storage
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $imap = $self->{store}->get_client();
+    my $entry = '/vendor/cmu/cyrus-imapd/jmapmetadata';
+
+    my sub stored (@entries) {
+        my $md = $imap->getmetadata('INBOX', { depth => 'infinity' }, @entries);
+        my $vals = $md->{INBOX};
+        return { map { $_ => $vals->{$_} } grep { defined $vals->{$_} } keys %$vals };
+    }
+
+    my $res = $jmap->request([
+        ['Mailbox/query', { filter => { role => 'inbox' } }],
+    ]);
+    my $inboxid = $res->single_sentence->arguments->{ids}[0];
+
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => {
+                $inboxid => {
+                    metadata => {
+                        'acme.example.com' => { a => 1 },
+                        'other.example' => { b => [1, 2] },
+                    },
+                    privateMetadata => { 'acme.example.com' => { p => 'x' } },
+                },
+            },
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $inboxid => undef },
+        $res->single_sentence->arguments->{updated});
+
+    xlog $self, "each namespace is an annotation, shared or private";
+    $self->assert_cmp_deeply(
+        {
+            "/shared$entry/acme.example.com" => '{"a":1}',
+            "/shared$entry/other.example" => '{"b":[1,2]}',
+            "/private$entry/acme.example.com" => '{"p":"x"}',
+        },
+        stored("/shared$entry", "/private$entry"),
+    );
+
+    xlog $self, "removing a namespace removes its annotation";
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => { $inboxid => { 'metadata/other.example' => undef } },
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $inboxid => undef },
+        $res->single_sentence->arguments->{updated});
+    $self->assert_cmp_deeply(
+        { "/shared$entry/acme.example.com" => '{"a":1}' },
+        stored("/shared$entry"),
+    );
+
+    xlog $self, "IMAP clients other than admins can't write them";
+    for my $which ('shared', 'private') {
+        $imap->setmetadata('INBOX', "/$which$entry/acme.example.com", '{}');
+        $self->assert_str_equals('no', $imap->get_last_completion_response());
+    }
+}

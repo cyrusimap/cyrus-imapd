@@ -36,6 +36,7 @@
 #include "json_support.h"
 #include "jscalendar.h"
 #include "jmap_notif.h"
+#include "jmap_metadata.h"
 #include "jmap_util.h"
 #include "search_query.h"
 #include "seen.h"
@@ -616,9 +617,22 @@ static json_t *encode_calendarrights(int rights, int is_owner)
             (rights & JACL_ADMIN_CALENDAR) == JACL_ADMIN_CALENDAR);
 }
 
+/* Add maySetMetadata (draft-ietf-jmap-metadata) to a CalendarRights */
+static json_t *with_maysetmetadata(json_t *jrights, int rights)
+{
+    json_object_set_new(jrights, "maySetMetadata",
+            json_boolean((rights & JACL_MAYSETMETADATA) == JACL_MAYSETMETADATA));
+    return jrights;
+}
+
 static json_t *calendarrights_to_sharewith(int rights)
 {
     return encode_calendarrights(rights, 0);
+}
+
+static json_t *calendarrights_to_sharewith_md(int rights)
+{
+    return with_maysetmetadata(encode_calendarrights(rights, 0), rights);
 }
 
 static int calendar_sharewith_to_rights(int rights, json_t *jsharewith)
@@ -654,6 +668,8 @@ calendar_sharewith_to_rights_iter:
             mask = JACL_DELETE;
         else if (!strcmp("mayShare", name))
             mask = JACL_ADMIN_CALENDAR;
+        else if (!strcmp("maySetMetadata", name))
+            mask = JACL_MAYSETMETADATA;
         else
             continue;
 
@@ -961,20 +977,35 @@ static int getcalendars_cb(const mbentry_t *mbentry, void *vrock)
             /* We don't allow deleting the default calendar */
             rights &= ~JACL_DELETE;
         }
-        json_object_set_new(obj, "myRights",
-                encode_calendarrights(rights,
-                    !strcmp(rock->req->userid, rock->req->accountid)));
+        json_t *jrights = encode_calendarrights(rights,
+                !strcmp(rock->req->userid, rock->req->accountid));
+        if (jmap_is_using(rock->req, JMAP_URN_METADATA))
+            with_maysetmetadata(jrights, rights);
+        json_object_set_new(obj, "myRights", jrights);
     }
 
     if (jmap_wantprop(rock->get->props, "shareWith")) {
-        json_t *sharewith =
-            jmap_get_sharewith(mbentry, calendarrights_to_sharewith);
+        json_t *sharewith = jmap_get_sharewith(mbentry,
+                jmap_is_using(rock->req, JMAP_URN_METADATA)
+                    ? calendarrights_to_sharewith_md
+                    : calendarrights_to_sharewith);
         json_object_set_new(obj, "shareWith", sharewith);
     }
 
     if (jmap_wantprop(rock->get->props, "mailboxUniqueId")) {
         json_object_set_new(obj, "mailboxUniqueId",
                             json_string(mbentry->uniqueid));
+    }
+
+    if (jmap_metadata_wanted(rock->get->props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, NULL, mbentry, 0, &md);
+        if (!r) jmap_metadata_get(rock->get->props, obj, &md);
+        jmap_metadata_fini(&md);
+        if (r) {
+            json_decref(obj);
+            goto done;
+        }
     }
 
     json_array_append_new(rock->get->list, obj);
@@ -1501,7 +1532,9 @@ static void setcalendar_parseprops(jmap_req_t *req,
                              strcmp(right, "mayUpdatePrivate") &&
                              strcmp(right, "mayRSVP") &&
                              strcmp(right, "mayShare") &&
-                             strcmp(right, "mayDelete"))) {
+                             strcmp(right, "mayDelete") &&
+                             (strcmp(right, "maySetMetadata") ||
+                              !jmap_is_using(req, JMAP_URN_METADATA)))) {
 
                         jmap_parser_push(parser, "shareWith");
                         jmap_parser_push(parser, sharee);
@@ -2121,13 +2154,32 @@ static void setcalendars_create(struct jmap_req *req,
     char *uid = xstrdup(makeuuid());
     char *mboxname = caldav_mboxname(req->accountid, uid);
     struct mailbox *mbox = NULL;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
     int r = 0;
+
+    memset(&props, 0, sizeof(struct setcalendar_props));
+    *err = jmap_metadata_set_parse(req, arg, /*is_create*/true, &ms);
+    if (*err) goto done;
+    if (!jmap_metadata_set_isempty(&ms)) {
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        /* the new collection takes the ACL of its parent */
+        *err = jmap_metadata_set_apply(&ms,
+                jmap_hasrights(req, parentname, JACL_MAYSETMETADATA),
+                &nomd, &md_shared, &md_private);
+        if (*err) goto done;
+    }
 
     /* Parse and validate properties. */
     setcalendar_parseprops(req, &parser, &props, arg, /*is_create*/NULL);
     if (props.share.With) {
         if (!jmap_hasrights(req, parentname, ACL_ADMIN)) {
             jmap_parser_invalid(&parser, "shareWith");
+        }
+        else {
+            jmap_metadata_sharewith_validate(&parser, NULL, props.share.With,
+                    /*overwrite*/true, calendar_sharewith_to_rights,
+                    calendarrights_to_sharewith_md);
         }
     }
     if (props.participant_identities && !jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
@@ -2186,6 +2238,10 @@ static void setcalendars_create(struct jmap_req *req,
     }
 
     r = setcalendar_writeprops(req, mbox, &props);
+    if (!r) {
+        r = jmap_metadata_write(req, mbox, 0, md_shared, md_private);
+        if (r) *err = jmap_metadata_set_error(r);
+    }
     if (r) {
         xsyslog_ev(LOG_ERR, "jmap.calendar.props.write.failed",
                    lf_jmapreq(req), lf_intname("mbox.name", mboxname),
@@ -2204,10 +2260,12 @@ static void setcalendars_create(struct jmap_req *req,
     /* Report calendar as created. */
     char id[JMAP_MAX_CALENDARID_SIZE];
     jmap_set_calendarid(req->cstate, mbentry, id);
-    *record = json_pack("{s:s s:o}", "id", id,
-                        "myRights",
-                        encode_calendarrights(jmap_myrights_mbentry(req, mbentry),
-                                               !strcmp(req->userid, req->accountid)));
+    int myrights = jmap_myrights_mbentry(req, mbentry);
+    json_t *jrights = encode_calendarrights(myrights,
+                                            !strcmp(req->userid, req->accountid));
+    if (jmap_is_using(req, JMAP_URN_METADATA))
+        with_maysetmetadata(jrights, myrights);
+    *record = json_pack("{s:s s:o}", "id", id, "myRights", jrights);
     if (jmap_is_using(req, JMAP_CALENDARS_EXTENSION)) {
         json_object_set_new(*record, "mailboxUniqueId",
                         json_string(mbentry->uniqueid));
@@ -2231,6 +2289,9 @@ done:
     mboxlist_entry_free(&mbparent);
     mboxlist_entry_free(&mbentry);
     setcalendar_props_fini(&props);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     jmap_parser_fini(&parser);
     free(parentname);
     free(mboxname);
@@ -2250,6 +2311,11 @@ static void setcalendars_update(jmap_req_t *req,
     mbname_t *mbname = NULL;
     struct mailbox *mbox = NULL;
     mbentry_t *mbentry = NULL;
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+
+    *err = jmap_metadata_set_parse(req, arg, /*is_create*/false, &ms);
+    if (*err) goto done;
 
     calid_to_mbentry(req, calid, &mbentry);
 
@@ -2270,6 +2336,11 @@ static void setcalendars_update(jmap_req_t *req,
     if (props.share.With) {
         if (!jmap_hasrights(req, mboxname, ACL_ADMIN)) {
             jmap_parser_invalid(&parser, "shareWith");
+        }
+        else {
+            jmap_metadata_sharewith_validate(&parser, mbentry, props.share.With,
+                    props.share.overwrite_acl, calendar_sharewith_to_rights,
+                    calendarrights_to_sharewith_md);
         }
     }
 
@@ -2298,10 +2369,32 @@ static void setcalendars_update(jmap_req_t *req,
         goto done;
     }
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        int r = jmap_metadata_lookup(req, NULL, mbentry, 0, &md);
+        if (!r) {
+            bool may_write = jmap_hasrights(req, mboxname,
+                                            JACL_MAYSETMETADATA);
+            *err = jmap_metadata_set_apply(&ms, may_write, &md,
+                                           &md_shared, &md_private);
+        }
+        else *err = jmap_server_error(r);
+        jmap_metadata_fini(&md);
+        if (*err) goto done;
+    }
+
     /* Update the calendar */
     int r = mailbox_open_iwl(mboxname, &mbox);
     if (!r) {
         r = setcalendar_writeprops(req, mbox, &props);
+        if (!r) {
+            r = jmap_metadata_write(req, mbox, 0, md_shared, md_private);
+            if (r == IMAP_QUOTA_EXCEEDED) {
+                *err = jmap_metadata_set_error(r);
+                mailbox_abort(mbox);
+                goto done;
+            }
+        }
         if (r) {
             xsyslog_ev(LOG_ERR, "jmap.calendar.props.write.failed",
                        lf_jmapreq(req), lf_intname("mbox.name", mboxname),
@@ -2338,6 +2431,9 @@ static void setcalendars_update(jmap_req_t *req,
 
 done:
     setcalendar_props_fini(&props);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     mailbox_close(&mbox);
     jmap_parser_fini(&parser);
     mboxlist_entry_free(&mbentry);
@@ -3348,6 +3444,7 @@ struct getcalendarevents_rock {
 
     /* Mailbox-scoped context */
     struct mailbox *mailbox;
+    annotate_db_t *annotdb;     /* held while reading metadata */
     mbentry_t *mbentry;
     mbname_t *mbname;
     strarray_t schedule_addresses;
@@ -4467,6 +4564,35 @@ gotevent:
         getcalendarevents_del_privateprops(jsevent);
     }
 
+    if (jmap_metadata_wanted(props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        if (rock->is_sharee &&
+            cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC) {
+            /* like the event's other details, hidden from sharees */
+            md.shared = json_object();
+            md.private = json_object();
+        }
+        else {
+            /* keep the calendar's annotations open across its events */
+            if (!rock->mailbox ||
+                strcmp(mailbox_uniqueid(rock->mailbox),
+                       rock->mbentry->uniqueid)) {
+                mailbox_close(&rock->mailbox);
+                r = jmap_openmbox_by_uniqueid(req, rock->mbentry->uniqueid,
+                                              &rock->mailbox, 0);
+            }
+            /* only a cost if it fails, so carry on */
+            if (!r) annotate_hold_mailbox(&rock->annotdb, rock->mailbox);
+            if (!r) {
+                r = jmap_metadata_lookup(req, rock->mailbox, NULL,
+                                         cdata->dav.imap_uid, &md);
+            }
+        }
+        if (!r) jmap_metadata_get(props, jsevent, &md);
+        jmap_metadata_fini(&md);
+        if (r) goto done;
+    }
+
     if (rock->want_eventids == NULL) {
         /* Client requested all events */
         jmap_filterprops(jsevent, props);
@@ -4598,6 +4724,7 @@ static void getcalendarevents_rock_init(struct getcalendarevents_rock *rock,
 
 static void getcalendarevents_rock_fini(struct getcalendarevents_rock *rock)
 {
+    annotate_hold_mailbox(&rock->annotdb, NULL);
     mailbox_close(&rock->mailbox);
     mboxlist_entry_free(&rock->mbentry);
     mbname_free(&rock->mbname);
@@ -5662,6 +5789,7 @@ static void setcalendarevents_create(jmap_req_t *req,
                                      struct mailbox *notifmbox,
                                      int send_itip,
                                      bool is_copy,
+                                     const struct jmap_metadata *copied,
                                      json_t *serverset,
                                      json_t **errptr)
 {
@@ -5674,6 +5802,12 @@ static void setcalendarevents_create(jmap_req_t *req,
         .serverset = serverset,
         .is_copy = is_copy,
     };
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+
+    *errptr = jmap_metadata_set_parse(req, create.jsevent, /*is_create*/true,
+                                      &ms);
+    if (*errptr) goto done;
 
     if (!is_copy) {
         remove_jsicalprops(create.jsevent, &parser, "iCalendar");
@@ -5683,14 +5817,41 @@ static void setcalendarevents_create(jmap_req_t *req,
     r = createevent_lookup_calendar(req, &parser, &create);
     if (r || json_array_size(parser.invalid)) goto done;
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        bool may_write = jmap_hasrights_mbentry(req, create.mbentry,
+                                                JACL_MAYSETMETADATA);
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        *errptr = jmap_metadata_set_apply(&ms, may_write, &nomd,
+                                          &md_shared, &md_private);
+        if (*errptr) goto done;
+    }
+    jmap_metadata_add_copied(req, copied, &md_shared, &md_private);
+    r = jmap_metadata_check_quota(create.mbentry->name, md_shared,
+                                  md_private, NULL);
+    if (r) goto done;
+
     r = createevent_toical(req, &parser, &create);
     if (r || json_array_size(parser.invalid)) goto done;
 
     r = createevent_store(req, &parser, &create, notifmbox, send_itip);
     if (r || json_array_size(parser.invalid)) goto done;
 
+    if (md_shared || md_private) {
+        struct caldav_data *cdata = NULL;
+        struct mailbox *mbox = NULL;
+        r = caldav_lookup_resource(db, create.mbentry, create.resourcename,
+                                   &cdata, 0);
+        if (!r) r = jmap_openmbox_by_uniqueid(req, create.mbentry->uniqueid,
+                                              &mbox, 1);
+        if (!r) {
+            r = jmap_metadata_write(req, mbox, cdata->dav.imap_uid,
+                                    md_shared, md_private);
+            mailbox_close(&mbox);
+        }
+    }
+
 done:
-    if (r) {
+    if (r && !*errptr) {
         switch (r) {
             case HTTP_FORBIDDEN:
             case IMAP_PERMISSION_DENIED:
@@ -5706,7 +5867,7 @@ done:
                 *errptr = jmap_server_error(r);
         }
     }
-    else if (json_array_size(parser.invalid)) {
+    else if (!*errptr && json_array_size(parser.invalid)) {
         *errptr = json_pack("{s:s s:O}",
                 "type", "invalidProperties",
                 "properties", parser.invalid);
@@ -5726,6 +5887,9 @@ done:
     free(create.resourcename);
     json_decref(create.jsevent);
     strarray_fini(&create.schedule_addresses);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
     jmap_parser_fini(&parser);
 }
 
@@ -6417,6 +6581,14 @@ static void setcalendarevents_update(jmap_req_t *req,
         .eid = eid,
         .serverset = serverset,
     };
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+
+    *err = jmap_metadata_set_parse(req, update.event_patch,
+                                   /*is_create*/false, &ms);
+    if (*err) goto done;
+    bool md_only = !jmap_metadata_set_isempty(&ms) &&
+                   !json_object_size(update.event_patch);
 
     remove_jsicalprops(update.event_patch, &parser, "iCalendar");
     if (json_array_size(parser.invalid)) goto done;
@@ -6561,6 +6733,36 @@ static void setcalendarevents_update(jmap_req_t *req,
         goto done;
     }
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        /* Shared metadata needs maySetMetadata on the calendar before and
+         * after any move */
+        bool may_write =
+            jmap_hasrights_mbentry(req, mbentry, JACL_MAYSETMETADATA) &&
+            (!dstmbentry ||
+             jmap_hasrights_mbentry(req, dstmbentry, JACL_MAYSETMETADATA));
+
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, mbox, NULL, record.uid, &md);
+        if (!r) {
+            *err = jmap_metadata_set_apply(&ms, may_write, &md,
+                                           &md_shared, &md_private);
+        }
+        if (!r && !*err) {
+            r = jmap_metadata_check_quota(dstmbentry ? dstmbentry->name
+                                                     : mbentry->name,
+                                          md_shared, md_private, &md);
+        }
+        jmap_metadata_fini(&md);
+        if (r || *err) goto done;
+
+        if (md_only) {
+            /* Leave the event, and its updated timestamp, alone */
+            r = jmap_metadata_write(req, mbox, record.uid,
+                                    md_shared, md_private);
+            goto done;
+        }
+    }
+
     /* Fast path trivial moves: if the patch only changes calendarIds,
      * move the index record instead of converting the iCalendar data */
     if (dstmbox && !eid->ical_recurid &&
@@ -6624,6 +6826,10 @@ static void setcalendarevents_update(jmap_req_t *req,
                              req->userid, cdata->dav.mailbox, 0);
         mboxevent_notify(&mboxevent);
         mboxevent_free(&mboxevent);
+
+        r = jmap_metadata_write(req, dstmbox, dstmbox->i.last_uid,
+                                md_shared, md_private);
+        if (r) goto done;
 
         /* Successfully moved, all done! */
         xsyslog_ev(LOG_DEBUG, "jmap.calendarevent.moved",
@@ -6777,6 +6983,15 @@ static void setcalendarevents_update(jmap_req_t *req,
     }
     r = 0;
 
+    if (md_shared || md_private) {
+        /* the resource was stored as a new record, or not at all */
+        struct caldav_data *newcdata = NULL;
+        r = caldav_lookup_resource(db, mbox->mbentry, resource, &newcdata, 0);
+        if (!r) r = jmap_metadata_write(req, mbox, newcdata->dav.imap_uid,
+                                        md_shared, md_private);
+        if (r) goto done;
+    }
+
     /* The event is stored, so a failure here only leaves attachment
      * refcounts off; it mustn't fail the item */
     ret = caldav_manage_attachments(req->accountid,
@@ -6847,6 +7062,9 @@ done:
         icalcomponent_free(update.oldical);
     json_decref(update.old_event);
     json_decref(update.event_patch);
+    jmap_metadata_set_fini(&ms);
+    json_decref(md_shared);
+    json_decref(md_private);
 
     mailbox_close(&mbox);
     mailbox_close(&dstmbox);
@@ -7325,7 +7543,8 @@ static int jmap_calendarevent_set(struct jmap_req *req)
 
         json_t *create = json_object();
         json_t *err = NULL;
-        setcalendarevents_create(req, arg, db, notifmbox, send_itip, false, create, &err);
+        setcalendarevents_create(req, arg, db, notifmbox, send_itip, false, NULL,
+                                 create, &err);
         if (err) {
             json_object_set_new(set.not_created, key, err);
         }
@@ -8203,6 +8422,114 @@ static int _calendarevent_queryargs_parse(jmap_req_t *req __attribute__((unused)
     return r;
 }
 
+/* Events whose metadata matches a FilterCondition are found by scanning
+ * the metadata annotations of every readable calendar. */
+struct eventquery_metadata_rock {
+    jmap_req_t *req;
+    const json_t *cond;
+    struct caldav_db *db;  /* set for sharees, to check event privacy */
+    hash_table by_uid;  /* uid -> struct jmap_metadata */
+    struct caldav_jscal_filter *filter;
+};
+
+static int eventquery_metadata_annot_cb(const char *mboxname __attribute__((unused)),
+                                        uint32_t uid,
+                                        const char *entry,
+                                        const char *userid,
+                                        const struct buf *value,
+                                        const struct annotate_metadata *mdata __attribute__((unused)),
+                                        void *vrock)
+{
+    struct eventquery_metadata_rock *rock = vrock;
+    char key[32];
+    snprintf(key, sizeof(key), "%u", uid);
+
+    struct jmap_metadata *md = hash_lookup(key, &rock->by_uid);
+    if (!md) {
+        md = xzmalloc(sizeof(struct jmap_metadata));
+        hash_insert(key, md, &rock->by_uid);
+    }
+    jmap_metadata_load(md, rock->req->userid, entry, userid, value);
+    return 0;
+}
+
+static void eventquery_metadata_free(void *val)
+{
+    struct jmap_metadata *md = val;
+    jmap_metadata_fini(md);
+    free(md);
+}
+
+static int eventquery_metadata_mbox_cb(const mbentry_t *mbentry, void *vrock)
+{
+    struct eventquery_metadata_rock *rock = vrock;
+
+    if (mbtype_isa(mbentry->mbtype) != MBTYPE_CALENDAR ||
+        (mbentry->mbtype & MBTYPE_DELETED) ||
+        !jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS))
+        return 0;
+
+    construct_hash_table(&rock->by_uid, 64, 0);
+    int r = annotatemore_findall_mbentry(mbentry, ANNOTATE_ANY_UID,
+                                         JMAP_METADATA_PATTERN, 0,
+                                         eventquery_metadata_annot_cb, rock, 0);
+
+    struct caldav_jscal_filter *f = NULL;
+    hash_iter *iter = hash_table_iter(&rock->by_uid);
+    while (!r && hash_iter_next(iter)) {
+        struct jmap_metadata *md = hash_iter_val(iter);
+        if (!md->shared) md->shared = json_object();
+        if (!md->private) md->private = json_object();
+        uint32_t uid = atoi(hash_iter_key(iter));
+        if (rock->db) {
+            /* sharees can't see the details of non-public events */
+            struct caldav_data *cdata = NULL;
+            if (caldav_lookup_imapuid(rock->db, mbentry, uid, &cdata, 0) ||
+                cdata->comp_flags.privacy != CAL_PRIVACY_PUBLIC)
+                continue;
+        }
+        if (!jmap_metadata_filter_match(rock->cond, md)) continue;
+
+        /* one subfilter per calendar, matching any of its uids */
+        if (!f) {
+            f = caldav_jscal_filter_new();
+            caldav_jscal_filter_by_mbentry(f, mbentry);
+            ptrarray_append(&rock->filter->subfilters, f);
+        }
+        caldav_jscal_filter_by_imap_uid(f, uid);
+    }
+    hash_iter_free(&iter);
+    free_hash_table(&rock->by_uid, eventquery_metadata_free);
+
+    return r;
+}
+
+static struct caldav_jscal_filter *eventquery_metadata_filter(jmap_req_t *req,
+                                                              const json_t *cond)
+{
+    struct eventquery_metadata_rock rock = { req, cond, NULL,
+                                             HASH_TABLE_INITIALIZER,
+                                             caldav_jscal_filter_new() };
+    rock.filter->op = CALDAV_JSCAL_OR;
+    if (strcmp(req->accountid, req->userid))
+        rock.db = caldav_open_userid(req->accountid);
+
+    char *mboxname = caldav_mboxname(req->accountid, NULL);
+    int r = mboxlist_mboxtree(mboxname, eventquery_metadata_mbox_cb, &rock,
+                              MBOXTREE_SKIP_ROOT);
+    free(mboxname);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "jmap.calendarevent.query.metadata.failed",
+                   lf_err("error", r));
+    }
+
+    if (r || !ptrarray_size(&rock.filter->subfilters))
+        rock.filter->op = CALDAV_JSCAL_FALSE;
+
+    if (rock.db) caldav_close(rock.db);
+    return rock.filter;
+}
+
 static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
                                                       json_t *jfilter,
                                                       struct eventquery_args *args,
@@ -8291,6 +8618,13 @@ static struct caldav_jscal_filter *build_jscal_filter(jmap_req_t *req,
         json_object_get(jfilter, "owner") ||
         json_object_get(jfilter, "attendee")) {
         *needs_xapian = 1;
+    }
+
+    if (!json_object_get(jfilter, "operator") &&
+        jmap_metadata_filter_uses(jfilter)) {
+        filter->op = CALDAV_JSCAL_AND;
+        ptrarray_append(&filter->subfilters,
+                        eventquery_metadata_filter(req, jfilter));
     }
 
     return filter;
@@ -8554,7 +8888,7 @@ done:
     return r;
 }
 
-static void calendarevent_validatefilter(jmap_req_t *req __attribute__((unused)),
+static void calendarevent_validatefilter(jmap_req_t *req,
                                          struct jmap_parser *parser,
                                          json_t *filter,
                                          json_t *unsupported __attribute__((unused)),
@@ -8593,10 +8927,11 @@ static void calendarevent_validatefilter(jmap_req_t *req __attribute__((unused))
                 jmap_parser_invalid(parser, field);
             }
         }
-        else {
+        else if (!jmap_metadata_is_filter(field)) {
             jmap_parser_invalid(parser, field);
         }
     }
+    jmap_metadata_filter_validate(req, parser, filter);
 }
 
 static int calendarevent_validatecomparator(jmap_req_t *req __attribute__((unused)),
@@ -8775,7 +9110,14 @@ static void _calendarevent_copy(jmap_req_t *req,
             getcalendarevents_reduce_participants(src_event, req->userid,
                     &schedule_addresses);
         }
-        dst_event = jmap_patchobject_apply(src_event, jevent, NULL, 0);
+
+        /* Keep metadata in the create out of the patch */
+        json_t *patch = json_copy(jevent);
+        json_t *mdprops = jmap_metadata_take_props(patch);
+        dst_event = jmap_patchobject_apply(src_event, patch, NULL, 0);
+        if (dst_event) json_object_update(dst_event, mdprops);
+        json_decref(mdprops);
+        json_decref(patch);
     }
     bool converted = src_event != NULL;
     json_decref(src_event);
@@ -8795,7 +9137,13 @@ static void _calendarevent_copy(jmap_req_t *req,
 
     /* Create event */
     *new_event = json_object();
-    setcalendarevents_create(req, dst_event, dst_db, notifmbox, 0, true, *new_event, set_err);
+    struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+    r = jmap_metadata_lookup(req, src_mbox, NULL, cdata->dav.imap_uid, &md);
+    if (!r) {
+        setcalendarevents_create(req, dst_event, dst_db, notifmbox, 0, true,
+                                 &md, *new_event, set_err);
+    }
+    jmap_metadata_fini(&md);
     if (*set_err) goto done;
 
 done:

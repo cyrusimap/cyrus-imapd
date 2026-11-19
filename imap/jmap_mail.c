@@ -37,6 +37,7 @@
 #include "jmap_calendar.h"
 #include "jmap_mail.h"
 #include "jmap_mail_query.h"
+#include "jmap_metadata.h"
 #include "json_support.h"
 #include "mailbox.h"
 #include "mappedfile.h"
@@ -2564,6 +2565,120 @@ static const search_attr_t emailsearch_headermatch_attr_cached = {
 
 /* ====================================================================== */
 
+/* Matches the metadata FilterCondition fields of an Email/query */
+struct emailsearch_metadata {
+    char *userid;
+    json_t *cond;
+};
+
+static void emailsearch_metadata_internalise(struct index_state *state __attribute__((unused)),
+                                             const union search_value *v __attribute__((unused)),
+                                             void *data1 __attribute__((unused)),
+                                             void **internalisedp __attribute__((unused)))
+{
+}
+
+static int emailsearch_metadata_match(message_t *msg,
+                                      const union search_value *v,
+                                      void *internalised __attribute__((unused)),
+                                      void *data1 __attribute__((unused)))
+{
+    struct emailsearch_metadata *sm = v->v;
+    struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+    const struct mailbox *mbox = NULL;
+    uint32_t uid = 0;
+    int match = 0;
+
+    if (!message_get_mailbox(msg, &mbox) && !message_get_uid(msg, &uid) &&
+        !jmap_metadata_lookup_filter(sm->userid, mbox, NULL, uid, sm->cond,
+                                     &md)) {
+        match = jmap_metadata_filter_match(sm->cond, &md);
+    }
+
+    jmap_metadata_fini(&md);
+    return match;
+}
+
+static void emailsearch_metadata_serialise(struct buf *buf,
+                                           const union search_value *v)
+{
+    struct emailsearch_metadata *sm = v->v;
+    struct dlist *dl = dlist_newlist(NULL, NULL);
+    char *cond = json_dumps(sm->cond, JSON_COMPACT|JSON_SORT_KEYS);
+    dlist_setatom(dl, NULL, sm->userid);
+    dlist_setatom(dl, NULL, cond);
+    dlist_printbuf(dl, 0, buf);
+    dlist_free(&dl);
+    free(cond);
+}
+
+static int emailsearch_metadata_unserialise(struct protstream *prot,
+                                            union search_value *v)
+{
+    struct dlist *dl = NULL;
+
+    int c = dlist_parse_asatomlist(&dl, 0, prot);
+    if (c == EOF) return EOF;
+
+    struct buf userid = BUF_INITIALIZER;
+    struct buf cond = BUF_INITIALIZER;
+    struct dlist_print_iter *iter = dlist_print_iter_new(dl, 0);
+    dlist_print_iter_step(iter, &userid);
+    dlist_print_iter_step(iter, &cond);
+
+    struct emailsearch_metadata *sm = xzmalloc(sizeof(*sm));
+    sm->userid = buf_release(&userid);
+    sm->cond = json_loads(buf_cstring(&cond), 0, NULL);
+    v->v = sm;
+
+    buf_free(&cond);
+    dlist_print_iter_free(&iter);
+    dlist_free(&dl);
+    return c;
+}
+
+static void emailsearch_metadata_duplicate(union search_value *new,
+                                           const union search_value *old)
+{
+    struct emailsearch_metadata *sm = old->v;
+    struct emailsearch_metadata *dup = xzmalloc(sizeof(*dup));
+    dup->userid = xstrdup(sm->userid);
+    dup->cond = json_incref(sm->cond);
+    new->v = dup;
+}
+
+static void emailsearch_metadata_free(union search_value *v,
+                                      struct search_attr **attrp __attribute__((unused)))
+{
+    struct emailsearch_metadata *sm = v->v;
+    if (sm) {
+        free(sm->userid);
+        json_decref(sm->cond);
+        free(sm);
+    }
+    v->v = NULL;
+}
+
+static const search_attr_t emailsearch_metadata_attr = {
+    "jmap_metadata",
+    SEA_MUTABLE,
+    SEARCH_PART_NONE,
+    SEARCH_COST_ANNOT,
+    emailsearch_metadata_internalise,
+    /*cmp*/NULL,
+    emailsearch_metadata_match,
+    emailsearch_metadata_serialise,
+    emailsearch_metadata_unserialise,
+    /*get_countability*/NULL,
+    emailsearch_metadata_duplicate,
+    emailsearch_metadata_free,
+    /*freeattr*/NULL,
+    /*dupattr*/NULL,
+    NULL
+};
+
+/* ====================================================================== */
+
 static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
                                              search_expr_t *parent,
                                              hash_table *contactgroups,
@@ -2630,6 +2745,15 @@ static search_expr_t *_email_buildsearchexpr(jmap_req_t *req, json_t *filter,
 
         this = search_expr_new(parent, SEOP_AND);
         search_expr_t *e;
+
+        if (jmap_metadata_filter_uses(filter)) {
+            struct emailsearch_metadata *sm = xzmalloc(sizeof(*sm));
+            sm->userid = xstrdup(req->userid);
+            sm->cond = json_incref(filter);
+            e = search_expr_new(this, SEOP_MATCH);
+            e->attr = &emailsearch_metadata_attr;
+            e->value.v = sm;
+        }
 
         if ((s = json_string_value(json_object_get(filter, "after")))) {
             time_from_iso8601(s, &t);
@@ -3053,8 +3177,18 @@ static void _email_parse_filter_cb(jmap_req_t *req,
         &frock
     };
 
-    /* Parse filter */
-    jmap_email_filtercondition_parse(filter, &parse_ctx);
+    /* Parse filter, with the metadata conditions validated apart */
+    jmap_metadata_filter_validate(req, parser, filter);
+    json_t *mailfilter = json_copy(filter);
+    const char *mdfield;
+    json_t *mdarg;
+    void *tmp;
+    json_object_foreach_safe(mailfilter, tmp, mdfield, mdarg) {
+        if (jmap_metadata_is_filter(mdfield))
+            json_object_del(mailfilter, mdfield);
+    }
+    jmap_email_filtercondition_parse(mailfilter, &parse_ctx);
+    json_decref(mailfilter);
     if (json_array_size(parser->invalid)) return;
 
     /* Gather contactgroups */
@@ -3593,6 +3727,8 @@ struct guidsearch_match {
     uint64_t nano_internaldate;  // nanoseconds since epoch
     conversation_id_t cid;
     bitvector_t folders;    // only set if numfolders > 0
+    uint32_t md_foldernum;  // a readable copy, for metadata conditions
+    uint32_t md_uid;
 };
 
 static void guidsearch_match_init(struct guidsearch_match *match,
@@ -3685,6 +3821,7 @@ enum guidsearch_expr_op {
     GSEOP_ALLCONVFLAGS,
     GSEOP_INTERNALDATE,
     GSEOP_GUIDSET,
+    GSEOP_METADATA,
     GSEOP_AND,
     GSEOP_OR,
     GSEOP_NOT
@@ -3709,9 +3846,28 @@ struct guidsearch_expr {
     union guidsearch_expr_value v;
 };
 
+/* A metadata condition of a guidsearch: the condition, and the mailboxes of
+ * the copies it reads, by folder number */
+struct guidsearch_metadata {
+    const struct emailsearch_metadata *sm;  // not owned
+    hashu64_table mbentries;
+};
+
+static void guidsearch_metadata_free_mbentry(void *val)
+{
+    mbentry_t *mbentry = val;
+    mboxlist_entry_free(&mbentry);
+}
+
 static void guidsearch_expr_free(struct guidsearch_expr *e)
 {
     if (!e) return;
+
+    if (e->op == GSEOP_METADATA) {
+        struct guidsearch_metadata *gm = e->v.v;
+        free_hashu64_table(&gm->mbentries, guidsearch_metadata_free_mbentry);
+        free(gm);
+    }
 
     int i;
     for (i = 0; i < ptrarray_size(&e->children); i++) {
@@ -4058,6 +4214,16 @@ guidsearch_expr_build(struct guidsearch_build_context *build_ctx,
                     }
                     if (ge) build_ctx->need_convflags = true;
                 }
+                else if (e->attr == &emailsearch_metadata_attr &&
+                         !build_ctx->guidsets.as_list) {
+                    struct guidsearch_metadata *gm =
+                        xzmalloc(sizeof(struct guidsearch_metadata));
+                    gm->sm = e->value.v;
+                    construct_hashu64_table(&gm->mbentries, 64, 0);
+                    ge = xzmalloc(sizeof(struct guidsearch_expr));
+                    ge->op = GSEOP_METADATA;
+                    ge->v.v = gm;
+                }
             }
             break;
         default:
@@ -4247,6 +4413,37 @@ static int guidsearch_expr_eval(struct conversations_state *cstate,
                 conversation_fini(&conv);
                 return ret;
             }
+        case GSEOP_METADATA:
+            {
+                struct guidsearch_metadata *gm = e->v.v;
+                struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+                mbentry_t *mbentry = NULL;
+                int r = 0;
+
+                if (match->md_uid) {
+                    mbentry = hashu64_lookup(match->md_foldernum,
+                                             &gm->mbentries);
+                    if (!mbentry) {
+                        r = cstate->folders_byname ?
+                            mboxlist_lookup(conversations_folder_mboxname(
+                                    cstate, match->md_foldernum),
+                                    &mbentry, NULL) :
+                            mboxlist_lookup_by_uniqueid(
+                                    conversations_folder_uniqueid(
+                                        cstate, match->md_foldernum),
+                                    &mbentry, NULL);
+                        if (!r) hashu64_insert(match->md_foldernum, mbentry,
+                                               &gm->mbentries);
+                    }
+                }
+                if (!r) {
+                    r = jmap_metadata_lookup_filter(gm->sm->userid, NULL,
+                            mbentry, match->md_uid, gm->sm->cond, &md);
+                }
+                int ret = !r && jmap_metadata_filter_match(gm->sm->cond, &md);
+                jmap_metadata_fini(&md);
+                return ret;
+            }
         case GSEOP_GUIDSET:
             {
                 const struct emailquery_category_guidset *gs = e->v.v;
@@ -4419,6 +4616,13 @@ static int guidsearch_rank_clause(struct conversations_state *cstate,
                 *need_xapian_index_version = 17;
                 return 2;
             }
+            else if (e->attr == &emailsearch_metadata_attr) {
+                /* metadata conditions, read for each match */
+                if (nonxapian_hash) {
+                    guidsearch_hash_expr(e, nonxapian_hash);
+                }
+                return 1;
+            }
             // any other MATCH is unsupported
             else return -1;
         case SEOP_TRUE:
@@ -4530,6 +4734,10 @@ static void guidsearch_match_add_guidrec(struct guidsearch_match *match,
     /* Merges the G record of one copy into the match of its email. The
      * caller must have asserted that this request may read the copy. */
     if (numfolders) bv_set(&match->folders, rec->foldernum);
+    if (!match->md_uid) {
+        match->md_foldernum = rec->foldernum;
+        match->md_uid = rec->uid;
+    }
     match->system_flags |= rec->system_flags;
     if (seendata) {
         int is_seen = jmapseen_copy_seen(seendata, cstate,
@@ -9018,6 +9226,14 @@ static int _email_get_meta(jmap_req_t *req,
             json_object_set_new(email, "createdModseq", json_integer(0));
         }
 
+        if (jmap_metadata_wanted(props)) {
+            struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+            md.shared = json_object();
+            md.private = json_object();
+            jmap_metadata_get(props, email, &md);
+            jmap_metadata_fini(&md);
+        }
+
         return 0;
     }
 
@@ -9148,6 +9364,18 @@ static int _email_get_meta(jmap_req_t *req,
 
         json_object_set_new(email, "snoozed",
                             rock.snoozed ? rock.snoozed : json_null());
+    }
+
+    if (jmap_metadata_wanted(props)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        struct mailbox *mbox = NULL;
+        uint32_t uid = 0;
+        r = msgrecord_get_mailbox(msg->mr, &mbox);
+        if (!r) r = msgrecord_get_uid(msg->mr, &uid);
+        if (!r) r = jmap_metadata_lookup(req, mbox, NULL, uid, &md);
+        if (!r) jmap_metadata_get(props, email, &md);
+        jmap_metadata_fini(&md);
+        if (r) goto done;
     }
 
     if (jmap_wantprop(props, "bimiBlobId")) {
@@ -10724,6 +10952,8 @@ static void _email_append(jmap_req_t *req,
                           strarray_t *keywords,
                           struct timespec *internaldate,
                           json_t *snoozed,
+                          const json_t *md_shared,
+                          const json_t *md_private,
                           int has_attachment,
                           const char *sourcefile,
                           int(*writecb)(jmap_req_t* req, FILE* fp, void* rock, json_t **err),
@@ -10951,6 +11181,12 @@ static void _email_append(jmap_req_t *req,
             qdiffs[QUOTA_MESSAGE] += 1;
         }
     }
+    if (!ignorequota) {
+        r = jmap_metadata_check_quota(mailbox_name(mbox), md_shared,
+                                      md_private, NULL);
+        if (r) goto done;
+    }
+
     r = append_setup_mbox(&as, mbox, req->userid, httpd_authstate,
             0, ignorequota ? NULL : qdiffs, 0, 0, EVENT_MESSAGE_NEW);
     if (r) goto done;
@@ -10996,6 +11232,14 @@ static void _email_append(jmap_req_t *req,
     /* Load message record */
     r = msgrecord_find(mbox, mbox->i.last_uid, &mr);
     if (r) goto done;
+
+    /* Store metadata before copying, so the copies get it too */
+    if (md_shared || md_private) {
+        r = jmap_metadata_write(req, mbox, mbox->i.last_uid,
+                                md_shared, md_private);
+        if (!r) r = mailbox_commit(mbox);
+        if (r) goto done;
+    }
 
     bit64 cid;
     r = msgrecord_get_cid(mr, &cid);
@@ -13153,13 +13397,19 @@ static void _email_create(jmap_req_t *req,
     /* Parse Email object into internal representation */
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
     struct email email = { HEADERS_INITIALIZER, NULL, NULL, { 0 }, 0, NULL, {0} };
+    struct jmap_metadata_set ms = JMAP_METADATA_SET_INITIALIZER;
+    json_t *md_shared = NULL, *md_private = NULL;
+    json_t *jmailboxids = NULL;
+
+    *set_err = jmap_metadata_set_parse(req, jemail, /*is_create*/true, &ms);
+    if (*set_err) goto done;
 
     _boundary_gen_init(&email.boundary_gen, jemail);
 
     _parse_email(req, jemail, &parser, &email);
 
     /* Validate mailboxIds */
-    json_t *jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
+    jmailboxids = json_copy(json_object_get(jemail, "mailboxIds"));
     _append_validate_mboxids(req, jmailboxids, &parser, &have_snoozed_mboxid);
 
     /* Validate snoozed + mailboxIds (MUST have both or neither) */
@@ -13190,9 +13440,25 @@ static void _email_create(jmap_req_t *req,
         goto done;
     }
 
+    if (!jmap_metadata_set_isempty(&ms)) {
+        /* shared metadata needs maySetMetadata on every mailbox */
+        bool may_write = true;
+        const char *mboxid;
+        json_t *jval;
+        json_object_foreach(jmailboxids, mboxid, jval) {
+            if (!jmap_hasrights_mboxid(req, mboxid, JACL_MAYSETMETADATA))
+                may_write = false;
+        }
+        struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+        *set_err = jmap_metadata_set_apply(&ms, may_write, &nomd,
+                                           &md_shared, &md_private);
+        if (*set_err) goto done;
+    }
+
     /* Append MIME-encoded Email to mailboxes and write keywords */
 
     _email_append(req, jmailboxids, &keywords, &email.internaldate, email.snoozed,
+                  md_shared, md_private,
                   config_getswitch(IMAPOPT_JMAP_SET_HAS_ATTACHMENT) ?
                   email.has_attachment : 0, NULL, _email_to_mime, &email,
                   &detail, set_err);
@@ -13219,6 +13485,9 @@ done:
             *set_err = jmap_server_error(r);
     }
     json_decref(jmailboxids);
+    json_decref(md_shared);
+    json_decref(md_private);
+    jmap_metadata_set_fini(&ms);
     strarray_fini(&keywords);
     jmap_parser_fini(&parser);
     _email_fini(&email);
@@ -13380,13 +13649,20 @@ struct email_update {
     struct email_uidrec *snoozed_uidrec; /* Currently snoozed email */
     char *snooze_in_mboxid;   /* Snooze the email in this mailboxid */
     json_t *readonly;         /* See jmap_set.update_readonly */
+    struct jmap_metadata_set md; /* metadata and privateMetadata */
+    json_t *md_shared;        /* New metadata, or NULL if unchanged */
+    json_t *md_private;       /* New privateMetadata, or NULL if unchanged */
+    ptrarray_t mdrecs;        /* The email's index records, for metadata */
 
     /* JMAP Email/copy specific fields */
     const char *creation_id;  /* Input: creation id of copied message */
+    json_t *md_err;           /* Return: SetError writing its metadata */
     const char *received_at;  /* Input: receivedAt of copied message */
     struct message_guid guid; /* Return: GUID of copied message */
     uint32_t size;            /* Return: byte size of copied message */
 };
+
+static void _email_mdrecs_fini(ptrarray_t *recs);
 
 static void _email_update_free(struct email_update *update)
 {
@@ -13396,6 +13672,11 @@ static void _email_update_free(struct email_update *update)
     json_decref(update->snoozed);
     json_decref(update->readonly);
     free(update->snooze_in_mboxid);
+    jmap_metadata_set_fini(&update->md);
+    json_decref(update->md_shared);
+    json_decref(update->md_private);
+    json_decref(update->md_err);
+    _email_mdrecs_fini(&update->mdrecs);
     free(update);
 }
 
@@ -15118,6 +15399,36 @@ static void _email_bulkupdate_dump(struct email_bulkupdate *bulk, json_t *jdump)
     buf_free(&buf);
 }
 
+/* An Email/copy copies the metadata and the copying user's
+ * privateMetadata (see annotate_msg_copy).  Apply the values of the
+ * create, or drop the privateMetadata if the request doesn't use the
+ * capability. */
+static void _email_copy_metadata(jmap_req_t *req,
+                                 struct email_update *update,
+                                 struct mailbox *mbox,
+                                 uint32_t uid)
+{
+    json_t *empty = NULL;
+    int r = 0;
+
+    if (!jmap_is_using(req, JMAP_URN_METADATA)) {
+        struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+        r = jmap_metadata_lookup(req, mbox, NULL, uid, &md);
+        if (!r && json_object_size(md.private)) {
+            empty = json_object();
+            r = jmap_metadata_write(req, mbox, uid, NULL, empty);
+        }
+        jmap_metadata_fini(&md);
+    }
+    else {
+        r = jmap_metadata_write(req, mbox, uid, update->md_shared,
+                                update->md_private);
+    }
+
+    if (r) update->md_err = jmap_metadata_set_error(r);
+    json_decref(empty);
+}
+
 static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
 {
     hash_iter *iter = hash_table_iter(&bulk->plans_by_mbox_id);
@@ -15221,6 +15532,11 @@ static void _email_bulkupdate_exec_copy(struct email_bulkupdate *bulk)
                 /* XXX append_copy should take new flags as parameter */
                 struct email_update *update = hash_lookup(src_uidrec->email_id,
                                                           &bulk->updates_by_email_id);
+
+                if (bulk->from_cstate) {
+                    _email_copy_metadata(bulk->req, update, dst_mbox,
+                                         new_uidrec->uid);
+                }
                 if (update->keywords || update->full_keywords) {
                     ptrarray_append(&plan->setflags, new_uidrec);
                 }
@@ -15483,6 +15799,192 @@ static void _email_bulkupdate_exec(struct email_bulkupdate *bulk,
 
 
 /* Execute the sequence of JMAP Email/set/{update} arguments in bulk. */
+/* The index records of an email, for metadata */
+struct email_mdrec {
+    char *mboxname;
+    uint32_t uid;
+    bool readable;              /* the user can read the mailbox */
+    struct email_update *update;
+};
+
+struct email_mdrecs_rock {
+    jmap_req_t *req;
+    ptrarray_t *recs;
+};
+
+static int _email_mdrecs_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct email_mdrecs_rock *rock = vrock;
+    mbentry_t *mbentry = NULL;
+
+    if (rec->part || (rec->system_flags & FLAG_DELETED) ||
+        (rec->internal_flags & FLAG_INTERNAL_EXPUNGED))
+        return 0;
+
+    conv_guidrec_mbentry(rec, &mbentry);
+    if (mbentry &&
+        !mboxname_isnondeliverymailbox(mbentry->name, mbentry->mbtype)) {
+        struct email_mdrec *mdrec = xzmalloc(sizeof(struct email_mdrec));
+        mdrec->mboxname = xstrdup(mbentry->name);
+        mdrec->uid = rec->uid;
+        mdrec->readable =
+            jmap_hasrights_mbentry(rock->req, mbentry, JACL_READITEMS);
+        ptrarray_append(rock->recs, mdrec);
+    }
+    mboxlist_entry_free(&mbentry);
+    return 0;
+}
+
+static void _email_mdrecs_fini(ptrarray_t *recs)
+{
+    struct email_mdrec *mdrec;
+    while ((mdrec = ptrarray_pop(recs))) {
+        free(mdrec->mboxname);
+        free(mdrec);
+    }
+    ptrarray_fini(recs);
+}
+
+static int _email_mdrecs(jmap_req_t *req, const char *email_id,
+                         ptrarray_t *recs)
+{
+    const char *guidrep = _guid_from_id(req->cstate, email_id);
+    if (!guidrep) return 0;
+
+    struct email_mdrecs_rock rock = { req, recs };
+    return conversations_guid_foreach(req->cstate, guidrep,
+                                      _email_mdrecs_cb, &rock);
+}
+
+/* Validate the metadata of an update against the email's current
+ * metadata, and compute the values to write.  Returns a SetError. */
+static json_t *_email_update_metadata_prepare(jmap_req_t *req,
+                                              struct email_update *update)
+{
+    struct jmap_metadata md = JMAP_METADATA_INITIALIZER;
+    struct email_mdrec *first = NULL;
+    json_t *err = NULL;
+
+    int r = _email_mdrecs(req, update->email_id, &update->mdrecs);
+    if (r) {
+        err = jmap_server_error(r);
+        goto done;
+    }
+
+    /* Shared metadata needs maySetMetadata on every mailbox the email is
+     * in, before and after the update. */
+    bool may_write = true;
+    for (int i = 0; i < ptrarray_size(&update->mdrecs); i++) {
+        struct email_mdrec *mdrec = ptrarray_nth(&update->mdrecs, i);
+        if (!mdrec->readable) continue;
+        if (!first) first = mdrec;
+        if (!jmap_hasrights(req, mdrec->mboxname, JACL_MAYSETMETADATA))
+            may_write = false;
+    }
+    if (!first) {
+        err = json_pack("{s:s}", "type", "notFound");
+        goto done;
+    }
+    if (jmap_metadata_set_isshared(&update->md)) {
+        const char *mboxid;
+        json_t *jval;
+        json_object_foreach(update->mailboxids, mboxid, jval) {
+            if (!json_is_true(jval)) continue;
+            if (*mboxid == '#') mboxid = jmap_lookup_id(req, mboxid + 1);
+            if (!mboxid || !jmap_hasrights_mboxid(req, mboxid,
+                                                  JACL_MAYSETMETADATA))
+                may_write = false;
+        }
+    }
+
+    mbentry_t *mbentry = NULL;
+    r = jmap_mboxlist_lookup(first->mboxname, &mbentry, NULL);
+    if (!r) r = jmap_metadata_lookup(req, NULL, mbentry, first->uid, &md);
+    mboxlist_entry_free(&mbentry);
+    if (r) {
+        err = jmap_server_error(r);
+        goto done;
+    }
+
+    err = jmap_metadata_set_apply(&update->md, may_write, &md,
+                                  &update->md_shared, &update->md_private);
+    if (!err && !ignorequota) {
+        r = jmap_metadata_check_quota(first->mboxname, update->md_shared,
+                                      update->md_private, &md);
+        if (r) err = jmap_metadata_set_error(r);
+    }
+
+done:
+    jmap_metadata_fini(&md);
+    return err;
+}
+
+static int _email_mdrec_cmp(const void **a, const void **b)
+{
+    const struct email_mdrec *ra = *a, *rb = *b;
+    int c = strcmp(ra->mboxname, rb->mboxname);
+    return c ? c : (ra->uid > rb->uid) - (ra->uid < rb->uid);
+}
+
+/* Write the metadata of @p updates to every index record of their emails,
+ * opening each mailbox once, and report the result in @p updated and
+ * @p not_updated. */
+static void _email_update_metadata_write(jmap_req_t *req,
+                                         ptrarray_t *updates,
+                                         json_t *updated,
+                                         json_t *not_updated)
+{
+    ptrarray_t recs = PTRARRAY_INITIALIZER;
+    struct mailbox *mbox = NULL;
+    int r = 0;
+
+    for (int i = 0; i < ptrarray_size(updates); i++) {
+        struct email_update *update = ptrarray_nth(updates, i);
+        if (!update->md_shared && !update->md_private) continue;
+        if (update->mailboxids) {
+            /* the update moved the email to other records */
+            _email_mdrecs_fini(&update->mdrecs);
+            r = _email_mdrecs(req, update->email_id, &update->mdrecs);
+            if (r) {
+                json_object_del(updated, update->email_id);
+                json_object_set_new(not_updated, update->email_id,
+                                    jmap_server_error(r));
+                r = 0;
+                continue;
+            }
+        }
+        for (int j = 0; j < ptrarray_size(&update->mdrecs); j++) {
+            struct email_mdrec *mdrec = ptrarray_nth(&update->mdrecs, j);
+            mdrec->update = update;
+            ptrarray_append(&recs, mdrec);
+        }
+    }
+    ptrarray_sort(&recs, _email_mdrec_cmp);
+
+    for (int i = 0; i < ptrarray_size(&recs); i++) {
+        struct email_mdrec *mdrec = ptrarray_nth(&recs, i);
+        struct email_update *update = mdrec->update;
+        if (json_object_get(not_updated, update->email_id)) continue;
+
+        if (!mbox || strcmp(mailbox_name(mbox), mdrec->mboxname)) {
+            mailbox_close(&mbox);
+            r = mailbox_open_iwl(mdrec->mboxname, &mbox);
+        }
+        if (!r) {
+            r = jmap_metadata_write(req, mbox, mdrec->uid, update->md_shared,
+                                    update->md_private);
+        }
+        if (r) {
+            json_object_del(updated, update->email_id);
+            json_object_set_new(not_updated, update->email_id,
+                                jmap_metadata_set_error(r));
+            r = 0;
+        }
+    }
+    mailbox_close(&mbox);
+    ptrarray_fini(&recs);
+}
+
 static void _email_update_bulk(jmap_req_t *req,
                                struct jmap_set *set,
                                json_t *debug,
@@ -15492,6 +15994,7 @@ static void _email_update_bulk(jmap_req_t *req,
     json_t *not_updated = set->not_updated;
     struct email_bulkupdate bulkupdate = _EMAIL_BULKUPDATE_INITIALIZER;
     ptrarray_t updates = PTRARRAY_INITIALIZER;
+    ptrarray_t mdonly = PTRARRAY_INITIALIZER;
     int i;
 
     /* Bulk updates are implemented to minimize the number of Cyrus mailbox
@@ -15542,6 +16045,8 @@ static void _email_update_bulk(jmap_req_t *req,
         update->email_id = email_id;
         update->readonly =
             json_incref(json_object_get(set->update_readonly, email_id));
+        json_t *mderr = jmap_metadata_set_parse(req, jval, /*is_create*/false,
+                                                &update->md);
         _email_update_parse(req, jval, &parser, update);
 
         /* Validate patched mailbox ids */
@@ -15575,11 +16080,29 @@ static void _email_update_bulk(jmap_req_t *req,
                     json_pack("{s:s s:O}", "type", "invalidProperties",
                         "properties", parser.invalid));
         }
+        else if (mderr) {
+            json_object_set_new(not_updated, email_id, mderr);
+            mderr = NULL;
+        }
+        else if (!jmap_metadata_set_isempty(&update->md) &&
+                 !json_object_get(not_updated, email_id)) {
+            mderr = _email_update_metadata_prepare(req, update);
+            if (mderr) {
+                json_object_set_new(not_updated, email_id, mderr);
+                mderr = NULL;
+            }
+        }
+        json_decref(mderr);
 
-        /* Add update to batch */
+        /* Add update to batch; metadata-only updates skip the planner,
+         * but not its check of server-set properties */
         if (!json_array_size(parser.invalid) &&
                 !json_object_get(not_updated, email_id)) {
-            ptrarray_append(&updates, update);
+            if (update->keywords || update->mailboxids || update->snoozed ||
+                update->readonly)
+                ptrarray_append(&updates, update);
+            else
+                ptrarray_append(&mdonly, update);
         }
         else _email_update_free(update);
 
@@ -15609,6 +16132,23 @@ static void _email_update_bulk(jmap_req_t *req,
         json_decref(bulkupdate.set_errors);
         json_decref(bulkupdate.committed);
     }
+
+    /* Metadata goes on the records the bulk update left in place */
+    for (i = 0; i < ptrarray_size(&mdonly); i++) {
+        struct email_update *update = ptrarray_nth(&mdonly, i);
+        json_object_set_new(updated, update->email_id, json_null());
+        ptrarray_append(&updates, update);
+    }
+    ptrarray_fini(&mdonly);
+    for (i = 0; i < ptrarray_size(&updates); i++) {
+        struct email_update *update = ptrarray_nth(&updates, i);
+        if (!json_object_get(updated, update->email_id)) {
+            json_decref(update->md_shared);
+            json_decref(update->md_private);
+            update->md_shared = update->md_private = NULL;
+        }
+    }
+    _email_update_metadata_write(req, &updates, updated, not_updated);
 
     for (i = 0; i < ptrarray_size(&updates); i++) {
         _email_update_free(ptrarray_nth(&updates, i));
@@ -16001,6 +16541,7 @@ gotrecord:
 
     /* Write the message to the file system */
     _email_append(req, jmailbox_ids, &keywords, &internaldate, snoozed,
+                  /*md_shared*/NULL, /*md_private*/NULL,
             has_attachment, sourcefile, _email_import_cb, &content, &detail, err);
     if (detail.partial) *partial = true;
 
@@ -16363,6 +16904,8 @@ static void _email_copy_bulk(jmap_req_t *req,
         struct email_update *update = xzmalloc(sizeof(struct email_update));
 
         update->creation_id = creation_id;
+        json_t *mderr = jmap_metadata_set_parse(req, jval, /*is_create*/true,
+                                                &update->md);
         _email_copy_parse(jval, &parser, update);
 
         /* Report invalid properties */
@@ -16372,6 +16915,11 @@ static void _email_copy_bulk(jmap_req_t *req,
                                           "type", "invalidProperties",
                                           "properties", parser.invalid));
         }
+        else if (mderr) {
+            json_object_set_new(copy->not_created, creation_id, mderr);
+            mderr = NULL;
+        }
+        json_decref(mderr);
 
         /* Lookup email in from_account */
         const char *guidrep = _guid_from_id(from_cstate, update->email_id);
@@ -16409,6 +16957,25 @@ static void _email_copy_bulk(jmap_req_t *req,
                 }
                 json_decref(mboxids);
             }
+        }
+
+        /* Metadata in the create overrides the copied values */
+        if (!json_object_get(copy->not_created, creation_id) &&
+            !jmap_metadata_set_isempty(&update->md)) {
+            bool may_write = true;
+            const char *mboxid;
+            json_t *jbool;
+            json_object_foreach(update->mailboxids, mboxid, jbool) {
+                if (*mboxid == '#') mboxid = jmap_lookup_id(req, mboxid + 1);
+                if (!mboxid || !jmap_hasrights_mboxid(req, mboxid,
+                                                      JACL_MAYSETMETADATA))
+                    may_write = false;
+            }
+            struct jmap_metadata nomd = JMAP_METADATA_INITIALIZER;
+            json_t *err = jmap_metadata_set_apply(&update->md, may_write,
+                                                  &nomd, &update->md_shared,
+                                                  &update->md_private);
+            if (err) json_object_set_new(copy->not_created, creation_id, err);
         }
 
         /* Add update to batch */
@@ -16485,6 +17052,22 @@ static void _email_copy_bulk(jmap_req_t *req,
             }
         }
         _email_bulkupdate_close(&bulkupdate);
+
+        for (i = 0; i < ptrarray_size(&updates); i++) {
+            struct email_update *update = ptrarray_nth(&updates, i);
+            json_t *created = json_object_get(copy->created,
+                                              update->creation_id);
+            if (!created) continue;
+
+            if (update->md_err) {
+                /* the copy stays, but the original must not be destroyed */
+                json_object_set_new(copy->not_created, update->creation_id,
+                                    json_incref(update->md_err));
+                json_object_del(copy->created, update->creation_id);
+                int j = json_array_find(destroy_emails, update->email_id);
+                if (j >= 0) json_array_remove(destroy_emails, j);
+            }
+        }
     }
     else {
         /* just clean up the memory we allocated above */

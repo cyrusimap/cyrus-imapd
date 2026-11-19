@@ -982,6 +982,21 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-metadata
+
+    JMAP Object Metadata
+
+    .. NOTE::
+
+       Revision -05.  Supported on Mailbox, Email, Calendar,
+       CalendarEvent, AddressBook, ContactCard and SieveScript, with
+       vendor namespaces only and a maxDepth of 8.  maySetMetadata is the
+       IMAP "n" right, which maySetKeywords, mayWriteAll and mayWrite also
+       grant.  Metadata-only changes are not tracked: a write, including
+       another user's privateMetadata write, reports the object as updated
+       in every user's Foo/changes, updatedProperties is null, and
+       ignoreMetadataOnlyChanges leaves nothing out.
+
 draft-ietf-mailmaint-imap-objectid-bis
 
     IMAP Extension for Object Identifiers (OBJECTID+)

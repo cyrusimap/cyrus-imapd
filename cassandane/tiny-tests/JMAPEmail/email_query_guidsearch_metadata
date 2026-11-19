@@ -1,0 +1,84 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_query_guidsearch_metadata
+    :needs_component_sieve :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $using = [
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:metadata',
+        'https://cyrusimap.org/ns/jmap/mail',
+        'https://cyrusimap.org/ns/jmap/debug',
+        'https://cyrusimap.org/ns/jmap/performance',
+    ];
+
+    for my $i (1..4) {
+        $self->make_message("msg$i", to => Cassandane::Address->new(
+            localpart => "recipient$i", domain => 'example.com',
+        )) || die;
+    }
+    $self->{instance}->run_command({ cyrus => 1 }, 'squatter');
+
+    my $res = $jmap->request({
+        using => $using,
+        methodCalls => [
+            ['Email/query', {
+                sort => [{ property => 'subject' }],
+            }, 'R1'],
+        ],
+    });
+    my @ids = @{ $res->single_sentence->arguments->{ids} };
+    $self->assert_num_equals(4, scalar @ids);
+
+    $res = $jmap->request({
+        using => $using,
+        methodCalls => [
+            ['Email/set', {
+                update => {
+                    $ids[0] => { 'metadata/acme.example.com' => { tag => 'a' } },
+                    $ids[1] => { 'metadata/acme.example.com' => { tag => 'b' } },
+                    $ids[2] => { 'privateMetadata/acme.example.com' => { tag => 'a' } },
+                },
+            }, 'R1'],
+        ],
+    });
+    $self->assert_num_equals(3,
+        scalar keys %{ $res->single_sentence->arguments->{updated} });
+
+    my sub query ($filter, %args) {
+        my $res = $jmap->request({
+            using => $using,
+            methodCalls => [
+                ['Email/query', { filter => $filter, %args }, 'R1'],
+            ],
+        });
+        my $args = $res->single_sentence->arguments;
+        return ($args->{performance}{details}{isGuidSearch}, [ sort @{ $args->{ids} } ]);
+    }
+
+    xlog $self, "a text condition keeps guidsearch, metadata filters its matches";
+    for my $case (
+        [ { metadataExists => 'acme.example.com' }, [ @ids[0, 1] ] ],
+        [ { metadataTextEquals => {
+              path => 'acme.example.com/tag', value => 'a' } }, [ $ids[0] ] ],
+        [ { privateMetadataExists => 'acme.example.com' }, [ $ids[2] ] ],
+        [ { operator => 'NOT', conditions => [
+              { metadataExists => 'acme.example.com' } ] }, [ @ids[2, 3] ] ],
+    ) {
+        my ($mdfilter, $want) = @$case;
+        my $filter = {
+            operator => 'AND',
+            conditions => [ { to => '@example.com' }, $mdfilter ],
+        };
+        my ($isguid, $got) = query($filter);
+        $self->assert_equals(JSON::true, $isguid);
+        $self->assert_cmp_deeply([ sort @$want ], $got);
+
+        my ($isguid2, $got2) = query($filter, disableGuidSearch => JSON::true);
+        $self->assert_equals(JSON::false, $isguid2);
+        $self->assert_cmp_deeply($got, $got2);
+    }
+}

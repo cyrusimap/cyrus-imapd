@@ -1,0 +1,30 @@
+Description:
+
+Implements JMAP Object Metadata (draft-ietf-jmap-metadata-05): the
+metadata and privateMetadata properties on Mailbox, Email, Calendar,
+CalendarEvent, AddressBook, ContactCard and SieveScript, with their /get,
+/set, /copy, /changes and /query extensions, and the maySetMetadata right
+on Mailbox, Calendar and AddressBook.
+
+
+Documentation:
+
+docsrc/rfc-support.rst
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None.  Each metadata namespace is stored in the annotation
+/vendor/cmu/cyrus-imapd/jmapmetadata/<namespace>, shared for metadata and
+private for privateMetadata, which only admins may write over IMAP.  It
+counts against the ANNOTATION-STORAGE quota.
+
+
+GitHub issue:
+
+None

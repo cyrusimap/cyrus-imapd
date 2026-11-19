@@ -1,0 +1,82 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_replication
+    :needs_component_replication :Replication :NoReplicaonly
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['Mailbox/set', {
+            create => {
+                mb => {
+                    name => 'replicated',
+                    metadata => { 'acme.example.com' => { m => 1 } },
+                    privateMetadata => { 'acme.example.com' => { p => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $mboxid = $res->single_sentence->as_set->created_id('mb');
+
+    $res = $jmap->request([
+        ['Email/set', {
+            create => {
+                m1 => {
+                    mailboxIds => { $mboxid => JSON::true },
+                    subject => 'replicated',
+                    bodyStructure => { type => 'text/plain', partId => '1' },
+                    bodyValues => { 1 => { value => 'hi' } },
+                    metadata => { 'acme.example.com' => { m => 1 } },
+                    privateMetadata => { 'acme.example.com' => { p => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $emailid = $res->single_sentence->as_set->created_id('m1');
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "metadata-only changes replicate incrementally";
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => { $mboxid => {
+                'metadata/acme.example.com/m' => 2,
+                'privateMetadata/acme.example.com/p' => 2,
+            } },
+        }],
+        ['Email/set', {
+            update => { $emailid => {
+                'metadata/acme.example.com/m' => 2,
+                'privateMetadata/acme.example.com/p' => 2,
+            } },
+        }],
+    ]);
+    $self->assert_num_equals(1, scalar keys $res->sentence(0)->arguments->{updated}->%*);
+    $self->assert_num_equals(1, scalar keys $res->sentence(1)->arguments->{updated}->%*);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $replica_jmap = $self->{replica}->new_jmaptester_for_user($self->default_user);
+    $replica_jmap->{default_using} = $self->jmap_default_using;
+    $res = $replica_jmap->request([
+        ['Mailbox/get', {
+            ids => [$mboxid], properties => ['metadata', 'privateMetadata'],
+        }],
+        ['Email/get', {
+            ids => [$emailid], properties => ['metadata', 'privateMetadata'],
+        }],
+    ]);
+    for my $obj (map { $_->arguments->{list}[0] } $res->sentences) {
+        $self->assert_cmp_deeply(
+            superhashof({
+                metadata => { 'acme.example.com' => { m => 2 } },
+                privateMetadata => { 'acme.example.com' => { p => 2 } },
+            }),
+            $obj,
+        );
+    }
+}

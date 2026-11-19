@@ -12,6 +12,7 @@
 #include "http_jmap.h"
 #include "http_proxy.h"
 #include "http_ws.h"
+#include "jmap_metadata.h"
 #include "jmap_push.h"
 #include "mboxname.h"
 #include "proxy.h"
@@ -163,6 +164,7 @@ static void jmap_init(struct buf *serverinfo)
 #ifdef USE_SIEVE
     jmap_sieve_init(&my_jmap_settings);
 #endif
+    jmap_metadata_init(&my_jmap_settings);
 
     jmap_push_poll = config_getduration(IMAPOPT_JMAP_PUSHPOLL);
     if (jmap_push_poll < 0) jmap_push_poll = 0;

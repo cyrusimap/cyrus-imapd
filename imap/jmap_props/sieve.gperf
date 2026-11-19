@@ -30,6 +30,12 @@ jmap_property_t;
 "name",     NULL, 0
 "isActive", NULL, JMAP_PROP_SERVER_SET
 "blobId",   NULL, 0
+#
+# draft-ietf-jmap-metadata
+"metadata",          NULL, JMAP_PROP_SKIP_GET
+"privateMetadata",   NULL, JMAP_PROP_SKIP_GET
+"metadata/*",        NULL, JMAP_PROP_SKIP_GET | JMAP_PROP_REJECT_SET
+"privateMetadata/*", NULL, JMAP_PROP_SKIP_GET | JMAP_PROP_REJECT_SET
 %%
 
 const jmap_prop_hash_table_t jmap_sieve_props_map = {

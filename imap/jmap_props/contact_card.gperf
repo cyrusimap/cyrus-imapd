@@ -72,6 +72,12 @@ jmap_property_t;
 #
 # Allow vendor properties (prefix ':' name)
 "*:*", NULL, JMAP_PROP_SKIP_GET
+#
+# draft-ietf-jmap-metadata
+"metadata",          NULL, JMAP_PROP_SKIP_GET
+"privateMetadata",   NULL, JMAP_PROP_SKIP_GET
+"metadata/*",        NULL, JMAP_PROP_SKIP_GET | JMAP_PROP_REJECT_SET
+"privateMetadata/*", NULL, JMAP_PROP_SKIP_GET | JMAP_PROP_REJECT_SET
 %%
 
 const jmap_prop_hash_table_t jmap_card_props_map = {

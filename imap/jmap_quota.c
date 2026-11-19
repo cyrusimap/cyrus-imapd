@@ -165,7 +165,7 @@ static const struct jquota_type_t {
 } jquota_types[QUOTA_NUMRESOURCES] = {
     { 'S', "octets" },
     { 'M', "count"  },
-    {  0,  "octets" },
+    { 'A', "octets" },  /* JMAP metadata */
     { 'F', "count"  }
 };
 
@@ -235,6 +235,18 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
             type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CONTACTCARD;
             type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_ADDRESSBOOK;
         }
+        if (jmap_is_using(qrock->req, JMAP_URN_METADATA)) {
+            type_masks[QUOTA_ANNOTSTORAGE] |=
+                JMAP_TYPE_MAILBOX | JMAP_TYPE_EMAIL;
+            if (jmap_is_using(qrock->req, JMAP_URN_SIEVE))
+                type_masks[QUOTA_ANNOTSTORAGE] |= JMAP_TYPE_SIEVESCRIPT;
+            if (jmap_is_using(qrock->req, JMAP_URN_CALENDARS))
+                type_masks[QUOTA_ANNOTSTORAGE] |=
+                    JMAP_TYPE_CALENDAR | JMAP_TYPE_CALENDAREVENT;
+            if (jmap_is_using(qrock->req, JMAP_URN_CONTACTS))
+                type_masks[QUOTA_ANNOTSTORAGE] |=
+                    JMAP_TYPE_ADDRESSBOOK | JMAP_TYPE_CONTACTCARD;
+        }
         break;
 
     case MBTYPE_JMAPSUBMIT:
@@ -256,6 +268,8 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         if (jmap_is_using(qrock->req, JMAP_URN_SIEVE)) {
             type_masks[QUOTA_STORAGE] |= JMAP_TYPE_SIEVESCRIPT;
             type_masks[QUOTA_MESSAGE] |= JMAP_TYPE_SIEVESCRIPT;
+            if (jmap_is_using(qrock->req, JMAP_URN_METADATA))
+                type_masks[QUOTA_ANNOTSTORAGE] |= JMAP_TYPE_SIEVESCRIPT;
         }
         break;
 
@@ -267,6 +281,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_CALENDAREVENT;
         type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CALENDAREVENT;
         type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_CALENDAR;
+        if (jmap_is_using(qrock->req, JMAP_URN_METADATA))
+            type_masks[QUOTA_ANNOTSTORAGE] |=
+                JMAP_TYPE_CALENDAR | JMAP_TYPE_CALENDAREVENT;
         break;
 
     case MBTYPE_ADDRESSBOOK:
@@ -277,6 +294,9 @@ static int fetch_quotas_cb(struct quota *q, void *rock)
         type_masks[QUOTA_STORAGE]    |= JMAP_TYPE_CONTACTCARD;
         type_masks[QUOTA_MESSAGE]    |= JMAP_TYPE_CONTACTCARD;
         type_masks[QUOTA_NUMFOLDERS] |= JMAP_TYPE_ADDRESSBOOK;
+        if (jmap_is_using(qrock->req, JMAP_URN_METADATA))
+            type_masks[QUOTA_ANNOTSTORAGE] |=
+                JMAP_TYPE_ADDRESSBOOK | JMAP_TYPE_CONTACTCARD;
         break;
     }
 

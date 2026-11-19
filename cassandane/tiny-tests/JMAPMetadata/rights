@@ -1,0 +1,248 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_rights_calendar
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $self->{instance}->create_user('sharee');
+
+    my $res = $jmap->request([
+        ['Calendar/set', { create => { c1 => { name => 'shared' } } }],
+    ]);
+    my $calid = $res->single_sentence->as_set->created_id('c1');
+
+    xlog $self, "myRights has maySetMetadata only with the capability";
+    $res = $jmap->request([
+        ['Calendar/get', { ids => [$calid], properties => ['myRights'] }],
+    ]);
+    $self->assert_equals(JSON::true,
+        $res->single_sentence->arguments->{list}[0]{myRights}{maySetMetadata});
+    $res = $jmap->request({
+        using => [ grep { !/metadata/ } $self->jmap_default_using->@* ],
+        methodCalls => [
+            ['Calendar/get', { ids => [$calid], properties => ['myRights'] }, 'R1'],
+        ],
+    });
+    $self->assert(!exists
+        $res->single_sentence->arguments->{list}[0]{myRights}{maySetMetadata});
+
+    my sub share ($rights) {
+        my $res = $jmap->request([
+            ['Calendar/set', {
+                update => { $calid => { 'shareWith/sharee' => $rights } },
+            }],
+            ['Calendar/get', { ids => [$calid], properties => ['shareWith'] }],
+        ]);
+        return (
+            $res->sentence(0)->arguments->{notUpdated}{$calid},
+            $res->sentence(1)->arguments->{list}[0]{shareWith}{sharee},
+        );
+    }
+
+    xlog $self, "maySetMetadata can be shared on its own";
+    my ($err, $got) = share({
+        mayReadItems => JSON::true, maySetMetadata => JSON::true,
+    });
+    $self->assert_null($err);
+    $self->assert_cmp_deeply(
+        superhashof({ maySetMetadata => JSON::true, mayWriteAll => JSON::false }),
+        $got,
+    );
+
+    xlog $self, "mayWriteAll implies maySetMetadata";
+    ($err, $got) = share({
+        mayReadItems => JSON::true,
+        mayWriteAll => JSON::true,
+        maySetMetadata => JSON::false,
+    });
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidProperties',
+            properties => ['shareWith/sharee/maySetMetadata'],
+        },
+        $err,
+    );
+
+    xlog $self, "so it can't be revoked from a sharee who has mayWriteAll";
+    ($err) = share({ mayReadItems => JSON::true, mayWriteAll => JSON::true });
+    $self->assert_null($err);
+    $res = $jmap->request([
+        ['Calendar/set', {
+            update => {
+                $calid => { 'shareWith/sharee/maySetMetadata' => JSON::false },
+            },
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidProperties',
+            properties => ['shareWith/sharee/maySetMetadata'],
+        },
+        $res->single_sentence->arguments->{notUpdated}{$calid},
+    );
+}
+
+sub test_rights_addressbook
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $self->{instance}->create_user('sharee');
+
+    my $res = $jmap->request([
+        ['AddressBook/set', { create => { a1 => { name => 'shared' } } }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id('a1');
+
+    $res = $jmap->request([
+        ['AddressBook/set', {
+            update => { $id => { shareWith => {
+                sharee => { mayRead => JSON::true, maySetMetadata => JSON::true },
+            } } },
+        }],
+        ['AddressBook/set', {
+            update => { $id => { shareWith => {
+                sharee => {
+                    mayRead => JSON::true,
+                    mayWrite => JSON::true,
+                    maySetMetadata => JSON::false,
+                },
+            } } },
+        }],
+        ['AddressBook/get', { ids => [$id], properties => ['shareWith'] }],
+    ]);
+    $self->assert_cmp_deeply({ $id => ignore() },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidProperties',
+            properties => ['shareWith/sharee/maySetMetadata'],
+        },
+        $res->sentence(1)->arguments->{notUpdated}{$id},
+    );
+    $self->assert_cmp_deeply(
+        superhashof({ maySetMetadata => JSON::true, mayWrite => JSON::false }),
+        $res->sentence(2)->arguments->{list}[0]{shareWith}{sharee},
+    );
+}
+
+sub test_rights_mailbox
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+    $self->{instance}->create_user('sharee');
+
+    my $using = [
+        @{ $self->jmap_default_using },
+        'urn:ietf:params:jmap:mail:share',
+    ];
+
+    my $res = $jmap->request([
+        ['Mailbox/set', { create => { mb => { name => 'shared' } } }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id('mb');
+
+    $res = $jmap->request({
+        using => $using,
+        methodCalls => [
+            ['Mailbox/set', {
+                update => { $id => { shareWith => {
+                    sharee => {
+                        mayReadItems => JSON::true,
+                        maySetMetadata => JSON::true,
+                    },
+                } } },
+            }, 'R1'],
+            ['Mailbox/set', {
+                update => { $id => { shareWith => {
+                    sharee => {
+                        mayReadItems => JSON::true,
+                        maySetKeywords => JSON::true,
+                        maySetMetadata => JSON::false,
+                    },
+                } } },
+            }, 'R2'],
+            ['Mailbox/get', { ids => [$id], properties => ['shareWith'] }, 'R3'],
+        ],
+    });
+    $self->assert_cmp_deeply({ $id => undef },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidProperties',
+            properties => ['shareWith/sharee/maySetMetadata'],
+        },
+        $res->sentence(1)->arguments->{notUpdated}{$id},
+    );
+    $self->assert_cmp_deeply(
+        superhashof({
+            mayReadItems => JSON::true,
+            maySetKeywords => JSON::false,
+            maySetMetadata => JSON::true,
+        }),
+        $res->sentence(2)->arguments->{list}[0]{shareWith}{sharee},
+    );
+    my %acl = @{ $admin->getacl('user.cassandane.shared') };
+    $self->assert_str_equals('lrn', $acl{sharee});
+
+    xlog $self, "maySetMetadata needs the capability";
+    $res = $jmap->request({
+        using => [ grep { !/metadata/ } @$using ],
+        methodCalls => [
+            ['Mailbox/set', {
+                update => { $id => {
+                    'shareWith/sharee/maySetMetadata' => JSON::false,
+                } },
+            }, 'R1'],
+        ],
+    });
+    $self->assert_str_equals('invalidProperties',
+        $res->single_sentence->arguments->{notUpdated}{$id}{type});
+}
+
+sub test_rights_contactcard_unreadable
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $owner = $self->{instance}->create_user('owner');
+    my $ojmap = $owner->jmap;
+    $ojmap->{default_using} = $self->jmap_default_using;
+
+    my $res = $ojmap->request([
+        ['AddressBook/set', { create => {
+            a => { name => 'shared' }, b => { name => 'private' },
+        } }],
+    ]);
+    my $shared = $res->single_sentence->as_set->created_id('a');
+    my $private = $res->single_sentence->as_set->created_id('b');
+    $res = $ojmap->request([
+        ['ContactCard/set', { create => { c => {
+            '@type' => 'Card', version => '1.0',
+            addressBookIds => { $private => JSON::true },
+            name => { full => 'Hidden' },
+        } } }],
+    ]);
+    my $cardid = $res->single_sentence->as_set->created_id('c');
+    $self->assert_not_null($cardid);
+
+    $ojmap->request([
+        ['AddressBook/set', { update => { $shared => { shareWith => {
+            cassandane => { mayRead => JSON::true },
+        } } } }],
+    ]);
+
+    xlog $self, "a card in an unreadable address book is notFound";
+    for my $prop ('privateMetadata/acme.example.com', 'metadata/acme.example.com') {
+        $res = $jmap->request([
+            ['ContactCard/set', {
+                accountId => 'owner',
+                update => { $cardid => { $prop => { x => 1 } } },
+            }],
+        ]);
+        $self->assert_str_equals('notFound',
+            $res->single_sentence->arguments->{notUpdated}{$cardid}{type});
+    }
+}

@@ -1,0 +1,123 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_binary
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $thumb = { '@type' => 'Binary', base64 => 'AAEC/w==' };
+    my $res = $jmap->request([
+        ['Mailbox/set', {
+            create => {
+                mb => {
+                    name => 'bin',
+                    metadata => {
+                        'acme.example.com' => { label => 'x', thumb => $thumb },
+                    },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->single_sentence->as_set->created_id('mb');
+    $self->assert_not_null($id);
+
+    my sub update_error ($patch) {
+        my $res = $jmap->request([
+            ['Mailbox/set', { update => { $id => $patch } }],
+        ]);
+        return $res->single_sentence->arguments->{notUpdated}{$id};
+    }
+
+    my sub get_metadata () {
+        my $res = $jmap->request([
+            ['Mailbox/get', { ids => [$id], properties => ['metadata'] }],
+        ]);
+        return $res->single_sentence->arguments->{list}[0]{metadata};
+    }
+
+    xlog $self, "a Binary value is stored and returned as given";
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { label => 'x', thumb => $thumb } },
+        get_metadata(),
+    );
+
+    xlog $self, "malformed Binary values are rejected";
+    my $invalid = {
+        type => 'invalidProperties',
+        properties => ['metadata/acme.example.com'],
+    };
+    for my $bad (
+        { '@type' => 'Binary', base64 => 'AAEC/w==', extra => 1 },
+        { '@type' => 'Binary' },
+        { '@type' => 'Binary', base64 => 'AAEC/w' },     # no padding
+        { '@type' => 'Binary', base64 => 'AAEC/x==' },   # non-zero pad bits
+        { '@type' => 'Binary', base64 => 'AA!C/w==' },
+        { '@type' => 'Binary', base64 => 42 },
+    ) {
+        $self->assert_cmp_deeply($invalid,
+            update_error({ 'metadata/acme.example.com/thumb' => $bad }));
+    }
+
+    xlog $self, "a namespace value is never a Binary value";
+    $self->assert_cmp_deeply($invalid,
+        update_error({ 'metadata/acme.example.com' => $thumb }));
+
+    xlog $self, "a patch can't address the members of a Binary value";
+    $self->assert_cmp_deeply(
+        {
+            type => 'invalidPatch',
+            properties => ['metadata/acme.example.com/thumb/base64'],
+        },
+        update_error({ 'metadata/acme.example.com/thumb/base64' => 'AAAA' }),
+    );
+
+    xlog $self, "but can replace one";
+    my $thumb2 = { '@type' => 'Binary', base64 => 'AAAA' };
+    $self->assert_null(
+        update_error({ 'metadata/acme.example.com/thumb' => $thumb2 }));
+    $self->assert_cmp_deeply(
+        { 'acme.example.com' => { label => 'x', thumb => $thumb2 } },
+        get_metadata(),
+    );
+
+    xlog $self, "a Binary value has depth 0";
+    my $deep = $thumb;
+    $deep = { d => $deep } for 1..8;
+    $self->assert_null(update_error({ 'metadata/acme.example.com' => $deep }));
+    my $deeper = { d => $deep };
+    $self->assert_cmp_deeply($invalid,
+        update_error({ 'metadata/acme.example.com' => $deeper }));
+
+    xlog $self, "filters don't look inside a Binary value";
+    $self->assert_null(update_error({
+        'metadata/acme.example.com' => { label => 'AAAA', thumb => $thumb2 },
+    }));
+    $res = $jmap->request([
+        ['Mailbox/query', {
+            filter => { metadataExists => 'acme.example.com/thumb' },
+        }],
+        ['Mailbox/query', {
+            filter => { metadataExists => 'acme.example.com/thumb/base64' },
+        }],
+        ['Mailbox/query', {
+            filter => { metadataTextEquals => {
+                path => 'acme.example.com/thumb/base64', value => 'AAAA',
+            } },
+        }],
+        ['Mailbox/query', {
+            filter => { metadataTextContains => {
+                path => 'acme.example.com/thumb', value => 'AAAA',
+            } },
+        }],
+        ['Mailbox/query', {
+            filter => { metadataTextEquals => {
+                path => 'acme.example.com/label', value => 'AAAA',
+            } },
+        }],
+    ]);
+    $self->assert_cmp_deeply(
+        [[$id], [], [], [], [$id]],
+        [ map { $_->arguments->{ids} } $res->sentences ],
+    );
+}

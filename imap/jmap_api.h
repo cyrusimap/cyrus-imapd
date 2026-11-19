@@ -37,6 +37,7 @@
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
 #define JMAP_URN_MAIL_SHARE "urn:ietf:params:jmap:mail:share"
+#define JMAP_URN_METADATA   "urn:ietf:params:jmap:metadata"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -147,6 +148,10 @@ void jmap_data_types_foreach(void (*cb)(const jmap_data_type_t *, void *),
 #define JACL_SETPROPERTIES  ACL_ANNOTATEMSG
 #define JACL_UPDATEITEMS    (JACL_ADDITEMS|JACL_REMOVEITEMS)
 #define JACL_SETMETADATA    (JACL_SETKEYWORDS|JACL_SETPROPERTIES)
+
+/* maySetMetadata (draft-ietf-jmap-metadata): the IMAP ANNOTATE "n" right.
+ * maySetKeywords, mayWriteAll and mayWrite grant it too. */
+#define JACL_MAYSETMETADATA JACL_SETPROPERTIES
 #define JACL_WRITE          (JACL_UPDATEITEMS|JACL_SETSEEN|JACL_SETMETADATA)
 #define JACL_ALL            (JACL_READITEMS|JACL_WRITE|JACL_RENAME|JACL_SUBMIT\
                              |ACL_ADMIN|JACL_DELETE|JACL_CREATECHILD|JACL_READFB|JACL_RSVP)
@@ -536,6 +541,10 @@ struct jmap_changes {
 
     /* Behavior control flags */
     int prefixed_state;
+
+    /* draft-ietf-jmap-metadata: set if the request uses the capability
+     * and the data type carries metadata */
+    bool metadata;
 
     /* Response fields */
     modseq_t new_modseq;
