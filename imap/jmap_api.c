@@ -19,6 +19,7 @@
 #include "http_dav_sharing.h"
 #include "http_jmap.h"
 #include "imparse.h"
+#include "jmap_metadata.h"
 #include "logfmt.h"
 #include "mboxname.h"
 #include "msgrecord.h"
@@ -557,6 +558,8 @@ static json_t *lookup_capabilities(const char *accountid,
         }
     }
 
+    jmap_metadata_capabilities(capas);
+
     if (!json_object_size(capas)) {
         json_decref(capas);
         capas = json_null();
@@ -1059,6 +1062,7 @@ HIDDEN void jmap_accounts(json_t *accounts, json_t *primary_accounts)
     json_object_set(primary_accounts, JMAP_SIEVE_EXTENSION, jprimary);
 #endif
     json_object_set(primary_accounts, JMAP_URN_PRINCIPALS, jprimary);
+    json_object_set(primary_accounts, JMAP_URN_METADATA, jprimary);
     json_decref(jprimary);
 
     /* Clean up */
@@ -1633,6 +1637,13 @@ HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
                 propdef = NULL;
             }
         }
+        if (propdef && !strncmp(propdef->name, "metadata/", 9)) {
+            /* subselector of a single namespace */
+            if (!jmap_metadata_valid_namespace(name + 9)) propdef = NULL;
+        }
+        else if (propdef && !strncmp(propdef->name, "privateMetadata/", 16)) {
+            if (!jmap_metadata_valid_namespace(name + 16)) propdef = NULL;
+        }
         if (!propdef || (propdef->flags & JMAP_PROP_REJECT_GET)) {
             jmap_parser_push_index(parser, key, i, name);
             jmap_parser_invalid(parser, NULL);
@@ -1771,6 +1782,16 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
             if (!prop->capability || jmap_is_using(req, prop->capability)) {
                 hash_insert(prop->name, (void*)1, get->props);
             }
+        }
+
+        /* metadata is a default property only for requests using it,
+         * and never for Email */
+        const char *datatype = jmap_metadata_datatype(req);
+        if (datatype && strcmp(datatype, "Email") &&
+            jmap_is_using(req, JMAP_URN_METADATA) &&
+            jmap_property_find("metadata", valid_props)) {
+            hash_insert("metadata", (void*)1, get->props);
+            hash_insert("privateMetadata", (void*)1, get->props);
         }
     }
     else {
@@ -2263,6 +2284,9 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
     changes->updated = json_array();
     changes->destroyed = json_array();
 
+    changes->metadata = jmap_metadata_datatype(req) &&
+                        jmap_is_using(req, JMAP_URN_METADATA);
+
     json_object_foreach(jargs, key, arg) {
         if (!strcmp(key, "accountId")) {
             /* already handled in jmap_api() */
@@ -2290,6 +2314,15 @@ HIDDEN void jmap_changes_parse(jmap_req_t *req,
                 changes->max_changes = json_integer_value(arg);
             } else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "maxChanges");
+            }
+        }
+
+        /* Metadata-only changes are not tracked, so there are none to
+         * leave out */
+        else if (changes->metadata &&
+                 !strcmp(key, "ignoreMetadataOnlyChanges")) {
+            if (!json_is_boolean(arg) && JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ignoreMetadataOnlyChanges");
             }
         }
 
@@ -2365,6 +2398,11 @@ HIDDEN json_t *jmap_changes_reply(struct jmap_changes *changes)
     json_object_set(res, "created", changes->created);
     json_object_set(res, "updated", changes->updated);
     json_object_set(res, "destroyed", changes->destroyed);
+
+    /* metadata-only changes are not tracked */
+    if (changes->metadata) {
+        json_object_set_new(res, "updatedProperties", json_null());
+    }
 
     free(old_state);
     free(new_state);
