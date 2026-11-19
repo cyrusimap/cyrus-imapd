@@ -4558,14 +4558,7 @@ static json_t *_mbox_markallread(jmap_req_t *req, const char *mboxid)
         goto done;
     }
 
-    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0,
-                                                  ITER_SKIP_EXPUNGED);
-    const message_t *msg;
-    while (!r && (msg = mailbox_iter_step(iter))) {
-        struct index_record record = *msg_record(msg);
-        r = mailbox_rewrite_index_record(mailbox, &record);
-    }
-    mailbox_iter_done(&iter);
+    r = mailbox_touch_records(mailbox, NULL);
     if (r) goto done;
 
     r = seen_open(req->userid, SEEN_CREATE, &seendb);
@@ -4593,8 +4586,8 @@ done:
 
 /* The caller's seen state in each of another account's mailboxes becomes
  * every message delivered so far.  That state lives in the caller's seen
- * db, so it takes one write per mailbox; each message's record is still
- * rewritten for its modseq, so that every user's /changes reports it. */
+ * db, so it takes one write per mailbox; each message is touched for a new
+ * modseq, so that every user's Email/changes reports it. */
 static int jmap_mailbox_markallemailread(jmap_req_t *req)
 {
     struct jmap_parser parser = JMAP_PARSER_INITIALIZER;

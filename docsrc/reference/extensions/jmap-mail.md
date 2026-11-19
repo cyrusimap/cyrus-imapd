@@ -32,5 +32,8 @@ state is their own.
 - `accountNotSupportedByMethod`: the account is the user's own.
 
 Email delivered after the call is unaffected.  Every affected email gets a
-new modseq, so `Email/changes` and `Thread/changes` report it for all users
-of the mailboxes, as when a user changes `$seen` with `Email/set`.
+new modseq, so `Email/changes` (and IMAP CONDSTORE) report it for all users
+of the mailboxes, as when a user changes `$seen` with `Email/set`.  Unlike
+`Email/set`, it leaves threads alone, so `Thread/changes` doesn't report
+them: `$seen` isn't part of a Thread.  One `auditlog.touched.bulk` line logs
+each mailbox's change, in place of an `auditlog.touched` line per email.

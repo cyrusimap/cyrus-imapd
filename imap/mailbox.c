@@ -2077,19 +2077,22 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
     /* rewrite might set extra flags, keep all of them */
     change->flags |= flags;
 
-    if (mailbox_cacherecord(mailbox, record)) {
-        /* failed to load cache record */
-        free(change->msgid);
-        change->msgid = xstrdup("unknown");
-    }
-    else {
-        char *c_env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
-                               cacheitem_size(record, CACHE_ENVELOPE) - 2);
-        char *envtokens[NUMENVTOKENS];
-        parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
-        free(change->msgid);
-        change->msgid = xstrdup(envtokens[ENV_MSGID] ? envtokens[ENV_MSGID] : "unknown");
-        free(c_env);
+    /* only an append logs the Message-ID, in _commit_one() */
+    if (change->flags & CHANGE_ISAPPEND) {
+        if (mailbox_cacherecord(mailbox, record)) {
+            /* failed to load cache record */
+            free(change->msgid);
+            change->msgid = xstrdup("unknown");
+        }
+        else {
+            char *c_env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
+                                   cacheitem_size(record, CACHE_ENVELOPE) - 2);
+            char *envtokens[NUMENVTOKENS];
+            parse_cached_envelope(c_env, envtokens, NUMENVTOKENS);
+            free(change->msgid);
+            change->msgid = xstrdup(envtokens[ENV_MSGID] ? envtokens[ENV_MSGID] : "unknown");
+            free(c_env);
+        }
     }
 
     if (mailbox->i.minor_version < 20) {
@@ -4594,6 +4597,43 @@ EXPORTED int mailbox_restore_record(struct mailbox *mailbox,
 
 done:
     free(userid);
+    return r;
+}
+
+EXPORTED int mailbox_touch_records(struct mailbox *mailbox,
+                                   const seqset_t *uids)
+{
+    seqset_t *touched = seqset_init(0, SEQ_MERGE);
+    uint32_t count = 0;
+    int r = 0;
+
+    assert(mailbox_index_islocked(mailbox, 1));
+
+    struct mailbox_iter *iter = mailbox_iter_init(mailbox, 0,
+                                                  ITER_SKIP_EXPUNGED);
+    const message_t *msg;
+    while ((msg = mailbox_iter_step(iter))) {
+        struct index_record record = *msg_record(msg);
+        if (uids && !seqset_ismember(uids, record.uid)) continue;
+
+        /* the modseq and last_updated are in the basic sync CRC */
+        mailbox->i.synccrcs.basic ^= crc_basic(mailbox, &record);
+        mailbox_modseq_dirty(mailbox);
+        record.modseq = mailbox->i.highestmodseq;
+        record.last_updated.tv_sec = mailbox->last_updated;
+        mailbox->i.synccrcs.basic ^= crc_basic(mailbox, &record);
+
+        r = _store_change(mailbox, &record, 0);
+        if (r) break;
+
+        seqset_add(touched, record.uid, 1);
+        count++;
+    }
+    mailbox_iter_done(&iter);
+
+    if (!r && count) auditlog_touched_bulk(mailbox, touched, count);
+
+    seqset_free(&touched);
     return r;
 }
 
