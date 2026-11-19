@@ -1,0 +1,646 @@
+:tocdepth: 3
+
+=====================================
+Cyrus IMAP 3.14.0-beta1 Release Notes
+=====================================
+
+Download from GitHub:
+
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.14.0-beta1/cyrus-imapd-3.14.0-beta1.tar.gz
+* https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.14.0-beta1/cyrus-imapd-3.14.0-beta1.tar.gz.sig
+
+These notes describe the changes since the 3.12 series.
+
+.. contents::
+    :local:
+    :depth: 1
+
+.. _relnotes-3.14.0-beta1_before_upgrading:
+
+Before you upgrade
+==================
+
+Read :ref:`the upgrade guide <upgrade>` before upgrading from 3.12.  In
+particular:
+
+* Check :ref:`upgrade_3.14_wont_start` for invalid configuration, including
+  a relative :imapdconf:`configdirectory`, overlapping partitions, removed
+  values in :imapdconf:`event_extra_params` and :imapdconf:`httpmodules`, and
+  entries for removed services.
+* The first start assigns a JMAP ID to every local mailbox, so it takes time
+  in proportion to the number of mailboxes.  Clients and replicas will see
+  every mailbox as changed.  See :ref:`upgrade_3.14_first_start`, which also
+  describes how replicas receive IDs.
+* In a Murder, see :ref:`upgrade_3.14_murder` for upgrade order and the
+  index formats used by mixed-version XFER.
+* Audit logging is now always on, so sites that did not enable ``auditlog``
+  will log much more.  See :ref:`upgrade_3.14_logging`.
+* Building Cyrus needs newer libraries than 3.12 did.  See
+  :ref:`relnotes-3.14.0-beta1_build`.
+* Two changes can stop existing clients from logging in or seeing their data.
+  On TLS 1.3, -PLUS SASL mechanisms now use ``tls-exporter`` channel binding
+  (:rfc:`9266`), so clients that send ``tls-unique`` fail to authenticate.
+  And non-admin users now reach calendars, address books and other non-email
+  mailboxes over IMAP only by logging in as ``user+dav``.
+* Review the other :ref:`client compatibility changes <upgrade_3.14_clients>`
+  for IMAP, JMAP, CalDAV and CardDAV clients and integrations.
+
+.. _relnotes_3.14.0-beta1_storage_changes:
+
+Storage changes
+===============
+
+* The mailbox index format is now version 20 (it was 19).  Dates and sizes in
+  the index are 64 bits wide, and the internaldate has nanosecond resolution.
+  Mailboxes are upgraded with :cyrusman:`reconstruct(8)` ``-V max``, and a
+  3.12 server cannot read an upgraded mailbox.
+* JMAP mailbox IDs are stored in mailbox headers and in ``mailboxes.db``.
+  Recovery assigns IDs to eligible local mailboxes.  Replica-only mailboxes
+  receive IDs through replication.  See :ref:`upgrade_3.14_first_start`.
+* The conversations database format is now version 2.
+  :cyrusman:`ctl_conversationsdb(8)` has a new ``-U`` option to upgrade a
+  user's database.
+* The DAV database schema is now version 19 (it was 16 in 3.12.0).  Cyrus
+  upgrades existing DAV databases when they are opened.
+* The Xapian search index format is now version 18 (it was 17).  Calendar
+  event organizers, attendees, summaries and descriptions are indexed as
+  search parts of their own, rather than as From, To, Subject and body.
+  Existing indexes keep working; see :ref:`upgrade_3.14_search`.
+* Two database backends have been added, ``twom`` and ``zeroskip``.  No
+  default has changed.  A zeroskip database is an append-only directory rather
+  than a single file, and readers take no lock.  If you adopt zeroskip, make
+  sure any scripts that back up or copy database files can handle directories.
+  See also :imapdconf:`zeroskip_index_path`.
+* The new :imapdconf:`compact_ids` option can enable compact JMAP object ids
+  for every user, rather than per user.  The default, ``per-user``, is the
+  existing behavior.  ``always`` will be the only behavior in the next major
+  release, so see :ref:`upgrade_3.14_compact_ids` for how to get there.
+
+But if your upgrade is skipping over earlier releases, please do not miss
+:ref:`3.6.0 Storage changes <relnotes_3.6.0_storage_changes>`.
+
+.. _relnotes-3.14.0-beta1_build:
+
+Build and packaging changes
+===========================
+
+* OpenSSL 3.0 or later is now required for all builds.
+* Use libical 4.0.0 or later, or a compatible development snapshot reporting
+  at least 3.99.99.
+* Xapian search now requires Xapian 2.0.0 or later, or a recent 1.5.x
+  snapshot, and a C++17 compiler.  Xapian 1.4 is no longer supported, although
+  configure only rejects versions older than that.
+* HTTP support, CalDAV, CardDAV, WebDAV and the calendar alarm daemon are now
+  part of every build.  The ``--enable-http`` and ``--enable-calalarmd``
+  configure options are gone, and their ``--disable`` forms no longer disable
+  these features.  libical, libxml2, SQLite3 and ``xxd`` are required.
+* ``gperf`` is now required to build from a release tarball as well as from Git.
+* Building needs ``perl`` 5.28.0 or later and the modules ``Moo`` and
+  ``App::Cmd`` (on Debian-based systems, ``libmoo-perl`` and
+  ``libapp-cmd-perl``).
+* The cyrus-timezones package is now part of Cyrus.  The IANA time zone
+  database is bundled, and ``make install`` generates and installs the
+  VTIMEZONEs and the time zone guessing database previously supplied by
+  cyruslibs.  Building them needs ``vzic`` (see ``--with-vzic``);
+  ``--without-vzic`` builds none.  See :ref:`upgrade_timezones`.
+* The :cyrusman:`mkimap(8)` and :cyrusman:`rehash(8)` tools are now installed
+  to ``--sbindir`` by ``make install``.
+* Linux libcap support has been removed.
+* Building the documentation now needs ``myst_parser``.
+
+Removed features
+================
+
+The following features have been removed in 3.14.  If your deployment depends
+on one of them, you should not upgrade until it no longer does.
+
+* NNTP support has been removed: nntpd, fetchnews, remotepurge, mknewsgroups,
+  the INN patch, and the ``news2mail`` mailbox annotation.
+* The fud service has been removed.
+* The RSS and CGI modules have been removed from httpd.
+* The IMAP URLAUTH extension (:rfc:`4467`, and with it :rfc:`5524`) has been
+  removed.
+* Support for "objectstore" has been removed.  See :ref:`objectstore_removal`.
+* iSchedule is now used only between the backends of a Cyrus Murder, and a
+  backend accepts it only from servers listed in :imapdconf:`proxyservers`.
+  Standalone servers and frontends no longer offer an iSchedule receiver, and
+  the never-built DKIM support and ``/domainkeys`` resource are gone.
+* The legacy JMAP Contacts API (``Contact/*`` and ``ContactGroup/*``) has been
+  removed.  Use ``ContactCard/*`` (:rfc:`9610`).
+* JMAP for Calendars no longer accepts JSCalendar 1.0 property names.  See
+  :ref:`upgrade_3.14_clients`.
+* The experimental JMAP Admin capability
+  (``https://cyrusimap.org/ns/jmap/admin``) has been removed.
+* The ``UserCounters/get`` JMAP method and the ``vnd.fastmail.counters`` event
+  parameter have been removed.  ``UserState/get`` and
+  ``vnd.fastmail.jmapStates`` report the same information.
+* The non-standard ``inCalendars`` filter condition of JMAP
+  ``CalendarEvent/query`` has been removed.  Use ``inCalendar``.
+* Fetching calendar data as xCal (:rfc:`6321`) is no longer supported.
+* CalDAV no longer supports the HTTP PATCH method (VPATCH).
+* CalDAV no longer supports the non-standard ``application/event+json`` media
+  type.  Use JMAP for Calendars for JSCalendar.
+* CalDAV no longer honors the ``Schedule-Sender-Address`` and
+  ``Schedule-Sender-Name`` request headers.
+* The experimental CalDAV calendar secretary mode has been removed, along with
+  the ``shareesActAs`` property of the JMAP calendar account.
+* Cyrus now determines event privacy using ``CLASS``.  Sites that rely on
+  ``X-JMAP-PRIVACY`` must migrate that data before upgrading.
+* The long deprecated ``installsieve`` program has been removed.  Use
+  :cyrusman:`sieveshell(1)` instead.
+* The undocumented ``XSTATS`` metrics system has been removed.  Use the
+  Prometheus metrics instead.
+* The undocumented ``XKILLMY`` command and its ``SIGUSR2`` handler have been
+  removed.
+
+These :cyrusman:`imapd.conf(5)` options are now deprecated and have no
+effect:
+
+* ``allowurlauth`` and ``mboxkey_db`` (URLAUTH)
+* ``allownewnews``, ``newsaddheaders``, ``newsgroups``, ``newsmaster``,
+  ``newspeer``, ``newspostuser``, ``newsprefix``, ``newsrc_db_path`` and
+  ``nntptimeout`` (NNTP)
+* ``rss_feedlist_template``, ``rss_feeds``, ``rss_maxage``, ``rss_maxitems``,
+  ``rss_maxsynopsis`` and ``rss_realm`` (RSS)
+* ``object_storage_enabled``, ``object_storage_dummy_spool``,
+  ``caringo_hostname``, ``caringo_port``, ``openio_account``,
+  ``openio_autocreate``, ``openio_namespace``, ``openio_proxy_timeout``,
+  ``openio_rawx_timeout`` and ``openio_verbosity`` (objectstore)
+* ``ischedule_dkim_domain``, ``ischedule_dkim_key_file``,
+  ``ischedule_dkim_required`` and ``ischedule_dkim_selector`` (iSchedule)
+* ``auditlog``, ``jmap_require_accountid`` and ``tls_server_dhparam``
+
+Changed behavior
+================
+
+A deployment that worked under 3.12 will behave differently in these ways
+under 3.14, without any change to its configuration.
+
+The :cyrusman:`cyr_info(8)` `conf`, `conf-all` and `conf-default` subcommands
+accept an `-s <version>` argument to highlight :cyrusman:`imapd.conf(5)`
+options that are new or whose behavior has changed since the specified
+version.  We recommend using this when evaluating a new Cyrus version to
+check which configuration options you will need to examine and maybe set or
+change during the process.
+
+Logging
+-------
+
+* Audit logging is now always enabled.
+* Cyrus syslogs are being converted to ``logfmt``, a structured logging
+  format with a documented event and key vocabulary.  So far this affects
+  primarily the login logs and the audit log.  Tools that parse those lines
+  need updating.
+* The audit log's traffic counts (``used.bytes.out``) now include all output.
+  Previously large responses were logged as much smaller than they were.
+
+Access control
+--------------
+
+* A Sieve fileinto that targets a mailbox the script owner doesn't own now
+  requires the ``i`` (insert) right on it; ``p`` (post) used to be enough.
+  Without it, the message is delivered to the script owner's INBOX.  A Sieve
+  mailboxid now matches another user's mailbox only if the script owner has
+  ``l`` (lookup) on it.
+* Granting free/busy access to a calendar (JMAP ``mayReadFreeBusy``, or the
+  ``9`` right) now also grants lookup, without which the grant did nothing.
+  Existing grants need repairing; see :ref:`upgrade_3.14_freebusy`.
+* Without :imapdconf:`allowspecialusesubfolder`, only a direct child of a
+  user's INBOX can have special-use, however the attribute is set:
+  SETMETADATA, a JMAP role, Sieve's ``:specialuse`` and autocreate now follow
+  the rule CREATE already did.  A non-admin can rename an existing special-use
+  mailbox only to such a place.
+* On a server with :imapdconf:`replicaonly` set, local changes are now refused
+  with an error rather than aborting the process: IMAP writes get ``NO
+  [UNAVAILABLE]``, JMAP writes get ``serverUnavailable``, DAV writes get a
+  503, and delivery gets a 4.2.1 tempfail.  On replicas,
+  :cyrusman:`cyr_expire(8)` cleans up expunged messages but leaves expiry and
+  the removal of deleted mailboxes to the master.
+
+TLS and authentication
+----------------------
+
+* The default for :imapdconf:`tls_eccurve` is now
+  ``X25519MLKEM768:X25519:prime256v1:secp384r1``, and the option now accepts a
+  colon-separated list.
+* TLS sessions can now be resumed from any service process, not only the one
+  that issued the ticket, and servers now send close_notify.  A
+  :imapdconf:`tls_session_timeout` of 0 now disables resumption entirely.
+
+JMAP
+----
+
+JMAP now follows :rfc:`8620` and :rfc:`8621` more strictly.  Clients written
+against 3.12 should review the :ref:`method and response changes
+<upgrade_3.14_clients>`, including the ``accountId`` requirement and changes to
+query responses, updates and mailbox sharing.
+
+Calendars and contacts
+----------------------
+
+* iTIP scheduling messages are now delivered after the request that caused
+  them has finished with the organizer's calendar, which prevents deadlocks
+  between an organizer and a local attendee.
+* Time zone data is no longer included in iTIP messages.
+
+Other
+-----
+
+* Sieve compilation enforces extension availability more strictly with
+  ``ihave``.  Templates that use ``$text[...]$`` in a ``notify`` message
+  must enable the ``body`` extension.
+* The annotator is now called only for items added to email mailboxes.
+* :cyrusman:`reconstruct(8)` no longer re-injects message files that have a
+  UID the mailbox already handed out but are missing from the index.  It
+  reports them and leaves them alone; ``-k`` re-injects them under new UIDs
+  as before, and ``-K`` deletes them.  Files above the mailbox's highest UID
+  are still added.  (:issue:`3022`)
+* Sharing a mailbox, calendar or address book through JMAP, or with a WebDAV
+  ACL request, now emits an AclChange event for each identifier whose rights
+  changed, as IMAP SETACL always has.
+* A graceful shutdown now waits for any write transaction in progress to
+  finish.
+
+Security fixes
+==============
+
+* :cve:`CVE-2026-61906`: An authenticated JMAP user could inject commands into
+  the backend SMTP connection through ``EmailSubmission/set``.  Reported by
+  Michael Lynch (mtlynch.io).
+
+The 3.12 series first addressed these issues in :ref:`3.12.3
+<relnotes-3.12.3-changes>`:
+
+* :cve:`CVE-2026-47084`: LOCALDELETE allowed authenticated non-admin users to
+  delete mailboxes without permission.  Reported by Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-47081`: XAPPLEPUSHSERVICE exposed the existence of other
+  users' mailboxes and allowed unauthorized subscriptions to change
+  notifications.  Reported by Matthew Horsfall.
+* :cve:`CVE-2026-47089`: LISTRIGHTS allowed users with some access to a mailbox
+  to query grantable rights without administrative access.  Reported by
+  Matthew Horsfall.
+* :cve:`CVE-2026-47083`: ESEARCH exposed mailbox names and search matches
+  across accounts.  Reported by Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-47088`: MIME comment parsing could expose heap memory.
+  Reported by Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-47082`: Sieve vacation ``:fcc`` could deliver copies to
+  mailboxes without insert permission.  Reported by Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-47085`, :cve:`CVE-2026-47086` and :cve:`CVE-2026-47087`:
+  URLAUTH could allow unauthorized message access through forged tokens,
+  incorrect permission checks or tokens that survived access revocation.
+  Cyrus 3.14 removes URLAUTH.  Reported by Matthew Horsfall.
+
+The 3.12 series first addressed these issues in :ref:`3.12.4
+<relnotes-3.12.4-changes>`:
+
+* :cve:`CVE-2026-61907`: JMAP snooze could insert mail into another user's
+  mailbox without insert permission.  Reported by Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-61908`: Downloading a JMAP email-header blob could expose
+  heap memory.  Reported by Ahmed Said.
+* :cve:`CVE-2026-61909`: CalDAV and CardDAV multiget reports could expose
+  unshared events and contacts.  Reported by Ahmed Said.
+* :cve:`CVE-2026-61910`: A JMAP sharee could change a shared mailbox's
+  special-use role, potentially causing unintended sharing.  Reported by
+  Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-61911`: Sieve could reveal the existence of private mailboxes
+  and the contents of shared mailbox annotations.  Reported by Michael Lynch
+  (mtlynch.io).
+* :cve:`CVE-2026-61915`: VPATCH could crash a CalDAV worker.  Cyrus 3.14
+  removes CalDAV PATCH support.  Reported by Michael Lynch (mtlynch.io).
+
+The following security fixes were made in public, without an embargo, as
+described in :ref:`security-classification`.  Several also shipped in 3.12.5.
+
+Message parsing and delivery:
+
+* Deeply nested message/rfc822 parts no longer overflow the stack in the MIME
+  parser; parsing stops descending at :imapdconf:`boundary_limit`.
+* The number of parameters accepted from one MIME header is now capped at 128.
+* Date-times containing non-ASCII bytes, such as in a message's Date header,
+  are now rejected.  Previously such bytes caused out-of-bounds reads while
+  parsing the date.  Reported by interpolwantme.
+* Empty address headers and incomplete Received headers no longer cause
+  out-of-bounds memory access.  Reported by interpolwantme.
+* xtext escapes in an LMTP ``AUTH=`` parameter now decode correctly, rather
+  than truncating the identity used for ACL checks.
+* Negative numeric Sieve match variable references are now rejected.
+* A Sieve fileinto into another user's mailbox now requires the ``i`` right.
+  This prevents bypassing the mailbox owner's Sieve script.
+
+IMAP:
+
+* IMAP CATENATE now counts TEXT and UTF8 parts toward
+  :imapdconf:`maxmessagesize`, which could previously be exceeded.
+* The list form of IMAP GETMETADATA now performs the same ACL checks as the
+  single-mailbox form, and no longer reveals whether a mailbox exists.
+* IMAP LIST ... RETURN (STATUS) now returns STATUS only for mailboxes the user
+  can read, and LIST (SUBSCRIBED) reports a subscribed mailbox the user can no
+  longer look up as \\NonExistent.
+* IMAP THREAD now reads at most 20 references from any one message.
+* Fixed a buffer overflow when appending DEPTH to a long metadata entry name.
+* A dlist parsed from stored metadata can no longer contain a file literal,
+  which previously wrote a file to disk.
+
+HTTP:
+
+* HTTP/2 request bodies are now bounded by :imapdconf:`maxmessagesize`.
+* WebSocket messages are now bounded in size, both as received and after
+  permessage-deflate inflation.
+* Malformed or out-of-range HTTP chunk sizes are now rejected, rather than
+  truncated so that a chunk could be read as the start of another request.
+* A malformed DAV If: header no longer crashes httpd.
+* httpd now escapes the client-supplied Host header in HTML responses,
+  preventing reflected cross-site scripting.
+* A calendar's display name is now properly escaped in a Content-Disposition
+  header, and httpd drops any response header containing control characters.
+
+JMAP:
+
+* JMAP ``accountId`` and ``fromAccountId`` arguments are now validated before
+  being used to build paths.
+* JMAP ``Email/copy`` between accounts and the saved copy made by
+  ``EmailSubmission/set`` are now charged against the storage quota.
+* JMAP vCard blobIds now identify specific card content.  Older blobIds are
+  rejected.
+* Setting ``isSeenShared`` with JMAP ``Mailbox/set`` now requires the admin
+  right.
+* JMAP ``Email/set`` now enforces Scheduled mailbox permissions when updating
+  ``mailboxIds``.  Previously a client could remove a message from Scheduled
+  while its send was still pending.
+* JMAP ``Backup/restoreCalendars`` now stores each user's private per-user
+  data under that user, rather than all of it under the restored account.
+
+Calendars, contacts and scheduling:
+
+* CalDAV and JMAP prevent users from scheduling as another local user.  An
+  alias that belongs to no other local user still works.
+* A CalDAV or CardDAV DELETE of a shared collection now only removes the
+  share from the authenticated user's own home.  Previously any authenticated
+  user could unsubscribe any other user from a shared collection and mark
+  their invitation declined.
+* Revoking a sharee's DAV access to a calendar or address book now also drops
+  their subscription to it, and calalarmd no longer sends alarms to a sharee
+  whose access has been revoked.
+* JMAP ``CalendarEvent/participantReply`` now requires the event's organizer
+  to be one of the calendar owner's addresses, and sharees acting for the
+  owner need ``mayWriteAll``.
+* A calendar sharee without ``mayWriteAll`` or ``mayWriteOwn`` can no longer
+  change an event's SEQUENCE.
+* An iMIP REPLY from an attendee not on the stored event no longer adds that
+  attendee to it.
+* MANAGED-ID parameters are now stripped from ATTACH properties in iMIP
+  messages, so a sender can no longer cause another event's managed
+  attachment to be expunged.
+* The iSchedule receiver now requires the Originator header to match the
+  ORGANIZER (or, for a REPLY, an ATTENDEE) of the message.
+* Recurrence expansion is now bounded by
+  :imapdconf:`calendar_max_expanded_instances`.
+
+.. _relnotes-3.14.0-beta1_changes:
+
+New features
+============
+
+IMAP
+----
+
+* Adds support for the IMAP UIDBATCHES extension (:rfc:`10022`).
+* Adds support for OBJECTID+
+  (:draft:`draft-ietf-mailmaint-imap-objectid-bis`): a compound OBJECTID
+  response carrying MAILBOXID and ACCOUNTID (and EMAILID and THREADID for
+  messages), mailbox selection by identifier, and OBJECTID as a STATUS
+  attribute, FETCH item and LIST return option.
+* Metadata and annotation changes are now reported: through the IMAP NOTIFY
+  events MailboxMetadataChange, ServerMetadataChange and AnnotationChange
+  (:rfc:`5465`), as unsolicited METADATA responses after ENABLE METADATA
+  (:rfc:`5464`), and as ANNOTATION items in unsolicited FETCH responses after
+  SELECT with the ANNOTATE parameter (:rfc:`5257`).  These need idled.
+  (:issue:`1657`)
+* The :imapdconf:`admins_get_internal_seen` option has been added.  If set,
+  admin users always get and set the same ``\Seen`` flags as the mailbox
+  owner.
+* Under FUZZY search, an IMAP HEADER search of Subject, From, To, Cc or Bcc is
+  now handled by the search engine, like the dedicated search key.
+
+Mail delivery and submission
+----------------------------
+
+* Adds support for SMTPUTF8 (:rfc:`6531`).  :cyrusman:`lmtpd(8)` accepts UTF-8
+  envelope addresses when the client requests SMTPUTF8, and advertises it
+  exactly when imapd advertises UTF8=ACCEPT: when both
+  :imapdconf:`munge8bit` and :imapdconf:`reject8bit` are disabled.  Outgoing
+  mail uses SMTPUTF8 when the relay supports it, and otherwise sends
+  internationalized domains as A-labels.
+* :cyrusman:`lmtpd(8)` has a new ``TRACE`` capability and command for setting
+  an internal trace id, which will be logged.
+
+Sieve
+-----
+
+* Adds the ``vnd.cyrus.redirect-multiple`` extension, which allows the
+  redirect action to take a list of addresses.  Cyrus uses a single SMTP
+  transaction, and stops processing the script if any recipient is refused.
+  Add it to :imapdconf:`sieve_extensions` to enable it.
+* The new :imapdconf:`sieve_mdn_original_recipient_header` option allows an
+  install to get the original recipient from a header other than
+  Original-Recipient.
+* The new :imapdconf:`sieve_mdn_private` option helps prevent leaking
+  usernames.
+* Sieve redirect can add a DKIM2 Message-Instance header field recording the
+  header fields the script changed.  See :imapdconf:`dkim2_message_instance`.
+* :cyrusman:`sieveshell(1)` has a new ``--tls`` option to use STARTTLS,
+  verifying the server certificate, with ``--cafile`` and ``--capath`` to
+  trust extra CAs.  (:issue:`530`)
+
+JMAP
+----
+
+* JMAP for Calendars now implements the current
+  :draft:`draft-ietf-jmap-calendars`, and always uses JSCalendar 2.0
+  (:draft:`draft-ietf-calext-jscalendarbis`), including in
+  CalendarEventNotification objects and in iMIP notifications sent to the
+  imipnotifier.
+* Mailbox sharing can now be done as JMAP Mail Sharing
+  (:draft:`draft-ietf-jmap-mail-sharing`) describes, with the
+  ``urn:ietf:params:jmap:mail:share`` capability.  The values in ``shareWith``
+  are MailboxRights objects, so each right can be granted on its own.  It
+  requires :imapdconf:`jmap_nonstandard_extensions` until the draft is
+  published.
+* ``MDN/parse`` (:rfc:`9007`) is implemented.
+* ``Identity/set`` (:rfc:`8621`) is implemented.  The user's one Identity
+  cannot be created, changed or destroyed, and the method says so, rather than
+  being an unknown method.
+* The Quota data type now has a JMAP state, and appears in push notifications
+  alongside the other stateful types.
+* The new :imapdconf:`jmap_base_url` option advertises absolute URLs in the
+  JMAP Session object, for clients that cannot resolve relative URLs.
+* ``Email/query`` and ``Email/queryChanges`` support a non-standard
+  "category" comparator, which groups results by filter condition.  It
+  requires :imapdconf:`jmap_nonstandard_extensions`.
+* A memo (a message with the ``$memo`` keyword) can name the message it
+  annotates in the new ``X-ME-Memo-For`` header, which places it in that
+  message's conversation.
+* ``EmailSubmission/set`` advertises "smtputf8" in ``submissionExtensions``
+  when the relay supports it.
+* If ``onSuccessUpdateEmail`` puts a message in the ``scheduled`` mailbox and
+  the client supplies no ``onSend``, ``EmailSubmission/set`` supplies one
+  when a ``sent`` mailbox exists.  After sending, it moves the message to
+  that mailbox and clears ``$draft``.
+
+HTTP, CalDAV and CardDAV
+------------------------
+
+* httpd can accept TLS 1.3 early data (0-RTT) if :imapdconf:`http_allow_0rtt`
+  is enabled.  Early requests with unsafe methods get 425 Too Early
+  (:rfc:`8470`).
+* httpd supports Content-Digest and Want-Content-Digest (:rfc:`9530`), and
+  Unencoded-Digest and Want-Unencoded-Digest
+  (:draft:`draft-ietf-httpbis-unencoded-digest`), with the sha-256 and sha-512
+  algorithms.
+* A WebDAV LOCK now honors the client's Timeout header, up to the new
+  :imapdconf:`dav_writelock_max_timeout`.  Previously every lock lasted five
+  minutes.
+* The DAV:principal-property-search and DAV:principal-search-property-set
+  REPORTs are now also accepted on calendar and address book collections and
+  their home sets.  (:issue:`2546`)
+* The new :imapdconf:`calendar_max_expanded_instances` option limits how many
+  instances of one recurring component a CalDAV calendar-query or a JMAP
+  ``CalendarEvent/query`` will expand.
+* iMIP messages sent without an ``imipnotifier`` now show "When" in the
+  event's own time zone, instead of always in UTC.  (:issue:`2658`)
+* iMIP notifications sent to the notify socket now include the username of
+  the authenticated user who triggered the change.
+* calalarmd now logs the scheduled-versus-actual send delay for every send it
+  performs.
+* A new experimental httpd module, "convert", converts between iCalendar and
+  JSCalendar as :draft:`draft-ietf-calext-jscalendar-icalendar` defines.  It
+  is not meant for production use and is not enabled by default.
+
+Event notifications
+-------------------
+
+* MailboxMetadataChange, ServerMetadataChange and AnnotationChange events are
+  sent when the new ``metadata`` group is added to :imapdconf:`event_groups`.
+* The new ``vnd.fastmail.specialUse`` value of
+  :imapdconf:`event_extra_params` adds the special-use attributes of the
+  mailbox an event refers to, and of the source mailbox of a copy, move or
+  rename.
+
+Replication
+-----------
+
+* :cyrusman:`cyr_deny(8)` ``-r`` marks a user replica-only.
+* Two new login policies: :imapdconf:`auth_userexists` refuses a login when
+  the user's INBOX does not exist or has been deleted, and
+  :imapdconf:`auth_notreplicaonly` refuses a login when the server, or the
+  user, is replica-only.  Both default to off, and neither applies to admins.
+* The :cyrusman:`backupcyrusd(8)` protocol daemon has been added to facilitate
+  rolling backups.
+
+Administration
+--------------
+
+* :cyrusman:`cyrus.conf(5)` can now schedule ``EVENTS`` with cron-like syntax.
+* :cyrusman:`idled(8)` can run as a ``wait=y`` daemon, so that
+  :cyrusman:`master(8)` starts services only once idled is ready to receive
+  notifications.  (:issue:`2973`)
+* The :imapdconf:`expire_by_savedate` and :imapdconf:`expire_keep_flagged`
+  options have been added to control the behavior of
+  :cyrusman:`cyr_expire(8)`.
+* The new :imapdconf:`squatter_batch_delay` option makes
+  :cyrusman:`squatter(8)` pause between the indexing batches of a mailbox,
+  releasing its lock meanwhile.
+* :cyrusman:`reconstruct(8)` now repairs JMAP mailbox id clashes.
+* The new :cyrusman:`cyr_guesstz(8)` guesses the IANA time zone that a
+  VTIMEZONE describes.
+
+Significant bugfixes
+====================
+
+Replication
+-----------
+
+* Rolling replication splits large mailbox updates into batches of
+  :imapdconf:`sync_batchsize` records again.  Since 3.4 the setting never
+  reached the code that applied it.  Batching now also covers flag and
+  annotation changes.
+* Replication no longer deletes the wrong mailbox when a mailbox name has been
+  reused; the replica now checks the mailbox's identity before deleting it.
+  This requires both ends to be upgraded.
+* Replication now converges the quota modseq, usergroup memberships and the
+  reverse-ACL modseq, which previously could stay out of step indefinitely.
+* A replica can now lose a base conversation id that the master no longer
+  has, instead of failing replication of that mailbox on every run.
+* ``sync_client -u`` now repairs a user the replica has lost, even when the
+  replication cache says the user is in sync.
+
+Server
+------
+
+* :cyrusman:`master(8)` no longer disables a service as having "too many
+  failures" when many of its connections fail at once, such as a burst of
+  connections that fail the TLS handshake.  (:issue:`6610`)
+* Deleting a user no longer removes another user's per-user databases and
+  search indexes.  Previously this could happen after a user had been renamed.
+* :imapdconf:`implicit_owner_rights` are now respected on HTTP-based
+  protocols, like JMAP.
+* :cyrusman:`lmtpd(8)` no longer resets the session id after ``LHLO``.
+* The TLS session cache now requests writes without syncing to disk.  The
+  ``twom`` backend honors the request.  The default ``twoskip`` backend still
+  syncs its writes.
+* :cyrusman:`promstatsd(8)` is less susceptible to timing drift.
+* :cyrusman:`ctl_zoneinfo(8)` ``-r`` now indexes a time zone alias in a region
+  directory under its full name (``Indian/Mayotte``, not ``Mayotte``).
+
+Search
+------
+
+* A batched :cyrusman:`squatter(8)` update now resumes where its previous
+  batch stopped, so a non-incremental Xapian run no longer re-indexes the
+  first batch of a large mailbox forever.
+* :cyrusman:`squatter(8)` now records the highest createdmodseq it has
+  indexed, preventing a race with JMAP ``Email/queryChanges``.
+* Zero-byte attachments are no longer sent to the attachment text extractor,
+  which rejected them and logged an IOERROR for each one.
+* IMAP SEARCH now handles non-ASCII search terms when the client has enabled
+  UTF8=ACCEPT or IMAP4rev2 rather than passing a CHARSET.
+* SEARCH EMAILID now matches the compact EMAILIDs that FETCH reports.
+* A JMAP header filter condition, as used by ``Email/query`` and by Sieve's
+  jmapquery test, now matches header values written as :rfc:`2047`
+  encoded-words.
+
+JMAP
+----
+
+* The JMAP session object now reports size limits of 2 GiB or more correctly.
+* ``Calendar/changes``, ``AddressBook/changes`` and ``Mailbox/changes`` no
+  longer report a renamed collection as destroyed, and no longer report the
+  same change on every call with an unchanged state.  ``Calendar/changes`` and
+  ``AddressBook/changes`` now honor ``maxChanges``.
+* ``Email/queryChanges`` now treats the ``snoozedUntil`` and ``addedDates``
+  sorts as mutable, reports the right index for an email with a copy in
+  another mailbox, and reports every moved email of a thread when sorting by
+  ``someInThreadHaveKeyword``.
+* A sharee moving an email between someone else's mailboxes no longer needs
+  the right to add items to the mailbox the email is leaving.
+* ``ContactCard/set`` now rejects name and address components that lack a
+  kind or a value.  Such components already stored are dropped when the card
+  is read, so a text query no longer crashes on them.
+* ``Backup/restoreCalendars`` no longer recreates every past version of each
+  event when restoring a deleted calendar, and no longer restores an event
+  whose UID is already in use in the account.
+
+CalDAV, CardDAV and WebDAV
+--------------------------
+
+* A PROPFIND on a URI that maps to no resource now returns 404, rather than a
+  207 wrapping a 404.  (:issue:`5667`)
+* A DELETE or MOVE of a collection now fails with 423 Locked while a member
+  resource holds an unexpired write lock, unless the lock owner submits that
+  member's lock token.  Previously the collection was deleted or moved along
+  with the locked member.
+* A MOVE of a collection onto an existing collection now replaces it, or
+  fails with 412 Precondition Failed when Overwrite is F.  Previously the
+  server answered with a malformed status line.
+* Fixed a crash in CalDAV free/busy lookups covering several recipients when
+  one of them publishes a CALDAV:calendar-availability.
