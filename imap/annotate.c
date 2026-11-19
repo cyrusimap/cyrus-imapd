@@ -675,6 +675,17 @@ HIDDEN int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp)
                            CYRUSDB_CREATE, dbp);
 }
 
+EXPORTED int annotate_hold_mailbox(annotate_db_t **holdp,
+                                   const struct mailbox *mailbox)
+{
+    if (*holdp && mailbox &&
+        !strcmpsafe((*holdp)->mboxid, mailbox_uniqueid(mailbox)))
+        return 0;
+
+    annotate_putdb(holdp);
+    return mailbox ? annotate_getdb(mailbox, holdp) : 0;
+}
+
 static void free_changes(annotate_db_t *d)
 {
     struct annotate_change *c;
@@ -3961,6 +3972,14 @@ static int find_desc_store(annotate_state_t *state,
         return 0;
     }
 
+    /* JMAP writes JMAP metadata; admins may repair it */
+    if (scope != ANNOTATION_SCOPE_SERVER &&
+        !strncmp(name, JMAP_METADATA_ANNOT, strlen(JMAP_METADATA_ANNOT))) {
+        if (!state->isadmin) return IMAP_PERMISSION_DENIED;
+        *descp = db_entry;
+        return 0;
+    }
+
     /* check known IMAP annotations */
     for (i = 0 ; i < descs->count ; i++) {
         desc = descs->data[i];
@@ -4137,6 +4156,14 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
     struct rename_rock *rrock = (struct rename_rock *) rock;
     int r = 0;
     int silent = rrock->oldmailbox->silentchanges;
+
+    /* Only the copying user's privateMetadata follows a copy into another
+     * account */
+    if (rrock->copy && *userid && strcmpsafe(userid, rrock->olduserid) &&
+        !strncmp(entry, JMAP_METADATA_ANNOT, strlen(JMAP_METADATA_ANNOT)) &&
+        !mboxname_same_userid(mailbox_name(rrock->oldmailbox),
+                              mailbox_name(rrock->newmailbox)))
+        return 0;
 
     if (rrock->newmailbox &&
         /* snoozed MUST only appear on one copy of a message */
@@ -4321,6 +4348,37 @@ out:
     annotate_putdb(&d);
     free(fname);
     return r;
+}
+
+struct copy_entry_rock {
+    struct mailbox *newmailbox;
+    uint32_t newuid;
+};
+
+static int copy_entry_cb(const char *mboxname __attribute__((unused)),
+                         uint32_t uid __attribute__((unused)),
+                         const char *entry, const char *userid,
+                         const struct buf *value,
+                         const struct annotate_metadata *mdata __attribute__((unused)),
+                         void *rock)
+{
+    struct copy_entry_rock *crock = rock;
+    return write_entry(crock->newmailbox, crock->newuid, entry, userid, value,
+                       /*ignorequota*/1, /*silent*/1, NULL, /*maywrite*/1,
+                       /*notify*/false);
+}
+
+EXPORTED int annotate_msg_copy_entry(const struct mailbox *oldmailbox,
+                                     uint32_t olduid,
+                                     struct mailbox *newmailbox,
+                                     uint32_t newuid,
+                                     const char *entry)
+{
+    struct copy_entry_rock crock = { newmailbox, newuid };
+    int r = mailbox_get_annotate_state(newmailbox, newuid, NULL);
+    if (r) return r;
+    return annotatemore_findall_mailbox(oldmailbox, olduid, entry, 0,
+                                        copy_entry_cb, &crock, 0);
 }
 
 EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,

@@ -528,6 +528,15 @@ EXPORTED int caldav_foreach(struct caldav_db *caldavdb, const mbentry_t *mbentry
     "   AND alive > 0"                 \
     "   AND jscal_objs.modseq <= :modseq"
 
+/* A record rewritten without new iCalendar data, such as for a JMAP
+ * metadata change, still changes its events */
+#define CMD_UPDATE_JSCAL_MODSEQ        \
+    "UPDATE jscal_objs SET"            \
+    "  modseq = :modseq"               \
+    " WHERE jscal_objs.rowid = :rowid" \
+    "   AND alive > 0"                 \
+    "   AND jscal_objs.modseq < :modseq"
+
 EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     unsigned comp_flags = _comp_flags_to_num(&cdata->comp_flags);
@@ -578,6 +587,17 @@ EXPORTED int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
     return 0;
 }
 
+
+EXPORTED int caldav_touch_jscal(struct caldav_db *caldavdb,
+                                 struct caldav_data *cdata)
+{
+    struct sqldb_bindval bval[] = {
+        { ":rowid",  SQLITE_INTEGER, { .i = cdata->dav.rowid  } },
+        { ":modseq", SQLITE_INTEGER, { .i = cdata->dav.modseq } },
+        { NULL,      SQLITE_NULL,    { .s = NULL              } } };
+
+    return sqldb_exec(caldavdb->db, CMD_UPDATE_JSCAL_MODSEQ, bval, NULL, NULL);
+}
 
 #define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
 
@@ -936,10 +956,22 @@ static void jscal_filter_to_stmt(struct caldav_db *caldavdb,
         }
     }
 
-    if (filter->imap_uid) {
+    if (arrayu64_size(&filter->imap_uids) == 1) {
         if (nargs++) buf_appendcstr(stmt, " AND");
         buf_printf(stmt, " imap_uid = %s", bval("imap_uid",
-           SQLITE_INTEGER, (union sqldb_sqlval){ .i = filter->imap_uid }, bvals));
+           SQLITE_INTEGER,
+           (union sqldb_sqlval){ .i = arrayu64_nth(&filter->imap_uids, 0) },
+           bvals));
+    }
+    else if (arrayu64_size(&filter->imap_uids)) {
+        /* literal integers, so a long list needs no bind variables */
+        if (nargs++) buf_appendcstr(stmt, " AND");
+        buf_appendcstr(stmt, " imap_uid IN (");
+        for (size_t i = 0; i < arrayu64_size(&filter->imap_uids); i++) {
+            buf_printf(stmt, "%s%" PRIu64, i ? "," : "",
+                       arrayu64_nth(&filter->imap_uids, i));
+        }
+        buf_appendcstr(stmt, ")");
     }
 
     if (filter->after || filter->before) {
@@ -1520,7 +1552,7 @@ EXPORTED void caldav_jscal_filter_by_mbentry(struct caldav_jscal_filter* f,
 EXPORTED void caldav_jscal_filter_by_imap_uid(struct caldav_jscal_filter* f,
                                               uint32_t imap_uid)
 {
-    f->imap_uid = imap_uid;
+    arrayu64_append(&f->imap_uids, imap_uid);
 }
 
 EXPORTED void caldav_jscal_filter_by_before(struct caldav_jscal_filter* f,
@@ -1561,7 +1593,7 @@ EXPORTED void caldav_jscal_filter_fini(struct caldav_jscal_filter *f)
     }
     dynarray_fini(&f->jscal_ids);
 
-    f->imap_uid = 0;
+    arrayu64_fini(&f->imap_uids);
     f->after = 0;
     f->before = 0;
     f->op = CALDAV_JSCAL_NOOP;

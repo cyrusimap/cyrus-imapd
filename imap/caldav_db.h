@@ -13,6 +13,7 @@ extern time_t caldav_eternity;
 #include <libical/ical.h>
 
 #include "dav_db.h"
+#include "arrayu64.h"
 #include "dynarray.h"
 #include "ical_support.h"
 #include "mboxlist.h"
@@ -95,6 +96,13 @@ struct caldav_db *caldav_open_userid(const char *userid);
 
 /* close this handle */
 int caldav_close(struct caldav_db *caldavdb);
+
+/**
+ * Advance the modseq of the events of a resource whose record was
+ * rewritten without new iCalendar data, such as for a JMAP metadata
+ * change, to the record's, so that they appear in CalendarEvent/changes.
+ */
+int caldav_touch_jscal(struct caldav_db *caldavdb, struct caldav_data *cdata);
 
 /* lookup an entry from 'caldavdb' by resource
    (optionally inside a transaction for updates) */
@@ -201,7 +209,7 @@ struct caldav_jscal_id {
 struct caldav_jscal_filter {
     ptrarray_t mbentries; // any of
     dynarray_t jscal_ids; // any of
-    uint32_t imap_uid;
+    arrayu64_t imap_uids; // any of
     time_t after;
     time_t before;
 

@@ -19,6 +19,13 @@
 #define DAV_ANNOT_NS            "/vendor/cmu/cyrus-httpd/"
 #define JMAP_ANNOT_NS           "/vendor/cmu/cyrus-jmap/"
 
+/* JMAP metadata and privateMetadata (draft-ietf-jmap-metadata), one entry
+ * per namespace below this prefix.  Only admins may write them over IMAP.
+ * Their private values belong to their users, so mailbox_extract_annots()
+ * leaves them out; copy them with annotate_msg_copy_entry() instead. */
+#define JMAP_METADATA_ANNOT     IMAP_ANNOT_NS "jmapmetadata/"
+#define JMAP_METADATA_PATTERN   JMAP_METADATA_ANNOT "*"
+
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;                   /* String */
@@ -222,6 +229,15 @@ int annotate_rename_mailbox(struct mailbox *oldmailbox,
                             struct mailbox *newmailbox);
 /* Handle a message COPY, by copying all the appropriate
  * per-message annotations. */
+/**
+ * Copy every user's value of the annotations matching @p entry, a pattern
+ * as for annotatemore_findall_mailbox(), from message @p olduid in
+ * @p oldmailbox to message @p newuid in @p newmailbox, which must be
+ * locked for writing.
+ */
+int annotate_msg_copy_entry(const struct mailbox *oldmailbox, uint32_t olduid,
+                            struct mailbox *newmailbox, uint32_t newuid,
+                            const char *entry);
 int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
                       struct mailbox *newmailbox, uint32_t newuid,
                       const char *userid);
@@ -266,6 +282,14 @@ void annotate_done(void);
  * references internally. */
 int annotate_getdb(const struct mailbox *mailbox, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
+
+/**
+ * Keep the message annotation database of @p mailbox open in @p holdp, so
+ * that lookups on many of its messages share one open database.  Moves an
+ * existing hold on another mailbox; a NULL @p mailbox releases it.
+ */
+int annotate_hold_mailbox(annotate_db_t **holdp,
+                          const struct mailbox *mailbox);
 
 // An API to check if any annotation database is locked, for consistency
 // and safety checks

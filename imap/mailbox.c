@@ -1846,6 +1846,10 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
 {
     struct entryattlist **eal = (struct entryattlist **)rock;
     const char *attrib = (userid[0] ? "value.priv" : "value.shared");
+
+    if (!strncmp(entry, JMAP_METADATA_ANNOT, strlen(JMAP_METADATA_ANNOT)))
+        return 0;
+
     setentryatt(eal, entry, attrib, value);
     return 0;
 }
