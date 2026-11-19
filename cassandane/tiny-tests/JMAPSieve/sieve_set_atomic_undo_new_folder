@@ -1,0 +1,61 @@
+#!perl
+use Cassandane::Tiny;
+
+# A failed first atomic SieveScript/set, which creates the #sieve folder,
+# must leave the folder, the sievedir and the conversations db consistent.
+sub test_sieve_set_atomic_undo_new_folder
+    :JMAPExtensions :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:sieve');
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', {
+            atomic => JSON::true,
+            create => {
+                a => { name => 'A', blobId => '#k' },
+                b => { name => 'B', blobId => '#k' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->sentence(1)->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.sievescript\.set\.failed});
+    $self->check_conversations();
+
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    $self->assert(!-e "$sievedir/A.bc");
+    $self->assert(!-e "$sievedir/B.bc");
+
+    $res = $jmap->request([ [ 'SieveScript/get', {} ] ]);
+    $self->assert_cmp_deeply(
+        [],
+        $res->single_sentence('SieveScript/get')->arguments->{list},
+    );
+
+    $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', { create => {
+            c => { name => 'C', blobId => '#k' },
+        } } ],
+    ]);
+    my $id = $res->sentence_named('SieveScript/set')->arguments->{created}{c}{id};
+    $self->assert_not_null($id);
+    $self->assert(-f "$sievedir/C.bc");
+
+    $self->check_conversations();
+}
