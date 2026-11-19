@@ -175,6 +175,14 @@ extern json_t *jmap_header_as_groupedaddresses(const char *raw);
 extern json_t *jmap_emailaddresses_from_addr(struct address *addr,
                                              enum header_form form);
 
+/** The most octets an Id may have, per RFC 8620 section 1.2 */
+#define JMAP_MAX_ID_LEN 255
+
+/**
+ * Is @p id a valid JMAP Id: 1 to JMAP_MAX_ID_LEN characters from A-Z,
+ * a-z, 0-9, "-" and "_"?  Stops reading at the first character past the
+ * limit, so a long string costs no more than that.
+ */
 extern int jmap_is_valid_id(const char *id);
 
 #define JMAP_BLOBID_SIZE 42

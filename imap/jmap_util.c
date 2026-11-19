@@ -1800,6 +1800,7 @@ EXPORTED int jmap_is_valid_id(const char *id)
     if (!id || *id == '\0') return 0;
     const char *p;
     for (p = id; *p; p++) {
+        if (p - id >= JMAP_MAX_ID_LEN) return 0;
         if (('0' <= *p && *p <= '9'))
             continue;
         if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
