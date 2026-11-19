@@ -190,6 +190,10 @@ typedef struct jmap_req {
     strarray_t *scheduled_emails;
     const strarray_t *using_capabilities;
 
+    /** Set by a method to make the dispatcher abort the conversations
+     *  transaction instead of committing it.  The response is still sent. */
+    bool abort_cstate;
+
     /** Set while Foo/get runs for ifUnchangedBy preconditions: object id to
      *  the properties it withheld.  See jmap_report_withheld(). */
     json_t *withheld;
@@ -244,8 +248,11 @@ enum jmap_method_flags {
     JMAP_NEED_CSTATE = (1 << 1),  /* conv.db is required for this method
                                      (lock type determined by r/w flag) */
     JMAP_NO_USERLOCK = (1 << 2),  /* action touches many users, it will do its own locking */
-    JMAP_NO_ACCOUNTID = (1 << 3)  /* method is not account-scoped and takes no
+    JMAP_NO_ACCOUNTID = (1 << 3), /* method is not account-scoped and takes no
                                      accountId argument (Core/echo) */
+    /** Foo/set handles "atomic": true; without it, atomic is refused with
+     *  cannotApplyAtomically. */
+    JMAP_SET_ATOMIC  = (1 << 4)
 };
 
 typedef struct {
@@ -480,6 +487,7 @@ struct jmap_set {
     /* Request arguments */
     const char *if_in_state;
     bool apply_empty_updates;
+    bool atomic;  /* "atomic": true, on a method with JMAP_SET_ATOMIC */
     json_t *create;
     json_t *update;
     json_t *destroy;
@@ -517,8 +525,10 @@ extern void jmap_set_default_failed(struct jmap_set *set, const char *id,
  *
  * When the request is using urn:ietf:params:jmap:conditional, this also
  * evaluates "ifUnchangedBy" by running Foo/get for the referenced objects,
- * and rejects "atomic": true.  Either can set @p err, so a caller must
- * check @p err before making any change.
+ * and handles "atomic".  "atomic": true sets @p set->atomic if the method
+ * has JMAP_SET_ATOMIC, and otherwise fails with cannotApplyAtomically
+ * before any precondition is evaluated.  Either can set @p err, so a caller
+ * must check @p err before making any change.
  *
  * @param valid_props  the type's properties, used to validate patches and
  *                     precondition pointers; NULL skips that validation
@@ -552,6 +562,15 @@ extern json_t *jmap_set_check_readonly(json_t *readonly, json_t *current);
 
 extern void jmap_set_fini(struct jmap_set *set);
 extern json_t *jmap_set_reply(struct jmap_set *set);
+
+/**
+ * Build the method-level atomicFailure error for an atomic Foo/set that
+ * found a problem while planning.  Returns NULL if @p set has no entries in
+ * notCreated, notUpdated or notDestroyed.  Otherwise returns
+ * {"type":"atomicFailure"} plus a copy of each non-empty map.  The caller
+ * owns the result.
+ */
+extern json_t *jmap_set_atomic_failure(const struct jmap_set *set);
 
 
 /* Foo/changes */

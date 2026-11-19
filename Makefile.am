@@ -1045,6 +1045,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/index.c \
     imap/index.h \
     imap/jmap_data_types.h \
+    imap/jmap_undo.c \
+    imap/jmap_undo.h \
     imap/jmap_util.c \
     imap/jmap_util.h \
     imap/json_support.c \
@@ -1396,7 +1398,7 @@ imap_httpd_LDADD += $(LD_SIEVE_ADD)
 
 if CUNIT
 
-cunit_TESTS += cunit/jmap_util.testc
+cunit_TESTS += cunit/jmap_undo.testc cunit/jmap_util.testc
 
 endif # CUNIT
 
