@@ -3604,6 +3604,31 @@ static void format_icaltimestr_to_datetimestr(const char *icalval, struct buf *b
     else buf_appendcstr(buf, "T00:00:00");
 }
 
+static json_t *getcalendarevents_publicprops(void);
+
+/* Report what a sharee may not read of a non-public event */
+static void getcalendarevents_report_private(struct getcalendarevents_rock *rock,
+                                             struct caldav_data *cdata,
+                                             const char *id)
+{
+    hash_table *props = rock->get->props;
+    if (!rock->is_sharee || cdata->comp_flags.privacy == CAL_PRIVACY_PUBLIC
+        || !props)
+    {
+        return;
+    }
+
+    json_t *publicprops = getcalendarevents_publicprops();
+    hash_iter *iter = hash_table_iter(props);
+    while (hash_iter_next(iter)) {
+        const char *prop = hash_iter_key(iter);
+        if (!json_object_get(publicprops, prop)) {
+            jmap_report_withheld(rock->req, id, prop);
+        }
+    }
+    hash_iter_free(&iter);
+}
+
 static int getcalendarevents_getinstances(json_t *jsevent,
                                           struct caldav_data *cdata,
                                           icalcomponent *ical,
@@ -3649,6 +3674,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                         json_string(buf_cstring(&baseidbuf)));
                 json_object_set_new(myevent, "recurrenceId", json_string(jscalrecurid));
                 json_object_set(myevent, "recurrenceIdTimeZone", jrtzid);
+                getcalendarevents_report_private(rock, cdata, eid->raw);
                 json_array_append_new(rock->get->list, myevent);
             }
             else {
@@ -3702,6 +3728,7 @@ static int getcalendarevents_getinstances(json_t *jsevent,
                     json_string(buf_cstring(&baseidbuf)));
             json_object_set_new(myevent, "recurrenceId", json_string(jscalrecurid));
             json_object_set(myevent, "recurrenceIdTimeZone", jrtzid);
+            getcalendarevents_report_private(rock, cdata, eid->raw);
             json_array_append_new(rock->get->list, myevent);
         }
     }
@@ -3859,7 +3886,8 @@ static void getcalendarevents_reduce_participants(json_t *jsevent,
     buf_free(&buf);
 }
 
-static void getcalendarevents_del_privateprops(json_t *jsevent)
+/* The properties a sharee may read of a non-public event */
+static json_t *getcalendarevents_publicprops(void)
 {
     static json_t *publicprops = NULL;
     if (!publicprops) {
@@ -3887,6 +3915,12 @@ static void getcalendarevents_del_privateprops(json_t *jsevent)
         json_object_set_new(publicprops, "utcStart", json_true());
         json_object_set_new(publicprops, "utcEnd", json_true());
     }
+    return publicprops;
+}
+
+static void getcalendarevents_del_privateprops(json_t *jsevent)
+{
+    json_t *publicprops = getcalendarevents_publicprops();
 
     const char *key;
     json_t *jval;
@@ -4479,6 +4513,7 @@ gotevent:
         json_object_set_new(jsevent, "id", json_string(id));
         json_object_set_new(jsevent, "uid", json_string(cdata->ical_uid));
         json_object_set_new(jsevent, "@type", json_string("Event"));
+        getcalendarevents_report_private(rock, cdata, id);
         json_array_append(rock->get->list, jsevent);
     }
     else {
@@ -4498,6 +4533,7 @@ gotevent:
                 json_object_set_new(myevent, "id", json_string(id));
                 json_object_set_new(myevent, "uid", json_string(cdata->ical_uid));
                 json_object_set_new(myevent, "@type", json_string("Event"));
+                getcalendarevents_report_private(rock, cdata, id);
                 json_array_append_new(rock->get->list, myevent);
                 buf_reset(&rock->buf);
             }

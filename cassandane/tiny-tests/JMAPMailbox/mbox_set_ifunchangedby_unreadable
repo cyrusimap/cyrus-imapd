@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+# A precondition can't read the counts and settings Mailbox/get gives only
+# placeholders for, on a mailbox the user may see but not read.
+sub test_mbox_set_ifunchangedby_unreadable
+    ($self)
+{
+    my $owner = $self->default_user;
+    my $parent = $owner->mailboxes->create({ name => 'P' });
+    my $child = $owner->mailboxes->create({
+        name     => 'C',
+        parentId => $parent->id,
+    });
+
+    my $admin = $self->{adminstore}->get_client();
+    $admin->setacl('user.cassandane.P', sharee => 'l');
+    $admin->setacl('user.cassandane.P.C', sharee => 'lrswipkxtecdn');
+
+    my $sharee = $self->{instance}->create_user('sharee');
+    my $jmap = $sharee->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    xlog $self, "a precondition on an unreadable count is forbidden";
+    my $res = $jmap->request([
+        [ 'Mailbox/set', {
+            accountId     => 'cassandane',
+            ifUnchangedBy => { $parent->id => { totalEmails => 0 } },
+            update        => { $child->id => { sortOrder => 5 } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'forbidden' }),
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "a wrong ifInState is reported before the unreadable count";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            accountId     => 'cassandane',
+            ifInState     => 'nosuchstate',
+            ifUnchangedBy => { $parent->id => { totalEmails => 0 } },
+            update        => { $child->id => { sortOrder => 5 } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch' },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "the name of the same mailbox is readable";
+    $res = $jmap->request([
+        [ 'Mailbox/set', {
+            accountId     => 'cassandane',
+            ifUnchangedBy => { $parent->id => { name => 'P' } },
+            update        => { $child->id => { sortOrder => 5 } },
+        } ],
+    ]);
+    $res->assert_single_successful_set('Mailbox/set');
+}

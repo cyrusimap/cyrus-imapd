@@ -1,0 +1,75 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee's precondition can't read what CalendarEvent/get withholds from
+# it for a private event.
+sub test_calendarevent_set_ifunchangedby_private
+    ($self)
+{
+    my $owner = $self->default_user;
+    my $calId = $owner->calendars->default->id;
+
+    my $res = $owner->jmap->request([
+        [ 'Calendar/set', { update => { $calId => {
+            shareWith => { sharee => {
+                mayReadItems => JSON::true,
+                mayWriteAll  => JSON::true,
+            } },
+        } } } ],
+        [ 'CalendarEvent/set', { create => { e => {
+            '@type'     => 'Event',
+            version     => '2.0',
+            calendarIds => { $calId => JSON::true },
+            title       => 'secret meeting',
+            start       => '2026-07-01T09:00:00',
+            duration    => 'PT1H',
+            timeZone    => 'Etc/UTC',
+            privacy     => 'private',
+        } } } ],
+    ]);
+    my $id = $res->sentence_named('CalendarEvent/set')
+                 ->arguments->{created}{e}{id};
+    $self->assert_not_null($id);
+
+    my $sharee = $self->{instance}->create_user('sharee');
+    my $jmap = $sharee->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    xlog $self, "a precondition on a withheld property is forbidden";
+    for my $title ('secret meeting', 'something else', undef) {
+        $res = $jmap->request([
+            [ 'CalendarEvent/set', {
+                accountId     => 'cassandane',
+                ifUnchangedBy => { $id => { title => $title } },
+                update        => { $id => { duration => 'PT2H' } },
+            } ],
+        ]);
+        $self->assert_cmp_deeply(
+            superhashof({ type => 'forbidden' }),
+            $res->single_sentence('error')->arguments,
+        );
+    }
+
+    xlog $self, "a precondition on a property the sharee may read is checked";
+    $res = $jmap->request([
+        [ 'CalendarEvent/set', {
+            accountId     => 'cassandane',
+            ifUnchangedBy => { $id => { start => '2026-07-01T10:00:00' } },
+            update        => { $id => { duration => 'PT2H' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ $id ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "the owner may read every property";
+    $owner->jmap->AddUsing('urn:ietf:params:jmap:conditional');
+    $res = $owner->jmap->request([
+        [ 'CalendarEvent/set', {
+            ifUnchangedBy => { $id => { title => 'secret meeting' } },
+            update        => { $id => { duration => 'PT2H' } },
+        } ],
+    ]);
+    $res->assert_single_successful_set('CalendarEvent/set');
+}

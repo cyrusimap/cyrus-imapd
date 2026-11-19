@@ -743,6 +743,20 @@ static json_t *_mbox_get(jmap_req_t *req,
         }
     }
     else {
+        if (share_type != _SHAREDMBOX_SHARED) {
+            /* placeholders for what the user may not read */
+            static const char *const unreadable[] = {
+                "totalEmails", "unreadEmails", "totalThreads",
+                "unreadThreads", "sortOrder", "isSeenShared",
+                "storageUsed", "color", "showAsLabel", NULL
+            };
+            const char *id = json_string_value(json_object_get(obj, "id"));
+            for (const char *const *p = unreadable; *p; p++) {
+                if (jmap_wantprop(props, *p)) {
+                    jmap_report_withheld(req, id, *p);
+                }
+            }
+        }
         if (jmap_wantprop(props, "totalEmails")) {
             json_object_set_new(obj, "totalEmails", json_integer(0));
         }
