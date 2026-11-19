@@ -4977,7 +4977,7 @@ struct select_objectid {
 
 static bool is_objectid(const char *s)
 {
-    return jmap_is_valid_id(s) && strlen(s) <= 255;
+    return jmap_is_valid_id(s);
 }
 
 /* The mailbox an OBJECTID parameter names, or NULL to select by name.
