@@ -67,6 +67,12 @@ jmap_property_t;
 "bimiBlobId",            JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
 "createdModseq",         JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
 "deliveredTo",           JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_SKIP_GET
+#
+# draft-ietf-jmap-metadata
+"metadata",          NULL, JMAP_PROP_SKIP_GET
+"privateMetadata",   NULL, JMAP_PROP_SKIP_GET
+"metadata/*",        NULL, JMAP_PROP_SKIP_GET | JMAP_PROP_REJECT_SET
+"privateMetadata/*", NULL, JMAP_PROP_SKIP_GET | JMAP_PROP_REJECT_SET
 %%
 
 const jmap_prop_hash_table_t jmap_email_props_map = {

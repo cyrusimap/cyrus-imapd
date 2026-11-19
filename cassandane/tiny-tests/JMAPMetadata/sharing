@@ -1,0 +1,189 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sharing
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    my $owner = $self->{instance}->create_user('owner');
+    my $ojmap = $owner->jmap;
+    $ojmap->{default_using} = $self->jmap_default_using;
+
+    xlog $self, "owner creates a mailbox and an email with metadata";
+    my $res = $ojmap->request([
+        ['Mailbox/set', {
+            create => {
+                mb => {
+                    name => 'shared',
+                    metadata => { 'acme.example.com' => { o => 1 } },
+                    privateMetadata => { 'acme.example.com' => { secret => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $mboxid = $res->single_sentence->as_set->created_id('mb');
+    $self->assert_not_null($mboxid);
+
+    $res = $ojmap->request([
+        ['Email/set', {
+            create => {
+                m1 => {
+                    mailboxIds => { $mboxid => JSON::true },
+                    subject => 'shared',
+                    bodyStructure => { type => 'text/plain', partId => '1' },
+                    bodyValues => { 1 => { value => 'hi' } },
+                    metadata => { 'acme.example.com' => { o => 1 } },
+                    privateMetadata => { 'acme.example.com' => { secret => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $emailid = $res->single_sentence->as_set->created_id('m1');
+    $self->assert_not_null($emailid);
+
+    $admin->setacl('user.owner.shared', cassandane => 'lr') or die;
+
+    $res = $ojmap->request([
+        ['Mailbox/get', { ids => [$mboxid], properties => ['id'] }],
+        ['Email/get', { ids => [$emailid], properties => ['id'] }],
+    ]);
+    my $mbox_state = $res->sentence(0)->arguments->{state};
+    my $email_state = $res->sentence(1)->arguments->{state};
+
+    xlog $self, "a reader sees shared metadata but not the owner's private";
+    $res = $jmap->request([
+        ['Mailbox/get', {
+            accountId => 'owner', ids => [$mboxid],
+            properties => ['metadata', 'privateMetadata'],
+        }],
+        ['Email/get', {
+            accountId => 'owner', ids => [$emailid],
+            properties => ['metadata', 'privateMetadata'],
+        }],
+    ]);
+    for my $obj (map { $_->arguments->{list}[0] } $res->sentences) {
+        $self->assert_cmp_deeply(
+            { 'acme.example.com' => { o => 1 } }, $obj->{metadata});
+        $self->assert_cmp_deeply({}, $obj->{privateMetadata});
+    }
+
+    xlog $self, "a reader may not write shared metadata";
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            accountId => 'owner',
+            update => { $mboxid => { 'metadata/acme.example.com/r' => 1 } },
+        }],
+        ['Email/set', {
+            accountId => 'owner',
+            update => { $emailid => { 'metadata/acme.example.com/r' => 1 } },
+        }],
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->sentence(0)->arguments->{notUpdated}{$mboxid}{type});
+    $self->assert_str_equals('forbidden',
+        $res->sentence(1)->arguments->{notUpdated}{$emailid}{type});
+
+    xlog $self, "but may write private metadata";
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            accountId => 'owner',
+            update => { $mboxid => {
+                'privateMetadata/acme.example.com' => { mine => 1 },
+            } },
+        }],
+        ['Email/set', {
+            accountId => 'owner',
+            update => { $emailid => {
+                'privateMetadata/acme.example.com' => { mine => 1 },
+            } },
+        }],
+        ['Email/get', {
+            accountId => 'owner', ids => [$emailid],
+            properties => ['privateMetadata'],
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $mboxid => undef },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_cmp_deeply({ $emailid => undef },
+        $res->sentence(1)->arguments->{updated});
+    $self->assert_cmp_deeply({ 'acme.example.com' => { mine => 1 } },
+        $res->sentence(2)->arguments->{list}[0]{privateMetadata});
+
+    xlog $self, "the owner's private metadata is unaffected";
+    $res = $ojmap->request([
+        ['Email/get', { ids => [$emailid], properties => ['privateMetadata'] }],
+        ['Mailbox/get', { ids => [$mboxid], properties => ['privateMetadata'] }],
+        ['Mailbox/changes', { sinceState => $mbox_state }],
+        ['Email/changes', { sinceState => $email_state }],
+    ]);
+    for my $obj (map { $res->sentence($_)->arguments->{list}[0] } 0..1) {
+        $self->assert_cmp_deeply(
+            { 'acme.example.com' => { secret => 1 } }, $obj->{privateMetadata});
+    }
+
+    xlog $self, "another user's private write is reported as an update";
+    $self->assert_cmp_deeply(
+        superhashof({ updated => [$mboxid], updatedProperties => undef }),
+        $res->sentence(2)->arguments,
+    );
+    $self->assert_cmp_deeply([$emailid], $res->sentence(3)->arguments->{updated});
+
+    my sub write_shared ($n) {
+        my $res = $jmap->request([
+            ['Mailbox/get', {
+                accountId => 'owner', ids => [$mboxid], properties => ['myRights'],
+            }],
+            ['Mailbox/set', {
+                accountId => 'owner',
+                update => { $mboxid => { 'metadata/acme.example.com/r' => $n } },
+            }],
+            ['Email/set', {
+                accountId => 'owner',
+                update => { $emailid => { 'metadata/acme.example.com/r' => $n } },
+            }],
+        ]);
+        return [
+            $res->sentence(0)->arguments->{list}[0]{myRights}{maySetMetadata},
+            $res->sentence(1)->arguments->{notUpdated}{$mboxid}{type},
+            $res->sentence(2)->arguments->{notUpdated}{$emailid}{type},
+        ];
+    }
+
+    xlog $self, "lookup alone doesn't allow writing private metadata";
+    $admin->setacl('user.owner.shared', cassandane => 'l') or die;
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            accountId => 'owner',
+            update => { $mboxid => {
+                'privateMetadata/acme.example.com' => { l => 1 },
+            } },
+        }],
+    ]);
+    $self->assert_str_equals('forbidden',
+        $res->single_sentence->arguments->{notUpdated}{$mboxid}{type});
+
+    xlog $self, "maySetKeywords alone doesn't allow writing shared metadata";
+    $admin->setacl('user.owner.shared', cassandane => 'lrsw') or die;
+    $self->assert_cmp_deeply([JSON::false, 'forbidden', 'forbidden'],
+                             write_shared(1));
+
+    xlog $self, "maySetMetadata does";
+    $admin->setacl('user.owner.shared', cassandane => 'lrn') or die;
+    $self->assert_cmp_deeply([JSON::true, undef, undef], write_shared(2));
+
+    xlog $self, "an unreadable object is notFound, metadata or not";
+    $admin->setacl('user.owner', cassandane => 'lrk') or die;
+    $admin->setacl('user.owner.shared', cassandane => '') or die;
+    $res = $jmap->request([
+        ['Email/set', {
+            accountId => 'owner',
+            update => { $emailid => {
+                'privateMetadata/acme.example.com' => { x => 1 },
+            } },
+        }],
+    ]);
+    $self->assert_str_equals('notFound',
+        $res->single_sentence->arguments->{notUpdated}{$emailid}{type});
+}

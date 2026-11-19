@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_quota
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    my $admin = $self->{adminstore}->get_client();
+
+    xlog $self, "allow 2KB of annotations";
+    $admin->setquota('user.cassandane', '(ANNOTATION-STORAGE 2)');
+    $self->assert_str_equals('ok', $admin->get_last_completion_response());
+
+    my $res = $jmap->request([
+        ['Mailbox/query', { filter => { role => 'inbox' } }],
+    ]);
+    my $inboxid = $res->single_sentence->arguments->{ids}[0];
+
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => { $inboxid => {
+                'metadata/acme.example.com' => { small => 'x' x 100 },
+            } },
+        }],
+    ]);
+    $self->assert_cmp_deeply({ $inboxid => undef },
+        $res->single_sentence->arguments->{updated});
+
+    $res = $jmap->request([
+        ['Mailbox/set', {
+            update => { $inboxid => {
+                'privateMetadata/acme.example.com' => { big => 'x' x 4096 },
+            } },
+        }],
+        ['Mailbox/get', {
+            ids => [$inboxid], properties => ['metadata', 'privateMetadata'],
+        }],
+    ]);
+    $self->assert_str_equals('overQuota',
+        $res->sentence(0)->arguments->{notUpdated}{$inboxid}{type});
+    $self->assert_cmp_deeply(
+        superhashof({
+            metadata => { 'acme.example.com' => { small => 'x' x 100 } },
+            privateMetadata => {},
+        }),
+        $res->sentence(1)->arguments->{list}[0],
+    );
+
+    xlog $self, "the annotation quota is reported for the metadata types";
+    $res = $jmap->request({
+        using => ['urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:quota',
+                  'urn:ietf:params:jmap:mail', 'urn:ietf:params:jmap:metadata'],
+        methodCalls => [['Quota/get', {}, 'R1']],
+    });
+    my ($quota) = grep { $_->{id} =~ /^A/ }
+                  @{ $res->single_sentence->arguments->{list} };
+    $self->assert_not_null($quota);
+    $self->assert_cmp_deeply(
+        superhashof({
+            resourceType => 'octets',
+            hardLimit => 2048,
+            types => bag('Mailbox', 'Email'),
+        }),
+        $quota,
+    );
+}
