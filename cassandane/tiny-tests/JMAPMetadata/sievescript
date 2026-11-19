@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sievescript
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+
+    my $res = $jmap->request([
+        ['Blob/upload', {
+            create => { b1 => { data => [{ 'data:asText' => "keep;\r\n" }] } },
+        }],
+        ['SieveScript/set', {
+            create => {
+                s1 => {
+                    name => 'meta',
+                    blobId => '#b1',
+                    metadata => { 'acme.example.com' => { v => 1 } },
+                },
+            },
+        }],
+    ]);
+    my $id = $res->sentence_named('SieveScript/set')->as_set->created_id('s1');
+    $self->assert_not_null($id);
+
+    xlog $self, "metadata survives new content, which stores a new record";
+    $res = $jmap->request([
+        ['Blob/upload', {
+            create => { b2 => { data => [{ 'data:asText' => "discard;\r\n" }] } },
+        }],
+        ['SieveScript/set', {
+            update => { $id => {
+                blobId => '#b2',
+                'privateMetadata/acme.example.com' => { mine => 1 },
+            } },
+        }],
+        ['SieveScript/get', { ids => [$id] }],
+        ['SieveScript/query', { filter => { metadataExists => 'acme.example.com/v' } }],
+    ]);
+    $self->assert_cmp_deeply({ $id => { blobId => ignore() } },
+        $res->sentence(1)->arguments->{updated});
+    $self->assert_cmp_deeply(
+        superhashof({
+            metadata => { 'acme.example.com' => { v => 1 } },
+            privateMetadata => { 'acme.example.com' => { mine => 1 } },
+        }),
+        $res->sentence(2)->arguments->{list}[0],
+    );
+    $self->assert_cmp_deeply([$id], $res->sentence(3)->arguments->{ids});
+}
