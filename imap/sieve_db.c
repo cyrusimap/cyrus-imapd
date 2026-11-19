@@ -557,7 +557,15 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
 
     /* Create RFC 5322 header for script */
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
-    if (strchr(userid, '@')) {
+    if (!userid) {
+        /* Global script */
+        mbname_t *mbname = mbname_from_intname(mailbox_name(mailbox));
+        const char *domain = mbname_domain(mbname);
+
+        buf_printf(&buf, "<global@%s>", domain ? domain : config_servername);
+        mbname_free(&mbname);
+    }
+    else if (strchr(userid, '@')) {
         buf_printf(&buf, "<%s>", userid);
     }
     else {
@@ -605,7 +613,7 @@ static int store_script(struct mailbox *mailbox, struct sieve_data *sdata,
     fclose(f);
 
     /* Treat this as the user taking action, since that's what it is. */
-    authstate = auth_newstate(userid);
+    if (userid) authstate = auth_newstate(userid);
 
     if (sdata->isactive) {
         /* Flag script as active */
@@ -892,7 +900,7 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
 
     user_nslock_t *user_nslock = NULL;
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-        user_nslock = user_nslock_lock_w(userid);
+        user_nslock = sieve_nslock_lock_w(userid);
 
         /* maybe we lost the race on this one */
         r = mboxlist_lookup(mboxname, NULL, NULL);
@@ -905,10 +913,17 @@ EXPORTED int sieve_ensure_folder(const char *userid, struct mailbox **mailboxptr
         mbentry.name = (char *) mboxname;
         mbentry.mbtype = MBTYPE_SIEVE;
 
+        const char *owner = userid;
+        if (sieve_userid_isglobal(userid)) {
+            /* Global scripts are for admins only, who need no ACL entry */
+            mbentry.acl = (char *) "";
+            owner = NULL;
+        }
+
         int flags = silent ? MBOXLIST_CREATE_SYNC : 0;
 
         r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-                                   1/*isadmin*/, userid, NULL/*auth_state*/,
+                                   1/*isadmin*/, owner, NULL/*auth_state*/,
                                    flags, &mailbox);
         if (r) {
             xsyslog_ev(LOG_ERR, "sieve.mailbox.create.failed",
@@ -954,29 +969,40 @@ EXPORTED int sieve_script_rebuild(const char *userid,
 {
     struct buf namebuf = BUF_INITIALIZER, *content_buf = NULL;
     struct sieve_data *sdata = NULL;
+    struct mailbox *mailbox = NULL;
     struct sieve_db *db = NULL;
     const char *content = NULL;
+    char *mboxname = sieve_mboxname(userid);
     time_t lastupdated = 0;
     struct stat bc_stat;
     int r;
 
-    db = sievedb_open_userid(userid);
-    if (!db) {
-        r = IMAP_INTERNAL;
-        goto done;
+    if (sieve_userid_isglobal(userid)) {
+        /* Global scripts are in the global mailbox's own DB, if it exists;
+           else they are only in the Sieve directory */
+        r = mailbox_open_irl(mboxname, &mailbox);
+        if (!r) {
+            db = sievedb_open_mailbox(mailbox);
+            if (!db) r = IMAP_INTERNAL;
+        }
+        else if (r == IMAP_MAILBOX_NONEXISTENT) {
+            r = CYRUSDB_NOTFOUND;
+        }
     }
+    else {
+        db = sievedb_open_userid(userid);
+        r = db ? 0 : IMAP_INTERNAL;
+    }
+    if (r && r != CYRUSDB_NOTFOUND) goto done;
 
     /* Lookup script in Sieve DB */
-    r = sievedb_lookup_name(db, script, &sdata, 0);
+    if (!r) r = sievedb_lookup_name(db, script, &sdata, 0);
     if (!r) {
-        char *mboxname = sieve_mboxname(userid);
-        struct mailbox *mailbox = NULL;
-
         lastupdated = sdata->lastupdated;
 
         content_buf = buf_new();
 
-        r = mailbox_open_irl(mboxname, &mailbox);
+        if (!mailbox) r = mailbox_open_irl(mboxname, &mailbox);
         if (r) {
             xsyslog_ev(LOG_ERR, "sieve.mailbox.open.failed",
                        lf_intname("mbox.name", mboxname),
@@ -990,7 +1016,6 @@ EXPORTED int sieve_script_rebuild(const char *userid,
             }
         }
         mailbox_close(&mailbox);
-        free(mboxname);
 
         if (r) goto done;
     }
@@ -1004,7 +1029,10 @@ EXPORTED int sieve_script_rebuild(const char *userid,
             lastupdated = sbuf.st_mtime;
         }
         else {
-            xsyslog_ev(LOG_ERR, "sieve.script.stat.failed",
+            /* a missing script is the script's problem, which a caller may
+               work around, as getinclude() does for a domain's :global */
+            xsyslog_ev(errno == ENOENT ? LOG_NOTICE : LOG_ERR,
+                       "sieve.script.stat.failed",
                        lf_buf("sys.path", &namebuf));
         }
     }
@@ -1070,22 +1098,61 @@ EXPORTED int sieve_script_rebuild(const char *userid,
     buf_destroy(content_buf);
     buf_free(&namebuf);
     sievedb_close(db);
+    mailbox_close(&mailbox);
+    free(mboxname);
 
     return r;
 }
 
+EXPORTED bool sieve_userid_isglobal(const char *userid)
+{
+    return !userid || !*userid || *userid == '@';
+}
+
+EXPORTED user_nslock_t *sieve_nslock_lock_w(const char *userid)
+{
+    /* the global Sieve mailbox is in the shared namespace */
+    return user_nslock_lock_w(sieve_userid_isglobal(userid) ? NULL : userid);
+}
+
+EXPORTED char *sieve_mboxname_owner(const char *mboxname)
+{
+    char *userid = mboxname_to_userid(mboxname);
+
+    if (!userid) {
+        mbname_t *mbname = mbname_from_intname(mboxname);
+        const char *domain = mbname_domain(mbname);
+
+        userid = domain ? strconcat("@", domain, (char *) NULL) : xstrdup("");
+        mbname_free(&mbname);
+    }
+
+    return userid;
+}
+
 EXPORTED char *sieve_mboxname(const char *userid)
 {
-    struct buf boxbuf = BUF_INITIALIZER;
+    const char *folder;
     char *res = NULL;
 
     init_internal();
 
-    buf_setcstr(&boxbuf, config_getstring(IMAPOPT_SIEVE_FOLDER));
+    folder = config_getstring(IMAPOPT_SIEVE_FOLDER);
 
-    res = mboxname_user_mbox(userid, buf_cstring(&boxbuf));
+    if (sieve_userid_isglobal(userid)) {
+        mbname_t *mbname = mbname_from_intname(NULL);
 
-    buf_free(&boxbuf);
+        if (config_virtdomains != IMAP_ENUM_VIRTDOMAINS_OFF &&
+            userid && *userid == '@') {
+            mbname_set_domain(mbname, userid + 1);
+        }
+        mbname_push_boxes(mbname, folder);
+        res = xstrdup(mbname_intname(mbname));
+        mbname_free(&mbname);
+    }
+    else {
+        res = mboxname_user_mbox(userid, folder);
+    }
 
     return res;
 }
