@@ -1,0 +1,7 @@
+Name: jmap_push_types
+Type: STRING
+Default-Value: Mailbox Email EmailSubmission Calendar CalendarEvent Contact
+Last-Modified: UNRELEASED
+
+Space-separated list of JMAP object types to which push notifications
+can be subscribed.
