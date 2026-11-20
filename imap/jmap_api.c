@@ -2181,11 +2181,9 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
     uint64_t limit = req->settings->limits[MAX_OBJECTS_IN_SET];
     uint64_t total = 0;
 
-    /* Blob/upload shares this parser, but the conditional arguments are
-     * defined only for Foo/set */
-    const char *slash = strrchr(req->method, '/');
-    bool is_conditional = jmap_is_using(req, JMAP_URN_CONDITIONAL) && slash
-                          && !strcmp(slash, "/set");
+    /* The conditional arguments are defined only for Foo/set */
+    bool is_conditional = jmap_is_using(req, JMAP_URN_CONDITIONAL)
+                          && strcmp(req->method, "Blob/upload");
 
     json_object_foreach(jargs, key, arg) {
         size_t size = 0;
