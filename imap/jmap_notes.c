@@ -1278,6 +1278,7 @@ done:
     mailbox_close(&mbox);
     jmap_parser_fini(&parser);
     jmap_set_fini(&set);
+    buf_free(&buf);
     return 0;
 }
 
