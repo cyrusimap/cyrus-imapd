@@ -1,0 +1,27 @@
+Description:
+
+An admin can set the new ``/vendor/cmu/cyrus-imapd/accountid`` annotation on
+a user's INBOX to choose the OBJECTID+ ACCOUNTID reported for all of that
+user's mailboxes, for example to match the accountId a JMAP frontend uses.
+Without it, the ACCOUNTID remains the userid.
+
+
+Documentation:
+
+The annotation list in docsrc/reference/faqs/o-annotations.rst.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+The value is kept in mailboxes.db and replicated with the INBOX, so upgrade
+replicas before setting it: an older replica doesn't store it.
+
+
+GitHub issue:
+
+None.

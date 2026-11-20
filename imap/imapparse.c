@@ -1401,7 +1401,7 @@ static int get_search_criterion(struct protstream *pin,
             if (c != ' ') goto missingarg;
             c = getastring(pin, pout, &arg);
             if (c <= EOF) goto missingarg;
-            if (!jmap_is_valid_id(arg.s) || strlen(arg.s) > 255) {
+            if (!jmap_is_valid_id(arg.s)) {
                 prot_printf(pout, "%s BAD Invalid threadid in Search command\r\n",
                             base->tag);
                 if (c != EOF) prot_ungetc(c, pin);

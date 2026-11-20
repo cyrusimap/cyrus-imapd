@@ -58,6 +58,7 @@
 #define KEY_TYPE_ID   'I'
 #define KEY_TYPE_ACL  'A'
 #define KEY_TYPE_JID  'J'
+#define KEY_TYPE_ACCOUNTID 'U'
 
 #define DB_DOMAINSEP_STR    "\x1D"  /* group separator (GS) */
 #define DB_DOMAINSEP_CHAR   DB_DOMAINSEP_STR[0]
@@ -123,6 +124,7 @@ EXPORTED mbentry_t *mboxlist_entry_copy(const mbentry_t *src)
     copy->acl = xstrdupnull(src->acl);
     copy->uniqueid = xstrdupnull(src->uniqueid);
     copy->jmapid = xstrdupnull(src->jmapid);
+    copy->accountid = xstrdupnull(src->accountid);
 
     copy->legacy_specialuse = xstrdupnull(src->legacy_specialuse);
 
@@ -163,6 +165,7 @@ EXPORTED void mboxlist_entry_free(mbentry_t **mbentryptr)
     free(mbentry->acl);
     free(mbentry->uniqueid);
     free(mbentry->jmapid);
+    free(mbentry->accountid);
 
     free(mbentry->legacy_specialuse);
 
@@ -252,6 +255,9 @@ static struct dlist *mboxlist_entry_dlist(const char *dbname,
 
     if (key != KEY_TYPE_JID)
         dlist_setatom(dl, "J", mbentry->jmapid);
+
+    if (mbentry->accountid)
+        dlist_setatom(dl, "U", mbentry->accountid);
 
     if (mbentry->partition)
         dlist_setatom(dl, "P", mbentry->partition);
@@ -416,6 +422,14 @@ static void mboxlist_jmapid_to_key(const char *scope,
     buf_appendcstr(key, scope ? scope : "");
     buf_putc(key, DB_RECORDSEP_CHAR);
     buf_appendcstr(key, jid);
+}
+
+/* A U record maps an INBOX's accountid to the INBOX's uniqueid */
+static void mboxlist_accountid_to_key(const char *accountid, struct buf *key)
+{
+    buf_reset(key);
+    buf_putc(key, KEY_TYPE_ACCOUNTID);
+    buf_appendcstr(key, accountid);
 }
 
 /*
@@ -639,6 +653,9 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
             else if (!strcmp(key, "T")) {
                 rock->mbentry->mbtype = mboxlist_string_to_mbtype(d->data);
             }
+            else if (!strcmp(key, "U")) {
+                rock->mbentry->accountid = xstrdupnull(d->data);
+            }
             else if (!strcmp(key, "V")) {
                 rock->mbentry->uidvalidity = atol(d->data);
             }
@@ -663,6 +680,7 @@ static int parseentry_cb(int type, struct dlistsax_data *d)
  *  P: _p_artition
  *  S: _s_erver
  *  T: _t_ype
+ *  U: acco_u_ntid
  *  V: uid_v_alidity
  */
 static int mboxlist_parse_entry(mbentry_t **mbentryptr,
@@ -1017,6 +1035,110 @@ static int mboxlist_read_jmapid(const char *inboxid, const char *jmapid,
     }
 
     buf_free(&key);
+    return r;
+}
+
+/* Read the uniqueid that the U record for 'accountid' names */
+static int mboxlist_read_accountid(const char *accountid, char **uniqueidp,
+                                   struct txn **tid)
+{
+    struct buf key = BUF_INITIALIZER;
+    const char *data = NULL;
+    size_t datalen = 0;
+
+    mboxlist_accountid_to_key(accountid, &key);
+    int r = cyrusdb_fetch(mbdb, buf_base(&key), buf_len(&key),
+                          &data, &datalen, tid);
+    buf_free(&key);
+
+    switch (r) {
+    case CYRUSDB_OK:
+        *uniqueidp = xstrndup(data, datalen);
+        return 0;
+    case CYRUSDB_AGAIN:
+        return IMAP_AGAIN;
+    case CYRUSDB_NOTFOUND:
+        return IMAP_MAILBOX_NONEXISTENT;
+    default:
+        xsyslog_ev(LOG_ERR, "mboxlist.read.failed",
+                   lf_s("mbox.accountid", accountid),
+                   lf_s("error", cyrusdb_strerror(r)));
+        return IMAP_IOERROR;
+    }
+}
+
+static int mboxlist_store_accountid(const char *accountid,
+                                    const char *uniqueid,
+                                    struct txn **txn)
+{
+    struct buf key = BUF_INITIALIZER;
+
+    mboxlist_accountid_to_key(accountid, &key);
+    int r = cyrusdb_store(mbdb, buf_base(&key), buf_len(&key),
+                          uniqueid, strlen(uniqueid), txn);
+    buf_free(&key);
+    return r;
+}
+
+/* Delete the U record for 'accountid' if it names the mailbox 'uniqueid'
+ * and 'name' is still that mailbox's name.  A rename writes the old
+ * name's tombstone first, so the new name's record survives. */
+static int mboxlist_delete_accountid(const char *name,
+                                     const char *accountid,
+                                     const char *uniqueid,
+                                     struct txn **txn)
+{
+    char *current = NULL;
+    mbentry_t *byid = NULL;
+    struct buf key = BUF_INITIALIZER;
+
+    int r = mboxlist_read_accountid(accountid, &current, txn);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+        r = 0;
+        goto done;
+    }
+    if (r || strcmpsafe(current, uniqueid)) goto done;
+
+    r = mboxlist_lookup_by_uniqueid(uniqueid, &byid, txn);
+    if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+    if (r || (byid && strcmp(byid->name, name))) goto done;
+
+    mboxlist_accountid_to_key(accountid, &key);
+    r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
+
+done:
+    mboxlist_entry_free(&byid);
+    buf_free(&key);
+    free(current);
+    return r;
+}
+
+EXPORTED int mboxlist_lookup_by_accountid(const char *accountid,
+                                          mbentry_t **entryptr)
+{
+    char *uniqueid = NULL;
+    mbentry_t *byid = NULL;
+    mbentry_t *inbox = NULL;
+
+    init_internal();
+
+    int r = mboxlist_read_accountid(accountid, &uniqueid, NULL);
+    if (!r) r = mboxlist_lookup_by_uniqueid(uniqueid, &byid, NULL);
+    if (!r) r = mboxlist_lookup(byid->name, &inbox, NULL);
+    if (!r && (!mboxname_isusermailbox(inbox->name, /*isinbox*/1) ||
+               strcmpsafe(inbox->uniqueid, uniqueid) ||
+               strcmpsafe(inbox->accountid, accountid))) {
+        r = IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    if (!r && entryptr) {
+        *entryptr = inbox;
+        inbox = NULL;
+    }
+
+    mboxlist_entry_free(&inbox);
+    mboxlist_entry_free(&byid);
+    free(uniqueid);
     return r;
 }
 
@@ -1529,6 +1651,8 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
     struct txn *mytid = NULL;
     char *dbname = mbname_dbname(mbname);
     const char *jscope = mbname_jmapid_scope(mbname);
+    const char *oldacct = NULL;
+    const char *newacct = NULL;
 
     /* make sure the name is locked first - NOTE, this doesn't guarantee ordering
      * on the I key since we can't tell to lock that (and may be accessing two) so
@@ -1551,6 +1675,12 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
     r = mboxlist_mylookup(dbname, &old, txn, /*wrlock*/1, /*allow_all*/1);
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
     if (r) goto done;
+
+    /* only a live mailbox has a U record */
+    if (old && old->uniqueid && !(old->mbtype & MBTYPE_DELETED))
+        oldacct = old->accountid;
+    if (mbentry && mbentry->uniqueid && !(mbentry->mbtype & MBTYPE_DELETED))
+        newacct = mbentry->accountid;
 
     // if we have RACLs, let's update them first
     if (have_racl) {
@@ -1591,6 +1721,13 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
                           buf_cstring(&mboxent), buf_len(&mboxent), txn);
         dlist_free(&dl);
         buf_reset(&mboxent);
+
+        if (!r && oldacct && strcmpsafe(oldacct, newacct)) {
+            r = mboxlist_delete_accountid(name, oldacct, old->uniqueid, txn);
+        }
+        if (!r && newacct) {
+            r = mboxlist_store_accountid(newacct, mbentry->uniqueid, txn);
+        }
 
         /* If there's an jmapid, update the J key too */
         if (!r && mbentry->jmapid) {
@@ -1664,6 +1801,11 @@ static int mboxlist_update_entry_full(const char *name, const mbentry_t *mbentry
         mboxlist_dbname_to_key(dbname, strlen(dbname), NULL, &key);
         r = cyrusdb_delete(mbdb, buf_base(&key), buf_len(&key), txn, /*force*/1);
         if (r) goto done;
+
+        if (oldacct) {
+            r = mboxlist_delete_accountid(name, oldacct, old->uniqueid, txn);
+            if (r) goto done;
+        }
 
         if (old->uniqueid) {
             /* Get the existing I key if any */
@@ -3250,6 +3392,7 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
         newmbentry->uidvalidity = oldmailbox->i.uidvalidity;
         newmbentry->uniqueid = xstrdupnull(mailbox_uniqueid(oldmailbox));
         newmbentry->jmapid = xstrdupnull(mailbox_jmapid(oldmailbox));
+        newmbentry->accountid = xstrdupnull(mbentry->accountid);
         newmbentry->createdmodseq = oldmailbox->i.createdmodseq;
         newmbentry->foldermodseq = silent ? mailbox_foldermodseq(oldmailbox)
                                           : mboxname_nextmodseq(newname, mailbox_foldermodseq(oldmailbox),
@@ -3341,6 +3484,11 @@ EXPORTED int mboxlist_renamemailbox(const mbentry_t *mbentry,
 
         // foldermodseq gets updated by the rename
         newmbentry->foldermodseq = oldmailbox->i.highestmodseq;
+    }
+
+    /* a user rename keeps the account; deleting the user ends it */
+    if (mboxname_isusermailbox(newname, /*isinbox*/1)) {
+        newmbentry->accountid = xstrdupnull(mbentry->accountid);
     }
 
     xsyslog_ev(LOG_INFO, "mboxlist.rename.started",

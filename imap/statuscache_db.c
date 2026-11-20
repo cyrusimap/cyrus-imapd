@@ -154,7 +154,8 @@ static void statuscache_read_index(const char *mboxname, struct statusdata *sdat
         sdata->mailboxid = static_mailboxid;
     }
 
-    /* not cached: derived from the name alone */
+    /* not cached, so that a change to the owner's accountid annotation
+     * shows at once */
     jmap_mailbox_accountid(mboxname, &static_accountid);
     sdata->accountid = buf_cstring(&static_accountid);
 

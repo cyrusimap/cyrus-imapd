@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_accountid_annot_replication
+    :NoAltNamespace :Replication
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/accountid';
+    my $master = $self->{adminstore}->get_client();
+
+    xlog $self, "Setting it on the master reaches the replica";
+    $master->setmetadata('user.cassandane', $entry, 'u1a48e8e3');
+    $self->assert_str_equals('ok', $master->get_last_completion_response());
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    my $replica = $self->{replica_adminstore}->get_client();
+    my $res = $replica->getmetadata('user.cassandane', $entry);
+    $self->assert_str_equals('u1a48e8e3', $res->{'user.cassandane'}{$entry});
+
+    xlog $self, "So does removing it";
+    $master = $self->{adminstore}->get_client();
+    $master->setmetadata('user.cassandane', $entry, undef);
+    $self->assert_str_equals('ok', $master->get_last_completion_response());
+    $self->run_replication();
+    $self->check_replication('cassandane');
+    $replica = $self->{replica_adminstore}->get_client();
+    $res = $replica->getmetadata('user.cassandane', $entry);
+    $self->assert_null($res->{'user.cassandane'}{$entry});
+}

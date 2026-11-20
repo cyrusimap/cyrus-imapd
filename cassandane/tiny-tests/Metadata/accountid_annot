@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_accountid_annot
+    :NoAltNamespace
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/accountid';
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $talk->create('INBOX.foo') or die "create INBOX.foo: $@";
+
+    xlog $self, "The owner can't set it, despite having the 'a' right";
+    $talk->setmetadata('INBOX', $entry, 'u1a48e8e3');
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "An admin can't set it on a mailbox other than an INBOX";
+    $admintalk->setmetadata('user.cassandane.foo', $entry, 'u1a48e8e3');
+    $self->assert_str_equals('no',
+        $admintalk->get_last_completion_response());
+
+    xlog $self, "An admin can't set a value that isn't an ObjectID";
+    for my $bad ('u1.a48', 'u1@example.com', 'x' x 256) {
+        $admintalk->setmetadata('user.cassandane', $entry, $bad);
+        $self->assert_str_equals('no',
+            $admintalk->get_last_completion_response());
+    }
+
+    xlog $self, "An admin can set it on an INBOX, and the owner can read it";
+    $admintalk->setmetadata('user.cassandane', $entry, 'u1a48e8e3');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    my $res = $talk->getmetadata('INBOX', $entry);
+    $self->assert_str_equals('u1a48e8e3', $res->{INBOX}{$entry});
+
+    xlog $self, "No other INBOX can take the same value";
+    $self->{instance}->create_user('other');
+    $admintalk->setmetadata('user.other', $entry, 'u1a48e8e3');
+    $self->assert_str_equals('no',
+        $admintalk->get_last_completion_response());
+    $admintalk->setmetadata('user.other', $entry, 'u2b59f9f4');
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+
+    xlog $self, "It has no private value";
+    $admintalk->setmetadata('user.cassandane',
+        '/private/vendor/cmu/cyrus-imapd/accountid', 'u1a48e8e3');
+    $self->assert_str_equals('no',
+        $admintalk->get_last_completion_response());
+
+    xlog $self, "The owner can't remove it, but an admin can";
+    $talk->setmetadata('INBOX', $entry, undef);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $admintalk->setmetadata('user.cassandane', $entry, undef);
+    $self->assert_str_equals('ok',
+        $admintalk->get_last_completion_response());
+    $res = $talk->getmetadata('INBOX', $entry);
+    $self->assert_null($res->{INBOX}{$entry});
+}

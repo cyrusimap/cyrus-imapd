@@ -1439,18 +1439,33 @@ EXPORTED void jmap_set_mailboxid(struct conversations_state *cstate,
             JMAP_MAX_MAILBOXID_SIZE);
 }
 
-static void _set_accountid(const char *userid, struct buf *accountid)
+EXPORTED void jmap_user_accountid(const char *userid, struct buf *accountid)
 {
+    buf_reset(accountid);
+
+    if (!userid) {
+        buf_setcstr(accountid, OBJECTID_SHARED_ACCOUNTID);
+        return;
+    }
+
+    char *inbox = mboxname_user_mbox(userid, NULL);
+    mbentry_t *mbentry = NULL;
+    if (!mboxlist_lookup(inbox, &mbentry, NULL) && mbentry->accountid) {
+        buf_setcstr(accountid, mbentry->accountid);
+    }
+    mboxlist_entry_free(&mbentry);
+    free(inbox);
+
     /* Not yet a legal ObjectID for every userid: the draft allows only
      * 1*255 of a-z A-Z 0-9 _ - , so a domain or a dot needs mapping. */
-    buf_setcstr(accountid, userid ? userid : OBJECTID_SHARED_ACCOUNTID);
+    if (!buf_len(accountid)) buf_setcstr(accountid, userid);
 }
 
 EXPORTED void jmap_mailbox_accountid(const char *mboxname,
                                     struct buf *accountid)
 {
     char *userid = mboxname_to_userid(mboxname);
-    _set_accountid(userid, accountid);
+    jmap_user_accountid(userid, accountid);
     free(userid);
 }
 
@@ -1504,7 +1519,7 @@ EXPORTED void jmap_get_mailbox_objectids(const mbentry_t *mbentry,
     char id[JMAP_MAX_MAILBOXID_SIZE];
     jmap_set_mailboxid(cstate, mbentry, id);
     buf_setcstr(mailboxid, id);
-    _set_accountid(userid, accountid);
+    jmap_user_accountid(userid, accountid);
 
     conversations_abort(&tmp);
     free(userid);
@@ -1800,6 +1815,7 @@ EXPORTED int jmap_is_valid_id(const char *id)
     if (!id || *id == '\0') return 0;
     const char *p;
     for (p = id; *p; p++) {
+        if (p - id >= JMAP_MAX_ID_LEN) return 0;
         if (('0' <= *p && *p <= '9'))
             continue;
         if (('a' <= *p && *p <= 'z') || ('A' <= *p && *p <= 'Z'))
