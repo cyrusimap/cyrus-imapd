@@ -2216,6 +2216,18 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
         /* ifUnchangedBy and atomic (urn:ietf:params:jmap:conditional) */
         else if (is_conditional && !strcmp(key, "ifUnchangedBy")) {
+            /* Evaluated by a Foo/get, so bounded by its limit */
+            if (json_object_size(arg)
+                > (size_t) req->settings->limits[MAX_OBJECTS_IN_GET])
+            {
+                *err = json_pack("{s:s s:s}",
+                                 "type",
+                                 "requestTooLarge",
+                                 "description",
+                                 "number of ifUnchangedBy ids exceeds "
+                                 "maxObjectsInGet limit");
+                return;
+            }
             if (json_is_object(arg)) {
                 if_unchanged_by = arg;
             }

@@ -1,0 +1,28 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_ifunchangedby_too_large
+    :JMAPExtensions :needs_component_sieve
+    ($self)
+{
+    my $jmap = $self->default_user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my sub set_if_absent (@ids) {
+        return $jmap->request([
+            [ 'SieveScript/set', {
+                ifUnchangedBy => { map { $_ => undef } @ids },
+            } ],
+        ]);
+    }
+
+    xlog $self, "ifUnchangedBy may name up to maxObjectsInGet (3) ids";
+    my $res = set_if_absent(qw(a b c));
+    $res->assert_single_successful_set('SieveScript/set');
+
+    $res = set_if_absent(qw(a b c d));
+    $self->assert_cmp_deeply(
+        { type => 'requestTooLarge', description => ignore() },
+        $res->single_sentence('error')->arguments,
+    );
+}
