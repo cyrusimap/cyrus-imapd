@@ -63,11 +63,14 @@ while (my $line = <$fh>) {
         if ($fields[0] =~ /".+\*"/) {
             push(@{$special_props{'wildcards'}}, $fields[0]);
         }
-        elsif ($fields[2] =~ /JMAP_PROP_ALWAYS_GET/) {
-            push(@{$special_props{'always_get'}}, $fields[0]);
-        }
-        elsif ($fields[2] =~ /JMAP_PROP_MANDATORY/) {
-            push(@{$special_props{'mandatory'}}, $fields[0]);
+        else {
+            # a property can be both
+            if ($fields[2] =~ /JMAP_PROP_ALWAYS_GET/) {
+                push(@{$special_props{'always_get'}}, $fields[0]);
+            }
+            if ($fields[2] =~ /JMAP_PROP_MANDATORY/) {
+                push(@{$special_props{'mandatory'}}, $fields[0]);
+            }
         }
     }
 }
