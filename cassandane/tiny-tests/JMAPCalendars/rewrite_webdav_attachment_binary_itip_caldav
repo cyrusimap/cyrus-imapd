@@ -72,18 +72,23 @@ EOF
         'Content-Type' => 'text/calendar');
 
     my $caldavResponse = $caldav->Request('GET', $eventHref);
-    my $ical = Data::ICal->new(data => $caldavResponse->{content});
-    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
-    my $event = $entries{'VEVENT'};
+    my $ical = ical2hash($caldavResponse->{content});
+    my ($event) = grep { $_->{type} eq 'vevent' } $ical->{objects}->@*;
     $self->assert_not_null($event);
 
     xlog "Assert BINARY ATTACH got rewritten to managed attachment URI";
-    my $attach = $event->property('ATTACH');
-    $self->assert_num_equals(1, scalar @{$attach});
-    $self->assert_not_null($attach->[0]->parameters()->{'MANAGED-ID'});
-    $self->assert_null($attach->[0]->parameters()->{VALUE});
     my $webdavAttachURI =
        $self->{instance}->{config}->get('webdav_attachments_baseurl') .
        '/dav/calendars/user/cassandane/Attachments/';
-    $self->assert($attach->[0]->value() =~ /^$webdavAttachURI.+/);
+    $self->assert_cmp_deeply(
+        [
+            {
+                name   => 'attach',
+                params => superhashof({ 'managed-id' => [ ignore() ] }),
+                value  => re(qr/^\Q$webdavAttachURI\E./),
+            },
+        ],
+        $event->{properties}{attach},
+    );
+    $self->assert_null($event->{properties}{attach}[0]{params}{value});
 }

@@ -61,12 +61,12 @@ sub test_calendarevent_set_attachbinary_datauri
 
     xlog "Assert ATTACH BINARY in VEVENT";
     my $caldavResponse = $caldav->Request('GET', $xhref);
-    my $ical = Data::ICal->new(data => $caldavResponse->{content});
-    my %entries = map { $_->ical_entry_type() => $_ } @{$ical->entries()};
-    my $vevent = $entries{'VEVENT'};
+    my $ical = ical2hash($caldavResponse->{content});
+    my ($vevent) = grep { $_->{type} eq 'vevent' } $ical->{objects}->@*;
     $self->assert_not_null($vevent);
 
-    my $attach = $vevent->property('ATTACH');
-    $self->assert_num_equals(1, scalar @{$attach});
-    $self->assert_str_equals('BINARY', $attach->[0]->parameters()->{VALUE});
+    $self->assert_cmp_deeply(
+        [ superhashof({ params => superhashof({ value => [ 'BINARY' ] }) }) ],
+        $vevent->{properties}{attach},
+    );
 }

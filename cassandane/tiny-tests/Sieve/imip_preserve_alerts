@@ -168,7 +168,7 @@ EOF
     $events = $CalDAV->GetEvents($CalendarHref);
 
     $response = $CalDAV->Request('GET', $href);
-    $ical = Data::ICal->new(data => $response->{content});
-    $self->assert_str_equals('DISPLAY', $ical->{entries}[0]{entries}[0]{properties}{action}[0]{value});
-    $self->assert_str_equals('DISPLAY', $ical->{entries}[1]{entries}[0]{properties}{action}[0]{value});
+    $ical = ical2hash($response->{content});
+    $self->assert_str_equals('DISPLAY', $ical->{objects}[0]{objects}[0]{properties}{action}[0]{value});
+    $self->assert_str_equals('DISPLAY', $ical->{objects}[1]{objects}[0]{properties}{action}[0]{value});
 }

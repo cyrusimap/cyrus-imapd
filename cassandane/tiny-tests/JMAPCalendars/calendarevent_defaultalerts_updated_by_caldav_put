@@ -1,6 +1,16 @@
 #!perl
 use Cassandane::Tiny;
-use Data::ICal;
+
+my sub display_alarm (%properties) {
+    return {
+        type => 'valarm',
+        properties => {
+            action => [ { name => 'action', value => 'DISPLAY' } ],
+            map {; $_ => [ { name => $_, value => $properties{$_} } ] }
+                keys %properties,
+        },
+    };
+}
 
 sub test_calendarevent_defaultalerts_updated_by_caldav_put
     :min_version_3_9
@@ -57,16 +67,16 @@ sub test_calendarevent_defaultalerts_updated_by_caldav_put
 
 sub assert_valarms ($self, $vevent, %args)
 {
-    my @props = @{$vevent->property('X-JMAP-USEDEFAULTALERTS')};
+    my @props = ($vevent->{properties}{'x-jmap-usedefaultalerts'} // [])->@*;
     if ($args{useDefaultAlerts}) {
         $self->assert_not_null($props[0]);
-        $self->assert_str_equals('TRUE', $props[0]->value);
+        $self->assert_str_equals('TRUE', $props[0]{value});
     } elsif (@props) {
-        $self->assert_str_equals('FALSE', $props[0]->value);
+        $self->assert_str_equals('FALSE', $props[0]{value});
     }
 
-    my @valarms = grep { $_->ical_entry_type eq 'VALARM' } @{$vevent->entries};
-    my @gotUids = sort map { @{$_->property('UID')}[0]->value } @valarms;
+    my @valarms = grep { $_->{type} eq 'valarm' } ($vevent->{objects} // [])->@*;
+    my @gotUids = sort map { $_->{properties}{uid}[0]{value} } @valarms;
     my @wantUids = sort @{${args}{uids}};
 
     $self->assert_cmp_deeply(\@wantUids, \@gotUids);
@@ -87,9 +97,8 @@ sub caldav_get ($self, $eventHref)
     });
     $self->assert_str_equals('200', $res->{status});
 
-    my $vcalendar = Data::ICal->new(data => $res->{content});
-    my @vevents = grep { $_->ical_entry_type eq 'VEVENT' } @{$vcalendar->entries};
-    my $vevent = $vevents[0];
+    my $vcalendar = ical2hash($res->{content});
+    my ($vevent) = grep { $_->{type} eq 'vevent' } $vcalendar->{objects}->@*;
     $self->assert_not_null($vevent);
     return ($vcalendar, $vevent, $res->{headers}{etag});
 }
@@ -145,13 +154,13 @@ sub create_jevent ($self)
 
     xlog "Rewrite unchanged iCalendar event";
     # We'll later change the iCalendar event data using
-    # the Data::ICal module. This library seems to sort
-    # iCalendar properties alphabetically when it
-    # serializes the event to iCalendar, so let's make
-    # sure the Cyrus on-disk representation matches.
+    # hash2ical, which sorts iCalendar properties
+    # alphabetically when it serializes the event, so
+    # let's make sure the Cyrus on-disk representation
+    # matches.
     # We need this to compare ETags later.
     my ($vcalendar, $vevent) = $self->caldav_get($eventHref);
-    $self->caldav_put($eventHref, { body => $vcalendar->as_string });
+    $self->caldav_put($eventHref, { body => hash2ical($vcalendar) });
 
     return $eventHref;
 }
@@ -173,7 +182,7 @@ sub assert_preserved_when_unchanged ($self)
     );
 
     xlog $self, "PUT back unchanged event";
-    my $putetag = $self->caldav_put($eventHref, { body => $vcalendar->as_string });
+    my $putetag = $self->caldav_put($eventHref, { body => hash2ical($vcalendar) });
     $self->assert_null($putetag);
 
     xlog $self, "Assert alarms via CalDAV";
@@ -192,11 +201,10 @@ sub assert_preserved_by_snooze_alarm ($self)
 
     xlog $self, "Assert useDefaultAlerts=true for snooze alarm";
 
-    my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
 
     # We actually should also acknowledge the default alarm
-    $alarm->add_properties(
+    my $alarm = display_alarm(
         description => 'useralarm',
         trigger   => '-PT15M',
         'related-to' => $self->{defaultAlertIds}[0],
@@ -214,8 +222,8 @@ sub assert_preserved_by_snooze_alarm ($self)
     );
 
     xlog $self, "Add snooze alarm via CalDAV";
-    $vevent->add_entry($alarm);
-    my $putetag = $self->caldav_put($eventHref, { body => $vcalendar->as_string });
+    push $vevent->{objects}->@*, $alarm;
+    my $putetag = $self->caldav_put($eventHref, { body => hash2ical($vcalendar) });
     $self->assert_null($putetag);
 
     xlog $self, "Assert alarms via CalDAV";
@@ -234,9 +242,8 @@ sub assert_disabled_by_user_alarm ($self)
 
     xlog $self, "Assert useDefaultAlerts=false for added user alarm";
 
-    my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
-    $alarm->add_properties(
+    my $alarm = display_alarm(
         description => 'useralarm',
         trigger   => 'PT15M',
         uid => $alarmUid,
@@ -253,8 +260,8 @@ sub assert_disabled_by_user_alarm ($self)
     );
 
     xlog $self, "Add user alarm via CalDAV";
-    $vevent->add_entry($alarm);
-    my $putetag = $self->caldav_put($eventHref, { body => $vcalendar->as_string });
+    push $vevent->{objects}->@*, $alarm;
+    my $putetag = $self->caldav_put($eventHref, { body => hash2ical($vcalendar) });
     $self->assert_null($putetag);
 
     xlog $self, "Assert alarms via CalDAV";
@@ -273,9 +280,8 @@ sub assert_preserved_by_apple_alarm ($self)
 
     xlog $self, "Assert useDefaultAlerts=true for added Apple default alarm";
 
-    my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
-    $alarm->add_properties(
+    my $alarm = display_alarm(
         description => 'applealarm',
         trigger   => '-PT15M',
         uid => $alarmUid,
@@ -293,8 +299,8 @@ sub assert_preserved_by_apple_alarm ($self)
     );
 
     xlog $self, "Add user alarm via CalDAV";
-    $vevent->add_entry($alarm);
-    my $putetag = $self->caldav_put($eventHref, { body => $vcalendar->as_string });
+    push $vevent->{objects}->@*, $alarm;
+    my $putetag = $self->caldav_put($eventHref, { body => hash2ical($vcalendar) });
     $self->assert_null($putetag);
 
     xlog $self, "Assert alarms via CalDAV";
@@ -324,9 +330,9 @@ sub assert_disabled_by_removed_default_alarm ($self)
     );
 
     xlog $self, "Remove one of two default alarms";
-    splice(@{$vevent->entries}, 1);
-    my $keptAlarmUid = $vevent->entries->[0]->property('uid')->[0]->value;
-    my $putetag = $self->caldav_put($eventHref, { body => $vcalendar->as_string });
+    splice($vevent->{objects}->@*, 1);
+    my $keptAlarmUid = $vevent->{objects}[0]{properties}{uid}[0]{value};
+    my $putetag = $self->caldav_put($eventHref, { body => hash2ical($vcalendar) });
     $self->assert_null($putetag);
 
     xlog $self, "Assert alarms via CalDAV";
@@ -355,7 +361,7 @@ sub assert_disabled_by_no_alarms ($self)
     );
 
     xlog $self, "Remove all alarms from VEVENT";
-    my $ical = $vcalendar->as_string;
+    my $ical = hash2ical($vcalendar);
     $ical =~ s/BEGIN:VALARM.*END:VALARM\r\n//gms;
     my $putetag = $self->caldav_put($eventHref, { body => $ical });
     $self->assert_null($putetag);
@@ -376,9 +382,8 @@ sub assert_not_disabled_if_xheader_set ($self)
 
     xlog $self, "Assert useDefaultAlerts=true for user alarm if x-header is set";
 
-    my $alarm = Data::ICal::Entry::Alarm::Display->new;
     my $alarmUid = (Data::UUID->new)->create_str;
-    $alarm->add_properties(
+    my $alarm = display_alarm(
         description => 'useralarm',
         trigger   => 'PT15M',
         uid => $alarmUid,
@@ -395,15 +400,14 @@ sub assert_not_disabled_if_xheader_set ($self)
     );
 
     xlog $self, "Remove VALARMs from VEVENT and add new user VALARM";
-    splice(@{$vevent->entries});
-    $vevent->add_entry($alarm);
+    $vevent->{objects} = [ $alarm ];
 
     xlog $self, "PUT via CalDAV";
     my $putetag = $self->caldav_put($eventHref, {
         headers => {
             'X-Cyrus-rewrite-usedefaultalerts' => 'f',
         },
-        body => $vcalendar->as_string,
+        body => hash2ical($vcalendar),
     });
     $self->assert_null($putetag);
 

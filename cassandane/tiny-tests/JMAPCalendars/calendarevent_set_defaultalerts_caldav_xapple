@@ -57,14 +57,14 @@ sub test_calendarevent_set_defaultalerts_caldav_xapple
     xlog "Get event via CalDAV";
     $res = $caldav->Request('GET', $event1Href);
 
-    my $ical = Data::ICal->new(data => $res->{content});
-    my $vevent = (grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()})[0];
+    my $ical = ical2hash($res->{content});
+    my ($vevent) = grep { $_->{type} eq 'vevent' } $ical->{objects}->@*;
     $self->assert_not_null($vevent);
 
-    my $valarm = (grep { $_->ical_entry_type() eq 'VALARM' } @{$vevent->entries()})[0];
+    my ($valarm) = grep { $_->{type} eq 'valarm' } $vevent->{objects}->@*;
     $self->assert_not_null($valarm);
 
     xlog "Assert X-JMAP-DEFAULT-ALARM is set on VALARM";
-    my $xprop = $valarm->property('x-jmap-default-alarm')->[0];
-    $self->assert_str_equals('TRUE', $xprop->value());
+    $self->assert_str_equals('TRUE',
+        $valarm->{properties}{'x-jmap-default-alarm'}[0]{value});
 }

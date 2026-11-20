@@ -15,6 +15,24 @@ sub test_calendarevent_set_standalone_itip
         { start => '2022-03-03T03:03:03', recurid => '20220303T030303' },
     );
 
+    my sub assert_itip_reply ($itip, $recurid, $partstat) {
+        my $ical = ical2hash($itip);
+        my @vevents = grep { $_->{type} eq 'vevent' } $ical->{objects}->@*;
+        $self->assert_cmp_deeply([
+            superhashof({
+                properties => superhashof({
+                    'recurrence-id' => [ superhashof({ value => $recurid }) ],
+                    attendee => [
+                        superhashof({
+                            value  => 'mailto:cassandane@example.com',
+                            params => superhashof({ partstat => [ $partstat ] }),
+                        }),
+                    ],
+                }),
+            }),
+        ], \@vevents);
+    }
+
     xlog "Clear notification cache";
     $self->{instance}->getnotify();
 
@@ -56,21 +74,7 @@ sub test_calendarevent_set_standalone_itip
     $self->assert_not_null($notif);
     my $notif_payload = decode_json($notif->{MESSAGE});
     my $itip = $notif_payload->{ical};
-    my $ical = Data::ICal->new(data => $itip);
-
-    my @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()};
-    $self->assert_num_equals(1, scalar @vevents);
-
-    my $recurid = $vevents[0]->property('RECURRENCE-ID');
-    $self->assert_num_equals(1, scalar @{$recurid});
-    $self->assert_str_equals($details[0]->{recurid}, $recurid->[0]->value());
-
-    my $attendees = $vevents[0]->property('ATTENDEE');
-    $self->assert_num_equals(1, scalar @{$attendees});
-    $self->assert_str_equals('mailto:cassandane@example.com',
-        $attendees->[0]->value());
-    $self->assert_str_equals('TENTATIVE',
-        $attendees->[0]->parameters()->{'PARTSTAT'});
+    assert_itip_reply($itip, $details[0]{recurid}, 'TENTATIVE');
 
     my $expect_id = $instance1Id;
     $self->assert_not_null($notif_payload->{id});
@@ -118,21 +122,7 @@ sub test_calendarevent_set_standalone_itip
     $self->assert_not_null($notif);
     $notif_payload = decode_json($notif->{MESSAGE});
     $itip = $notif_payload->{ical};
-    $ical = Data::ICal->new(data => $itip);
-
-    @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()};
-    $self->assert_num_equals(1, scalar @vevents);
-
-    $recurid = $vevents[0]->property('RECURRENCE-ID');
-    $self->assert_num_equals(1, scalar @{$recurid});
-    $self->assert_str_equals($details[1]->{recurid}, $recurid->[0]->value());
-
-    $attendees = $vevents[0]->property('ATTENDEE');
-    $self->assert_num_equals(1, scalar @{$attendees});
-    $self->assert_str_equals('mailto:cassandane@example.com',
-        $attendees->[0]->value());
-    $self->assert_str_equals('ACCEPTED',
-        $attendees->[0]->parameters()->{'PARTSTAT'});
+    assert_itip_reply($itip, $details[1]{recurid}, 'ACCEPTED');
 
     $expect_id = $instance2Id;
     $self->assert_not_null($notif_payload->{id});
@@ -160,21 +150,7 @@ sub test_calendarevent_set_standalone_itip
     $self->assert_not_null($notif);
     $notif_payload = decode_json($notif->{MESSAGE});
     $itip = $notif_payload->{ical};
-    $ical = Data::ICal->new(data => $itip);
-
-    @vevents = grep { $_->ical_entry_type() eq 'VEVENT' } @{$ical->entries()};
-    $self->assert_num_equals(1, scalar @vevents);
-
-    $recurid = $vevents[0]->property('RECURRENCE-ID');
-    $self->assert_num_equals(1, scalar @{$recurid});
-    $self->assert_str_equals($details[1]->{recurid}, $recurid->[0]->value());
-
-    $attendees = $vevents[0]->property('ATTENDEE');
-    $self->assert_num_equals(1, scalar @{$attendees});
-    $self->assert_str_equals('mailto:cassandane@example.com',
-        $attendees->[0]->value());
-    $self->assert_str_equals('DECLINED',
-        $attendees->[0]->parameters()->{'PARTSTAT'});
+    assert_itip_reply($itip, $details[1]{recurid}, 'DECLINED');
 
     $expect_id = $instance2Id;
     $self->assert_not_null($notif_payload->{id});
