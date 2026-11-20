@@ -1,0 +1,27 @@
+Description:
+
+CalDAV PUT of a VTODO now validates that, when both DTSTART and DUE are
+present, DUE has the same value type as DTSTART and occurs no earlier than
+DTSTART, as required by RFC 5545 Section 3.8.2.3.  Previously only VEVENT
+DTEND/DTSTART were validated this way; an invalid VTODO (e.g. a DATE-TIME
+DTSTART with a DATE DUE) was accepted.
+
+
+Documentation:
+
+(none)
+
+
+Config changes:
+
+(none)
+
+
+Upgrade instructions:
+
+(none)
+
+
+GitHub issue:
+
+https://github.com/cyrusimap/cyrus-imapd/issues/4591
