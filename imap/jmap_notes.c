@@ -695,8 +695,7 @@ static json_t *_notes_check_readonly(json_t *readonly,
     }
 
     json_decref(cur);
-    free_hash_table(props, NULL);
-    free(props);
+    release_hash_table(&props, NULL);
     return err;
 }
 

@@ -388,7 +388,7 @@ static int restore_collection_cb(const mbentry_t *mbentry, void *rock)
         return HTTP_UNPROCESSABLE;
     }
 
-    construct_hash_table(&resources, 64, 0);
+    construct_hash_table(&resources, 0, 0);
 
     message_t *msg = message_new();
     for (recno = rrock->mailbox->i.num_records; recno > 0; recno--) {
@@ -1338,7 +1338,7 @@ static int recreate_ical_resources(const mbentry_t *mbentry,
 
     /* Newest first, so the first record seen of each resource is its
        latest version */
-    construct_hash_table(&resources, 64, 0);
+    construct_hash_table(&resources, 0, 0);
 
     struct mailbox_iter *iter =
         mailbox_iter_init(mailbox, 0, ITER_STEP_BACKWARD|ITER_SKIP_UNLINKED);
@@ -1505,7 +1505,7 @@ static int jmap_backup_restore_calendars(jmap_req_t *req)
                                   &crock, NULL, 0, 0, NULL,
                                   &ical_uid_conflict };
 
-    construct_hash_table(&crock.uids, 64, 0);
+    construct_hash_table(&crock.uids, 0, 0);
 
     r = mboxlist_mboxtree(calhomeset, restore_calendar_cb, &rrock,
                           MBOXTREE_SKIP_ROOT | MBOXTREE_DELETED);
@@ -2503,7 +2503,7 @@ static int restore_memos(struct restore_rock *rrock, struct mail_rock *mrock)
 {
     hash_table mailboxes = HASH_TABLE_INITIALIZER;
     struct memo_rock memo_rock = {
-        rrock, mrock, construct_hash_table(&mailboxes, 32, 0),
+        rrock, mrock, construct_hash_table(&mailboxes, 0, 0),
         STRARRAY_INITIALIZER };
     int r = 0;
 
@@ -2557,10 +2557,10 @@ static int jmap_backup_restore_mail(jmap_req_t *req)
                lf_time("backup.cutoff", restore.cutoff));
 
     struct mail_rock mrock = {
-        construct_hash_table(&emailids, 1024, 0),  // every message GUID
-        construct_hash_table(&msgids, 1024, 0),    // every Message-ID of non-drafts
-        construct_hash_table(&memos, 32, 0),       // memos by parent Message-ID
-        construct_hash_table(&mailboxes, 32, 0),
+        construct_hash_table(&emailids, 0, 0),  // every message GUID
+        construct_hash_table(&msgids, 0, 0),    // every Message-ID of non-drafts
+        construct_hash_table(&memos, 0, 0),     // memos by parent Message-ID
+        construct_hash_table(&mailboxes, 0, 0),
         BUF_INITIALIZER, BUF_INITIALIZER };
     struct restore_rock rrock = { req, &restore, MBTYPE_EMAIL, 0,
                                   NULL, NULL, &mrock, NULL, 0, 0,

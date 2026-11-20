@@ -46,8 +46,8 @@ EXPORTED search_query_t *search_query_new(struct index_state *state,
     ptrarray_init(&query->merged_msgdata);
     construct_hash_table(&query->folders_by_name, 128, 0);
     ptrarray_init(&query->folders_by_id);
-    construct_hashu64_table(&query->partid_by_num, 1024, 0);
-    construct_hash_table(&query->partnum_by_id, 1024, 0);
+    construct_hashu64_table(&query->partid_by_num, 0, 0);
+    construct_hash_table(&query->partnum_by_id, 0, 0);
 
     return query;
 }
