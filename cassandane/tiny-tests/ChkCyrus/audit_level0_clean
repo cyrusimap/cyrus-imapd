@@ -1,0 +1,16 @@
+#!perl
+use Cassandane::Tiny;
+
+# A freshly created, undamaged store has nothing to report.  If this ever
+# starts failing, the audit has grown a false positive.
+sub test_audit_level0_clean
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $findings = $self->audit_json('--level', '0');
+    my @codes = sort { $a cmp $b } codes($findings);
+    $self->assert_str_equals('', join(q{,}, @codes));
+}

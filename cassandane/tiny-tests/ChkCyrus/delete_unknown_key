@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+
+# A key with an unrecognised prefix does not belong in mailboxes.db.
+# Seeing it at all is why the scan reads the keyspace raw rather than
+# through the lookup API, which would hide or choke on it.
+sub test_delete_unknown_key
+    :NoSanityCheck
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create("INBOX.Archive") or die "create: $@";
+
+    my $db = $self->mailboxes_db();
+    my $fmt = $self->mailboxes_db_format();
+
+    $self->{instance}->run_dbcommand($db, $fmt, ['SET', 'Zbogus', 'value']);
+
+    my $findings = $self->audit_json('--level', '0');
+    $self->assert_has_code($findings, 'db-unknown-key');
+
+    # a dry run must leave it alone
+    $self->audit_json('--level', '0', '--delete');
+    $findings = $self->audit_json('--level', '0');
+    $self->assert_has_code($findings, 'db-unknown-key');
+
+    # --really removes it
+    $self->audit_json('--level', '0', '--delete', '--really');
+    $findings = $self->audit_json('--level', '0');
+    $self->assert_lacks_code($findings, 'db-unknown-key');
+
+    # and nothing else was disturbed
+    $self->assert_str_equals('', join(q{,}, codes($findings)));
+}

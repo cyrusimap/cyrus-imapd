@@ -1,0 +1,37 @@
+Description:
+
+:cyrusman:`chk_cyrus(8)` gains an audit mode which checks ``mailboxes.db``
+against itself and against the mailbox directories on disk, reporting -- and
+optionally repairing -- inconsistencies that no other tool detects.
+
+
+Documentation:
+
+:cyrusman:`chk_cyrus(8)`
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None.  Without the new **-l**/**--level** option, :cyrusman:`chk_cyrus(8)`
+behaves exactly as before, so existing invocations are unaffected.
+
+Two things are worth knowing before running the new mode with **--delete**
+or **--fix**:
+
+- Nothing is modified without **--really**, and nothing newer than ten
+  minutes is ever removed.
+
+- ``--prune-tombstones`` has no default and does nothing unless given an
+  age.  Removing a tombstone before a replica has synchronised past it
+  means that replica never learns the name is gone, so the safe threshold
+  depends on your replication topology.
+
+
+GitHub issue:
+
+None
