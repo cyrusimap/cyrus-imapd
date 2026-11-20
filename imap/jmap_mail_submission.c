@@ -840,7 +840,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     /* Extract envelope from message */
     if (!envelope) {
         hash_table props = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&props, 8, 0);
+        construct_hash_table(&props, 6, 1);
         hash_insert("sender", (void*)1, &props);
         hash_insert("from", (void*)1, &props);
         hash_insert("to", (void*)1, &props);
@@ -927,7 +927,7 @@ static void _emailsubmission_create(jmap_req_t *req,
     }
     else if (holduntil) {
         hash_table props = HASH_TABLE_INITIALIZER;
-        construct_hash_table(&props, 1, 0);
+        construct_hash_table(&props, 1, 1);
         hash_insert("from", (void*)1, &props);
         r = jmap_email_get_with_props(req, &props, mr, &msg);
         free_hash_table(&props, NULL);

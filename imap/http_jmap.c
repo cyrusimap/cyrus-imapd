@@ -148,6 +148,7 @@ static void jmap_init(struct buf *serverinfo)
 
     initialize_JMAP_error_table();
 
+    /* Currently we register 79, 88 or 91 methods. Hence 128 is a good size: */
     construct_hash_table(&my_jmap_settings.methods, 128, 0);
     my_jmap_settings.server_capabilities = json_object();
 
@@ -732,7 +733,7 @@ static int jmap_download(struct transaction_t *txn)
 
     /* Initialize ACL mailbox cache for findblob */
     hash_table mbstates = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&mbstates, 64, 0);
+    construct_hash_table(&mbstates, 0, 0);
     req.mbstates = &mbstates;
 
     blobid = xstrndup(blobbase, bloblen);

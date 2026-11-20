@@ -62,11 +62,11 @@ EXPORTED void replace_tzid_aliases(icalcomponent *ical,
 /* Strip all VTIMEZONE components for known TZIDs */
 EXPORTED void strip_vtimezones(icalcomponent *ical)
 {
-    struct hash_table tzid_table;
+    struct hash_table tzid_table = HASH_TABLE_INITIALIZER;
     icalcomponent *vtz, *next;
 
     /* Create hash table for TZID aliases */
-    construct_hash_table(&tzid_table, 10, 1);
+    construct_hash_table(&tzid_table, 0, 0);
 
     for (vtz = icalcomponent_get_first_component(ical, ICAL_VTIMEZONE_COMPONENT);
          vtz; vtz = next) {

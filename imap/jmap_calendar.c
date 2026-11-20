@@ -4593,7 +4593,7 @@ static void getcalendarevents_rock_init(struct getcalendarevents_rock *rock,
     rock->check_acl = strcmp(req->accountid, req->userid);
     rock->is_sharee = strcmp(req->accountid, req->userid);
     rock->utctz = icaltimezone_get_utc_timezone();
-    construct_hashu64_table(&rock->cache_jsevents, 512, 0);
+    construct_hashu64_table(&rock->cache_jsevents, 0, 0);
 }
 
 static void getcalendarevents_rock_fini(struct getcalendarevents_rock *rock)
@@ -5057,7 +5057,7 @@ static void updateevent_set_utctimes(json_t *new_event,
 static void merge_missing_vevents(icalcomponent *dstical, icalcomponent *srcical)
 {
     hash_table have = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&have, 32, 0);
+    construct_hash_table(&have, 0, 0);
     struct buf buf = BUF_INITIALIZER;
 
     int iteration;
@@ -7587,8 +7587,7 @@ static int jmap_calendarevent_changes(struct jmap_req *req)
     jmap_changes_fini(&changes);
     jmap_parser_fini(&parser);
     if (rock.mboxrights) {
-        free_hash_table(rock.mboxrights, free);
-        free(rock.mboxrights);
+        release_hash_table(&rock.mboxrights, free);
     }
     buf_free(&rock.buf);
     if (db) caldav_close(db);
@@ -8976,8 +8975,7 @@ static int _calendareventparse_args_parse(jmap_req_t *req,
             size_t i;
             json_t *val;
 
-            parseargs->props = xzmalloc(sizeof(hash_table));
-            construct_hash_table(parseargs->props, json_array_size(arg) + 1, 0);
+            parseargs->props = malloc_hash_table(json_array_size(arg) + 1);
             json_array_foreach(arg, i, val) {
                 const char *s = json_string_value(val);
                 if (!s) {
@@ -9081,8 +9079,7 @@ done:
     jmap_parser_fini(&parser);
     jmap_parse_fini(&parse);
     if (args.props) {
-        free_hash_table(args.props, NULL);
-        free(args.props);
+        release_hash_table(&args.props, NULL);
     }
     return 0;
 }
@@ -9947,7 +9944,7 @@ static int principalfilter_init(json_t *jfilter, struct principalfilter *filter)
 {
     if (!jfilter) return 0;
 
-    construct_hash_table(&filter->props, 8, 0);
+    construct_hash_table(&filter->props, 0, 0);
     int r = xapian_dbw_openmem(&filter->dbw);
     if (r) return r;
     r = xapian_db_opendbw(filter->dbw, &filter->db);
@@ -10360,7 +10357,8 @@ static json_t *principal_check_readonly(jmap_req_t *req,
     }
 
     hash_table wantids = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&wantids, 2, 0);
+    /* Using a memory pool means that the hash_insert() doesn't also malloc() */
+    construct_hash_table(&wantids, 1, 1);
     hash_insert(id, (void *) 0x1, &wantids);
 
     SHA1_CTX sha1;
@@ -11038,8 +11036,7 @@ static int jmap_principal_getavailability(struct jmap_req *req)
 
 done:
     if (props) {
-        free_hash_table(props, NULL);
-        free(props);
+        release_hash_table(&props, NULL);
     }
     jmap_parser_fini(&parser);
     free(principalid);

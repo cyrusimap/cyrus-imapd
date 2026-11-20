@@ -204,6 +204,7 @@ static struct event_groups {
 
 } *notify_event_groups = NULL;
 
+/* If you add elements to this struct, make sure to update clear_id() below */
 static struct id_data {
     hash_table params;
     unsigned quirks;
@@ -3634,9 +3635,24 @@ static void cmd_noop(char *tag, char *cmd)
 }
 
 static void clear_id() {
-    free_hash_table(&imapd_id.params, &free);
-    memset(&imapd_id, 0, sizeof(struct id_data));
-    construct_hash_table(&imapd_id.params, 32, 1);
+    /* No point in free()/malloc() if the hash was already empty. This is quite
+     * likely as we call this function on connection reset, unautenticate and id
+     */
+    if (hash_constructed(&imapd_id.params)) {
+        if (hash_count(&imapd_id.params)) {
+            free_hash_table(&imapd_id.params, &free);
+            /* A client may send up to 30 parameters; we care about the 11
+             * below. The default hash size of 8 is a good starting guess.
+             * Use a memory pool - this hash is written once, then read, then
+             * freed. If we get the size right that's condensed to one malloc()
+             */
+            construct_hash_table(&imapd_id.params, 0, 1);
+        }
+    } else {
+        construct_hash_table(&imapd_id.params, 0, 1);
+    }
+    imapd_id.quirks = 0;
+    imapd_id.did_id = 0;
 }
 
 /* The fields RFC 2971 section 3.3 defines, and the key each is logged
@@ -6781,7 +6797,7 @@ static void cmd_search(const char *tag, const char *cmd)
             /*cstate*/NULL
         };
 
-        construct_hash_table(&mrock.mailboxes, 100, 0);  // arbitrary size
+        construct_hash_table(&mrock.mailboxes, 0, 0);
 
         if (!searchargs->returnopts) {
             /* RFC 7377: 2.1
@@ -8568,7 +8584,7 @@ static void cmd_rename(char *tag, char *oldname, char *newname, char *location, 
         struct mboxevent *mboxevent = NULL;
         uint32_t uidvalidity = mbentry ? mbentry->uidvalidity : 0;
 
-        construct_hash_table(&sharedmboxes_by_username, 64, 0);
+        construct_hash_table(&sharedmboxes_by_username, 0, 0);
 
         /* don't send rename notification if we only change the partition */
         if (strcmp(oldmailboxname, newmailboxname))
@@ -14330,7 +14346,7 @@ static void list_data_remotesubscriptions(struct listargs *listargs)
     memset(&rock, 0, sizeof(struct list_rock));
     rock.listargs = listargs;
     rock.subs = strarray_new();
-    construct_hash_table(&rock.server_table, 10, 1);
+    construct_hash_table(&rock.server_table, 0, 0);
 
     proxy_gentag(mytag, sizeof(mytag));
 
@@ -14465,7 +14481,7 @@ static void list_data_recursivematch(struct listargs *listargs)
 
     rock.count = 0;
     rock.listargs = listargs;
-    construct_hash_table(&rock.table, 100, 1);
+    construct_hash_table(&rock.table, 0, 0);
 
     /* find */
     mboxlist_findsubmulti(&imapd_namespace, &listargs->pat, imapd_userisadmin, imapd_userid,
@@ -14537,7 +14553,7 @@ static void list_data(struct listargs *listargs)
         else {
             if (config_mupdate_server) {
                 /* In case we proxy to backends due to select/return criteria */
-                construct_hash_table(&rock.server_table, 10, 1);
+                construct_hash_table(&rock.server_table, 0, 0);
             }
 
             /* XXX: is there a cheaper way to figure out \Subscribed? */
@@ -15782,7 +15798,7 @@ static void cmd_notify(char *tag, int set)
         int i;
 
         if (new_egroups->filters & ~FILTER_SELECTED) {
-            srock.mboxnames = construct_hash_table(&mboxnames, 100, 0);
+            srock.mboxnames = construct_hash_table(&mboxnames, 0, 0);
         }
 
         if (new_egroups->selected.events && imapd_index) {

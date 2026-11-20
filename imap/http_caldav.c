@@ -1338,7 +1338,7 @@ HIDDEN int caldav_manage_attachments(const char *userid,
     int ret = 0;
 
     /* Create hash table of managed attachments in new resource */
-    construct_hash_table(&mattach_table, 10, 1);
+    construct_hash_table(&mattach_table, 0, 0);
 
     if (ical) {
         comp = icalcomponent_get_first_real_component(ical);
@@ -1650,7 +1650,7 @@ static int export_calendar(struct transaction_t *txn)
     struct buf *buf = &resp_body->payload;
     struct mailbox *mailbox = NULL;
     static char etag[33];
-    struct hash_table tzid_table;
+    struct hash_table tzid_table = HASH_TABLE_INITIALIZER;
     static const char *displayname_annot =
         DAV_ANNOT_NS "<" XML_NS_DAV ">displayname";
     static const char *description_annot =
@@ -1797,7 +1797,7 @@ static int export_calendar(struct transaction_t *txn)
     txn->flags.cc |= CC_NOTRANSFORM;
 
     /* Create hash table for TZIDs */
-    construct_hash_table(&tzid_table, 10, 1);
+    construct_hash_table(&tzid_table, 0, 0);
 
     /* Get description and color of calendar */
     r = annotatemore_lookupmask_mbox(mailbox, description_annot,
@@ -3665,7 +3665,7 @@ static int caldav_import(struct transaction_t *txn, void *obj,
     txn->req_tgt.resource = txn->req_tgt.path + irock.baselen;
 
     /* Create hash table of components */
-    construct_hash_table(&comp_table, 100, 1);
+    construct_hash_table(&comp_table, 0, 0);
 
     /* Group components by UID (recurrence sets) */
     for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
@@ -3968,8 +3968,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    construct_hashu64_table(&rdates, 256, 0);
-    construct_hashu64_table(&overrides, 256, 0);
+    construct_hashu64_table(&rdates, 0, 0);
+    construct_hashu64_table(&overrides, 0, 0);
 
     comp = icalcomponent_get_first_real_component(ical);
 

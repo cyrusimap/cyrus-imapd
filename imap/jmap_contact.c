@@ -342,7 +342,7 @@ static int jmap_card_get(struct jmap_req *req)
         .cid = BUF_INITIALIZER
     };
 
-    construct_hashu64_table(&rock.jmapcache, 512, 0);
+    construct_hashu64_table(&rock.jmapcache, 0, 0);
 
     /* Parse request */
     jmap_get_parse(req, &parser, &card_props, /* allow_null_ids */ 1,
@@ -741,7 +741,14 @@ static json_t *_card_check_readonly(jmap_req_t *req,
         .jmapcache = HASHU64_TABLE_INITIALIZER,
         .cid = BUF_INITIALIZER,
     };
-    construct_hashu64_table(&rock.jmapcache, 1, 0);
+    /* The hash table in the rock is used by jmap_card_get() to permit
+     * getcards_byid() to collect and return the set of records to pass to
+     * cachecard_cb().
+     * Here we don't need to do that, but we have no good way to avoid the
+     * hash_insert() in getcards_cb() below. Hence create a trivial hash to
+     * write our single ID into. Use a memory pool to avoid a second malloc()
+     */
+    construct_hashu64_table(&rock.jmapcache, 1, 1);
 
     json_t *err = NULL;
     int r = getcards_byid(&rock, id);
@@ -3243,8 +3250,7 @@ static void card_filter_free(void *vf)
 
     mboxlist_entry_free(&f->inAddressBook);
     if (f->inCardGroup) {
-        free_hash_table(f->inCardGroup, NULL);
-        free(f->inCardGroup);
+        release_hash_table(&f->inCardGroup, NULL);
     }
     contact_textfilter_free(f->fullName);
     contact_textfilter_free(f->given);
@@ -3284,9 +3290,7 @@ static void *card_filter_parse(json_t *arg, void *rock)
     json_t *inCardGroup = json_object_get(arg, "inCardGroup");
     if (inCardGroup) {
         struct buf cid = BUF_INITIALIZER;
-        f->inCardGroup = xmalloc(sizeof(struct hash_table));
-        construct_hash_table(f->inCardGroup,
-                             json_array_size(inCardGroup)+1, 0);
+        f->inCardGroup = malloc_hash_table(json_array_size(inCardGroup)+1);
         size_t i;
         json_t *val;
         json_array_foreach(inCardGroup, i, val) {
@@ -4924,8 +4928,7 @@ static int _card_parseargs_parse(jmap_req_t *req __attribute__((unused)),
         size_t i;
         json_t *val;
 
-        args->props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(args->props, json_array_size(arg) + 1, 0);
+        args->props = malloc_hash_table(json_array_size(arg) + 1);
         json_array_foreach(arg, i, val) {
             const char *s = json_string_value(val);
             if (!s) {
@@ -5030,8 +5033,7 @@ done:
     jmap_parser_fini(&parser);
     jmap_parse_fini(&parse);
     if (db) carddav_close(db);
-    free_hash_table(args.props, NULL);
-    free(args.props);
+    release_hash_table(&args.props, NULL);
     return 0;
 }
 

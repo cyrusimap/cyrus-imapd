@@ -56,6 +56,22 @@ typedef struct hash_table {
 hash_table *construct_hash_table(hash_table *table, size_t size,
                                  int use_mpool);
 
+/* Allocates memory and constructs a hash table. Effectively these chained:
+ * 1. xmalloc() memory
+ * 2. initialise it with HASH_TABLE_INITIALIZER
+ * 3. construct_hash_table()
+ *
+ * but (for future flexibility) DON'T ASSUME that hash_constructed() will return
+ * true - the precise implementation is subject to change, and might soon defer
+ * "construction" until the first insert. If you need a boolean flag, test
+ * whether the pointer you allocated is NULL/not-NULL.
+ *
+ * As the name "free_hash_table" is already used for the inverse of
+ * "construct_hash_table", the inverse of this function is release_hash_table()
+ */
+
+hash_table *malloc_hash_table(size_t size);
+
 /*
 ** Inserts a pointer to 'data' in the table, with a copy of 'key' as its
 ** key.  Note that this makes a copy of the key, but NOT of the
@@ -116,6 +132,9 @@ EXPORTED inline size_t hash_count(const hash_table *table)
  * undefined if neither HASH_TABLE_INITIALIZER was used nor
  * construct_hash_table() called.
  *
+ * "unspecified" on a hash returned from malloc_hash_table() - currently it will
+ * always return true, but this will change soon.
+ *
  * As free_hash_table() resets the memory to that same state, will be true after
  * it has been called
  * Encapsulates an idiom used by lots of Cyrus code to defer expensive
@@ -147,6 +166,9 @@ EXPORTED inline bool hash_constructed(const hash_table *table)
 */
 
 void free_hash_table(hash_table *table, void (*func)(void *));
+
+/* Frees a hash table allocated by xmalloc(), and NULLs out the pointer: */
+void release_hash_table(hash_table **table, void (*func)(void *));
 
 /*
 ** An iterator for a hash table. Inserting or deleting entries

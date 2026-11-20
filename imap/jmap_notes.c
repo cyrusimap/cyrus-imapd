@@ -432,7 +432,7 @@ static int jmap_note_get(jmap_req_t *req)
         json_t *val;
 
         specific_ids = true;
-        construct_hash_table(&ids, 32, 0);
+        construct_hash_table(&ids, json_array_size(get.ids), 0);
         
         json_array_foreach(get.ids, i, val) {
             hash_insert(json_string_value(val), (void *) 1, &ids);
@@ -695,8 +695,7 @@ static json_t *_notes_check_readonly(json_t *readonly,
     }
 
     json_decref(cur);
-    free_hash_table(props, NULL);
-    free(props);
+    release_hash_table(&props, NULL);
     return err;
 }
 
@@ -897,7 +896,7 @@ static int jmap_note_set(jmap_req_t *req)
     hash_table ids = HASH_TABLE_INITIALIZER;
     struct set_rock srock = { &set, &buf, rights, false };
 
-    construct_hash_table(&ids, 32, 0);
+    construct_hash_table(&ids, json_array_size(set.destroy), 0);
 
     /* Build hash of ids */
     json_array_foreach(set.destroy, i, val) {
@@ -936,7 +935,7 @@ static int jmap_note_set(jmap_req_t *req)
     }
 
     /* update */
-    construct_hash_table(&ids, 32, 0);
+    construct_hash_table(&ids, json_array_size(set.update), 0);
 
     /* Build hash of ids */
     json_object_foreach(set.update, id, val) {

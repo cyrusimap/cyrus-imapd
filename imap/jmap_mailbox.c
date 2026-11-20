@@ -794,8 +794,8 @@ done:
 struct jmap_mailbox_get_cb_rock {
     jmap_req_t *req;
     struct jmap_get *get;
-    hash_table *roles;
-    hash_table *want;
+    hash_table roles;
+    hash_table want;
     struct shared_mboxes *shared_mboxes;
     strarray_t *sublist;
 };
@@ -845,13 +845,13 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     if (!is_jmap_mailbox(rock->req, mbentry, 0)) return 0;
 
     /* Do we need to process this mailbox? */
-    if (rock->want) {
+    if (hash_constructed(&rock->want)) {
         static char mboxid[JMAP_MAX_MAILBOXID_SIZE];
         jmap_set_mailboxid(rock->req->cstate, mbentry, mboxid);
-        if (hash_lookup(mboxid, rock->want))
+        if (hash_lookup(mboxid, &rock->want))
             id = mboxid;
         else if (USER_COMPACT_EMAILIDS(rock->req->cstate) && // check for legacy id
-                 hash_lookup(mbentry->uniqueid, rock->want))
+                 hash_lookup(mbentry->uniqueid, &rock->want))
             id = mbentry->uniqueid;
         else
             return 0;
@@ -864,7 +864,7 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
         return 0;
 
     /* Convert mbox to JMAP object. */
-    obj = _mbox_get(req, mbentry, rock->roles, rock->get->props, share_type, rock->sublist);
+    obj = _mbox_get(req, mbentry, &rock->roles, rock->get->props, share_type, rock->sublist);
     if (!obj) {
         xsyslog_ev(LOG_INFO, "jmap.mailbox.convert.failed",
                    lf_jmapreq(req),
@@ -874,10 +874,10 @@ static int jmap_mailbox_get_cb(const mbentry_t *mbentry, void *_rock)
     json_array_append_new(list, obj);
 
     /* Move this mailbox of the lookup list */
-    if (rock->want) {
-        hash_del(id, rock->want);
+    if (hash_constructed(&rock->want)) {
+        hash_del(id, &rock->want);
         // are we done looking?
-        if (!hash_count(rock->want))
+        if (!hash_count(&rock->want))
             return IMAP_OK_COMPLETED;
     }
 
@@ -911,19 +911,24 @@ static int jmap_mailbox_get(jmap_req_t *req)
     if (jmap_wantprop(get.props, "isSubscribed")) {
         sublist = mboxlist_sublist(req->userid);
     }
-    struct jmap_mailbox_get_cb_rock rock = { req, &get, NULL, NULL, shared_mboxes, sublist };
-    rock.roles = (hash_table *) xmalloc(sizeof(hash_table));
-    construct_hash_table(rock.roles, 8, 0);
+    struct jmap_mailbox_get_cb_rock rock = {
+        .req = req,
+        .get = &get,
+        .roles = HASH_TABLE_INITIALIZER,
+        .want = HASH_TABLE_INITIALIZER,
+        .shared_mboxes = shared_mboxes,
+        .sublist = sublist
+    };
+    construct_hash_table(&rock.roles, 0, 0);
 
     /* Does the client request specific mailboxes? */
     if (JNOTNULL(get.ids)) {
         size_t i;
         json_t *val;
         /* Make a set of request ids to know when to stop mboxlist*/
-        rock.want = (hash_table *) xmalloc(sizeof(hash_table));
-        construct_hash_table(rock.want, json_array_size(get.ids) + 1, 0);
+        construct_hash_table(&rock.want, json_array_size(get.ids) + 1, 0);
         json_array_foreach(get.ids, i, val) {
-            hash_insert(json_string_value(val), (void*)1, rock.want);
+            hash_insert(json_string_value(val), (void*)1, &rock.want);
         }
     }
 
@@ -939,8 +944,8 @@ static int jmap_mailbox_get(jmap_req_t *req)
                           jmap_mailbox_get_cb, &rock, MBOXTREE_INTERMEDIATES);
 
     /* Report if any requested mailbox has not been found */
-    if (rock.want) {
-        hash_enumerate(rock.want, jmap_mailbox_get_notfound, get.not_found);
+    if (hash_constructed(&rock.want)) {
+        hash_enumerate(&rock.want, jmap_mailbox_get_notfound, get.not_found);
     }
 
     /* Build response */
@@ -948,10 +953,8 @@ static int jmap_mailbox_get(jmap_req_t *req)
     jmap_ok(req, jmap_get_reply(&get));
 
     _shared_mboxes_free(shared_mboxes);
-    free_hash_table(rock.want, NULL);
-    free(rock.want);
-    free_hash_table(rock.roles, NULL);
-    free(rock.roles);
+    free_hash_table(&rock.want, NULL);
+    free_hash_table(&rock.roles, NULL);
     strarray_free(rock.sublist);
     jmap_parser_fini(&parser);
     jmap_get_fini(&get);
@@ -2566,8 +2569,7 @@ static json_t *_mbox_update_check_readonly(jmap_req_t *req,
     json_t *err = jmap_set_check_readonly(args->readonly, cur);
 
     json_decref(cur);
-    free_hash_table(props, NULL);
-    free(props);
+    release_hash_table(&props, NULL);
     return err;
 }
 
@@ -3305,6 +3307,7 @@ struct toposort {
     int is_cyclic;
 };
 
+/* sorts into topo->dst, and returns 1 if the graph is cyclic, 0 if not. */
 static void _toposort_cb(const char *id, void *data, void *rock)
 {
     struct toposort *topo = rock;
@@ -3347,8 +3350,7 @@ static int _toposort(hash_table *parent_id_by_id, strarray_t *dst)
     construct_hash_table(&topo.visited, hash_count(parent_id_by_id) + 1, 0);
     hash_enumerate(topo.parent_id_by_id, _toposort_cb, &topo);
     free_hash_table(&topo.visited, NULL);
-    free_hash_table(&topo.visited, NULL);
-    return topo.is_cyclic ? -1 : 0;
+    return topo.is_cyclic;
 }
 
 struct mboxset_ops {
@@ -3405,9 +3407,7 @@ static struct mboxset_ops *_mboxset_newops(jmap_req_t *req, struct mboxset *set)
             hash_insert(args->mbox_id, args, &args_by_id);
         }
         strarray_t tmp = STRARRAY_INITIALIZER;
-        if (_toposort(&parent_id_by_id, &tmp) < 0) {
-            ops->is_cyclic = 1;
-        }
+        ops->is_cyclic = _toposort(&parent_id_by_id, &tmp);
         for (i = 0; i < strarray_size(&tmp); i++) {
             const char *id = strarray_nth(&tmp, i);
             ptrarray_append(ops->put, hash_lookup(id, &args_by_id));
@@ -3613,11 +3613,11 @@ static void _mboxset_entry_free(void *entryp)
 
 struct mboxset_state {
     jmap_req_t *req;
+    hash_table id_by_imapname;
+    hash_table entry_by_id;
+    hash_table siblingnames_by_parent_id;
+    hash_table specialuses_by_id;
     int has_conflict;
-    hash_table *id_by_imapname;
-    hash_table *entry_by_id;
-    hash_table *siblingnames_by_parent_id;
-    hash_table *specialuses_by_id;
 };
 
 static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
@@ -3627,7 +3627,7 @@ static int _mboxset_state_mboxlist_cb(const mbentry_t *mbentry, void *rock)
     if (mbtype_isa(mbentry->mbtype) == MBTYPE_EMAIL) {
         char *mboxid = xmalloc(JMAP_MAX_MAILBOXID_SIZE);
         jmap_set_mailboxid(state->req->cstate, mbentry, mboxid);
-        hash_insert(mbentry->name, mboxid, state->id_by_imapname);
+        hash_insert(mbentry->name, mboxid, &state->id_by_imapname);
     }
     return 0;
 }
@@ -3663,7 +3663,7 @@ static void _mboxset_state_mkentry_cb(const char *imapname, void *idptr, void *r
     mboxlist_entry_free(&pmbentry);
 
     /* Add entry */
-    hash_insert(mbox_id, entry, state->entry_by_id);
+    hash_insert(mbox_id, entry, &state->entry_by_id);
     mbname_free(&mbname);
 }
 
@@ -3680,7 +3680,7 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
         return;
     }
     if (entry->parent_id) {
-        struct mboxset_entry *parent = hash_lookup(entry->parent_id, state->entry_by_id);
+        struct mboxset_entry *parent = hash_lookup(entry->parent_id, &state->entry_by_id);
         if (!parent) {
             /* This is an internal error in the state. It can't be valid. */
             state->has_conflict = 1;
@@ -3696,10 +3696,10 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
     if (entry->parent_id) parent_id = entry->parent_id;
 
     /* A mailbox must not have siblings with the same name. */
-    strarray_t *siblings = hash_lookup(parent_id, state->siblingnames_by_parent_id);
+    strarray_t *siblings = hash_lookup(parent_id, &state->siblingnames_by_parent_id);
     if (!siblings) {
         siblings = strarray_new();
-        hash_insert(parent_id, siblings, state->siblingnames_by_parent_id);
+        hash_insert(parent_id, siblings, &state->siblingnames_by_parent_id);
     }
     int i;
     for (i = 0; i < strarray_size(siblings); i++) {
@@ -3717,7 +3717,7 @@ static void _mboxset_state_conflict_cb(const char *id, void *data, void *rock)
             state->has_conflict = 1;
             return;
         }
-        struct mboxset_entry *parent_entry = hash_lookup(parent_id, state->entry_by_id);
+        struct mboxset_entry *parent_entry = hash_lookup(parent_id, &state->entry_by_id);
         if (!parent_entry || parent_entry->is_deleted) break;
         parent_id = parent_entry->parent_id;
     }
@@ -3744,12 +3744,12 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
             entry->name = xstrdup(args->name);
             buf_putc(&buf, '#');
             buf_appendcstr(&buf, args->creation_id);
-            hash_insert(buf_cstring(&buf), entry, state->entry_by_id);
+            hash_insert(buf_cstring(&buf), entry, &state->entry_by_id);
             buf_reset(&buf);
         }
         else {
             /* Update entry in in-memory mailbox tree */
-            struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
+            struct mboxset_entry *entry = hash_lookup(args->mbox_id, &state->entry_by_id);
             if (!entry) {
                 state->has_conflict = 1;
                 break;
@@ -3778,7 +3778,7 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
     /* Apply destroy */
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
-        struct mboxset_entry *entry = hash_lookup(mbox_id, state->entry_by_id);
+        struct mboxset_entry *entry = hash_lookup(mbox_id, &state->entry_by_id);
         if (!entry) {
             state->has_conflict = 1;
             break;
@@ -3788,7 +3788,7 @@ static void _mboxset_state_update_mboxtree(struct mboxset_state *state,
 
     /* Check state for mailbox tree conflicts. */
     if (!state->has_conflict) {
-        hash_enumerate(state->entry_by_id, _mboxset_state_conflict_cb, state);
+        hash_enumerate(&state->entry_by_id, _mboxset_state_conflict_cb, state);
     }
 
     buf_free(&buf);
@@ -3836,7 +3836,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             if (!args->mbox_id) {
                 continue;
             }
-            strarray_t *specialuses = hash_lookup(args->mbox_id, state->specialuses_by_id);
+            strarray_t *specialuses = hash_lookup(args->mbox_id, &state->specialuses_by_id);
             if (!specialuses) {
                 continue;
             }
@@ -3846,7 +3846,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
                 if (!strarray_contains(protected_uses, specialuse)) {
                     continue;
                 }
-                struct mboxset_entry *entry = hash_lookup(args->mbox_id, state->entry_by_id);
+                struct mboxset_entry *entry = hash_lookup(args->mbox_id, &state->entry_by_id);
                 if (entry->changed_parent) {
                     state->has_conflict = 1;
                     buf_printf(&conflict_desc,
@@ -3858,7 +3858,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             }
         }
         /* Gather currently used protected specialuse */
-        hash_iter *iter = hash_table_iter(state->specialuses_by_id);
+        hash_iter *iter = hash_table_iter(&state->specialuses_by_id);
         while (hash_iter_next(iter)) {
             strarray_t *specialuses = hash_iter_val(iter);
             int j;
@@ -3883,23 +3883,23 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             if (args->specialuse[0]) {
                 strarray_t *specialuses = strarray_new();
                 strarray_append(specialuses, args->specialuse);
-                hash_insert(args->creation_id, specialuses, state->specialuses_by_id);
+                hash_insert(args->creation_id, specialuses, &state->specialuses_by_id);
             }
         }
         else {
             if (args->specialuse[0]) {
                 /* _mbox_set_annots replaces any existing specialuse annotation,
                  * so emulate the same here */
-                strarray_t *specialuses = hash_lookup(args->mbox_id, state->specialuses_by_id);
+                strarray_t *specialuses = hash_lookup(args->mbox_id, &state->specialuses_by_id);
                 if (!specialuses) {
                     specialuses = strarray_new();
-                    hash_insert(args->mbox_id, specialuses, state->specialuses_by_id);
+                    hash_insert(args->mbox_id, specialuses, &state->specialuses_by_id);
                 }
                 else strarray_truncate(specialuses, 0);
                 strarray_append(specialuses, args->specialuse);
             }
             else {
-                strarray_t *specialuses = hash_lookup(args->mbox_id, state->specialuses_by_id);
+                strarray_t *specialuses = hash_lookup(args->mbox_id, &state->specialuses_by_id);
                 if (specialuses) strarray_truncate(specialuses, 0);
             }
         }
@@ -3907,12 +3907,12 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
     /* Apply destroy */
     for (i = 0; i < strarray_size(ops->del); i++) {
         const char *mbox_id = strarray_nth(ops->del, i);
-        strarray_t *specialuses = hash_lookup(mbox_id, state->specialuses_by_id);
+        strarray_t *specialuses = hash_lookup(mbox_id, &state->specialuses_by_id);
         if (specialuses) strarray_truncate(specialuses, 0);
     }
 
     /* Validate: one mailbox per specialuse, one specialuse per mailbox */
-    hash_iter *iter = hash_table_iter(state->specialuses_by_id);
+    hash_iter *iter = hash_table_iter(&state->specialuses_by_id);
     while (hash_iter_next(iter)) {
         const char* mbox_id = hash_iter_key(iter);
         strarray_t *specialuses = hash_iter_val(iter);
@@ -3957,13 +3957,13 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             strarray_split(config_getstring(IMAPOPT_SPECIALUSE_NOCHILDREN),
                 NULL, STRARRAY_TRIM);
 
-        hash_iter *iter = hash_table_iter(state->specialuses_by_id);
+        hash_iter *iter = hash_table_iter(&state->specialuses_by_id);
         while (hash_iter_next(iter)) {
             const char* mbox_id = hash_iter_key(iter);
             strarray_t *specialuses = hash_iter_val(iter);
             if (strarray_size(specialuses) &&
                     strarray_intersect(specialuses, nochildren)) {
-                if (hash_lookup(mbox_id, state->siblingnames_by_parent_id)) {
+                if (hash_lookup(mbox_id, &state->siblingnames_by_parent_id)) {
                     buf_printf(&conflict_desc, "\nMailbox %s has specialuse %s "
                             "which forbids it to have children", mbox_id,
                             strarray_nth(specialuses, 0));
@@ -3991,7 +3991,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
             struct mboxset_args *args = ptrarray_nth(ops->put, i);
             if (args->specialuse ||
                     (args->parent_id &&
-                     hash_lookup(args->mbox_id, state->specialuses_by_id))) {
+                     hash_lookup(args->mbox_id, &state->specialuses_by_id))) {
                 json_t *errfield = args->creation_id ?
                     set->super.not_created : set->super.not_updated;
                 const char *errkey = args->creation_id ?
@@ -4008,7 +4008,7 @@ static void _mboxset_state_update_specialuse(struct mboxset_state *state,
         /* Apply destroy */
         for (i = 0; i < strarray_size(ops->del); i++) {
             const char *mbox_id = strarray_nth(ops->del, i);
-            if (hash_lookup(mbox_id, state->specialuses_by_id)) {
+            if (hash_lookup(mbox_id, &state->specialuses_by_id)) {
                 json_object_set_new(set->super.not_destroyed, mbox_id,
                         json_pack("{s:s s:s}",
                             "type", "serverFail", "description", buf_cstring(&desc)));
@@ -4035,11 +4035,11 @@ static int _mboxset_state_find_specialuse_cb(const char *mboxname,
     jmap_req_t *req = state->req;
 
     if (!strcmpsafe(userid, req->accountid)) { // XXX userid or accountid?
-        const char *mbox_id = hash_lookup(mboxname, state->id_by_imapname);
+        const char *mbox_id = hash_lookup(mboxname, &state->id_by_imapname);
         if (mbox_id) {
             strarray_t *specialuses = strarray_split(buf_cstring(value), " ", STRARRAY_TRIM);
             if (specialuses) {
-                hash_insert(mbox_id, specialuses, state->specialuses_by_id);
+                hash_insert(mbox_id, specialuses, &state->specialuses_by_id);
             }
         }
     }
@@ -4055,52 +4055,46 @@ static int _mboxset_state_validate(jmap_req_t *req,
     int is_valid = 0;
 
     /* Create in-memory mailbox tree */
-    struct mboxset_state *state = xzmalloc(sizeof(struct mboxset_state));
-    state->req = req;
+    struct mboxset_state state = {
+        .req = req,
+        .id_by_imapname = HASH_TABLE_INITIALIZER,
+        .entry_by_id = HASH_TABLE_INITIALIZER,
+        .siblingnames_by_parent_id = HASH_TABLE_INITIALIZER,
+        .specialuses_by_id = HASH_TABLE_INITIALIZER,
+        .has_conflict = 0
+    };
+    construct_hash_table(&state.id_by_imapname, 0, 0);
+    construct_hash_table(&state.entry_by_id, 0, 0);
+    construct_hash_table(&state.siblingnames_by_parent_id, 0, 0);
 
-    hash_table id_by_imapname = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&id_by_imapname, 1024, 0);
-    state->id_by_imapname = &id_by_imapname;
-
-    hash_table entry_by_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&entry_by_id, 1024, 0);
-    state->entry_by_id = &entry_by_id;
-
-    hash_table siblingnames_by_parent_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&siblingnames_by_parent_id, 1024, 0);
-    state->siblingnames_by_parent_id = &siblingnames_by_parent_id;
-
-    mboxlist_usermboxtree(req->accountid, NULL, _mboxset_state_mboxlist_cb, state,
+    mboxlist_usermboxtree(req->accountid, NULL, _mboxset_state_mboxlist_cb, &state,
                           MBOXTREE_INTERMEDIATES);
-    hash_enumerate(&id_by_imapname, _mboxset_state_mkentry_cb, state);
+    hash_enumerate(&state.id_by_imapname, _mboxset_state_mkentry_cb, &state);
 
     /* Create specialuse entries */
-    hash_table specialuses_by_id = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&specialuses_by_id, 1024, 0);
-    state->specialuses_by_id = &specialuses_by_id;
+    construct_hash_table(&state.specialuses_by_id, 0, 0);
     struct buf pattern = BUF_INITIALIZER;
     buf_initmcstr(&pattern, mboxname_user_mbox(req->accountid, NULL));
     buf_putc(&pattern, '*');
     annotatemore_findall_pattern(buf_cstring(&pattern), 0, "/specialuse", 0,
-                                 _mboxset_state_find_specialuse_cb, state, 0);
+                                 _mboxset_state_find_specialuse_cb, &state, 0);
     buf_free(&pattern);
 
     /* Apply changes */
-    if (!state->has_conflict) {
-        _mboxset_state_update_mboxtree(state, set, ops);
+    if (!state.has_conflict) {
+        _mboxset_state_update_mboxtree(&state, set, ops);
     }
     /* Check mailbox roles */
-    if (!state->has_conflict) {
-        _mboxset_state_update_specialuse(state, set, ops);
+    if (!state.has_conflict) {
+        _mboxset_state_update_specialuse(&state, set, ops);
     }
-    is_valid = !state->has_conflict;
+    is_valid = !state.has_conflict;
 
     /* Clean up state */
-    free_hash_table(&entry_by_id, _mboxset_entry_free);
-    free_hash_table(&id_by_imapname, free);
-    free_hash_table(&siblingnames_by_parent_id, (void(*)(void*))strarray_free);
-    free_hash_table(&specialuses_by_id, (void(*)(void*))strarray_free);
-    free(state);
+    free_hash_table(&state.entry_by_id, _mboxset_entry_free);
+    free_hash_table(&state.id_by_imapname, free);
+    free_hash_table(&state.siblingnames_by_parent_id, (void(*)(void*))strarray_free);
+    free_hash_table(&state.specialuses_by_id, (void(*)(void*))strarray_free);
 
     return is_valid;
 }

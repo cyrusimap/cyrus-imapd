@@ -617,7 +617,7 @@ static struct header_prop *_header_parseprop(const char *s)
     static hash_table allowed_header_forms = HASH_TABLE_INITIALIZER;
     if (!hash_constructed(&allowed_header_forms)) {
         /* TODO initialize with all headers in RFC 5322 and RFC 2369 */
-        construct_hash_table(&allowed_header_forms, 32, 0);
+        construct_hash_table(&allowed_header_forms, 27, 0);
         hash_insert("bcc",
                 (void*) (HEADER_FORM_ADDRESSES|HEADER_FORM_GROUPEDADDRESSES),
                 &allowed_header_forms);
@@ -5491,8 +5491,8 @@ static int emailquery_uidsearch(jmap_req_t *req,
 
     rrock->seen_emails = hashset_new(MESSAGE_GUID_SIZE);
     if (q->want_partids) {
-        construct_hashu64_table(&rrock->partid_bynum, 1024, 0);
-        construct_hash_table(&rrock->partnum_byid, 1024, 0);
+        construct_hashu64_table(&rrock->partid_bynum, 0, 0);
+        construct_hash_table(&rrock->partnum_byid, 0, 0);
         rrock->want_partids = 1;
     }
 
@@ -6460,11 +6460,9 @@ static void _email_querychanges_collapsed(jmap_req_t *req,
     if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
 
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
-    memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
 
     hashu64_table touched_cids = HASHU64_TABLE_INITIALIZER;
-    memset(&touched_cids, 0, sizeof(hashu64_table));
     construct_hashu64_table(&touched_cids, mdcount + 1, 0);
 
     /* touched_ids contains values for each email_id:
@@ -6767,7 +6765,6 @@ static void _email_querychanges_uncollapsed(jmap_req_t *req,
     if (search.sort_savedate) savedates = emailquery_savedates(msgdata);
 
     hash_table touched_ids = HASH_TABLE_INITIALIZER;
-    memset(&touched_ids, 0, sizeof(hash_table));
     construct_hash_table(&touched_ids, mdcount + 1, 0);
 
     /* touched_ids contains values for each email_id:
@@ -7017,7 +7014,6 @@ static void _email_changes(jmap_req_t *req, struct jmap_changes *changes,
     size_t prev_modseq_mark[3] = {0};
     int i;
     hash_table seen_ids = HASH_TABLE_INITIALIZER;
-    memset(&seen_ids, 0, sizeof(hash_table));
     construct_hash_table(&seen_ids, msgdata->count + 1, 0);
 
     for (i = 0 ; i < msgdata->count; i++) {
@@ -8186,11 +8182,13 @@ static hash_table _email_parse_default_props = HASH_TABLE_INITIALIZER;
 
 static void _email_getargs_fini(struct email_getargs *args)
 {
-    if (args->bodyprops && args->bodyprops != &_email_get_default_bodyprops) {
-        free_hash_table(args->bodyprops, NULL);
-        free(args->bodyprops);
+    if (args->bodyprops) {
+        if (args->bodyprops == &_email_get_default_bodyprops) {
+            args->bodyprops = NULL;
+        } else {
+            release_hash_table(&args->bodyprops, NULL);
+        }
     }
-    args->bodyprops = NULL;
 
     struct header_prop *prop;
     while ((prop = ptrarray_pop(&args->want_headers))) {
@@ -8234,7 +8232,7 @@ static void _email_keywords_init(struct email_keywords *keywords,
                                  struct seen *seendb,
                                  hash_table *seenseq_by_mbox_id)
 {
-    construct_hash_table(&keywords->counts, 64, 0);
+    construct_hash_table(&keywords->counts, 0, 0);
     keywords->userid = userid;
     keywords->seendb = seendb;
     keywords->seenseq_by_mbox_id = seenseq_by_mbox_id;
@@ -8396,7 +8394,7 @@ static int _email_get_keywords(jmap_req_t *req,
         if (r) return r;
     }
     if (!hash_constructed(&ctx->seenseq_by_mbox_id)) {
-        construct_hash_table(&ctx->seenseq_by_mbox_id, 128, 0);
+        construct_hash_table(&ctx->seenseq_by_mbox_id, 0, 0);
     }
     /* Gather keywords for all message records */
     struct email_get_keywords_rock rock = { req, _EMAIL_KEYWORDS_INITIALIZER };
@@ -8465,8 +8463,8 @@ static void _email_parse_wantheaders(json_t *jprops,
 static void _email_init_default_props(hash_table *props)
 {
     /* Initialize process-owned default property list */
-    construct_hash_table(props, 32, 0);
     if (props == &_email_get_default_bodyprops) {
+        construct_hash_table(props, 10, 0);
         hash_insert("blobId",      (void*)1, props);
         hash_insert("charset",     (void*)1, props);
         hash_insert("cid",         (void*)1, props);
@@ -8479,6 +8477,7 @@ static void _email_init_default_props(hash_table *props)
         hash_insert("type",        (void*)1, props);
     }
     else {
+        construct_hash_table(props, 17, 0);
         hash_insert("attachments",   (void*)1, props);
         hash_insert("bcc",           (void*)1, props);
         hash_insert("bodyValues",    (void*)1, props);
@@ -8539,8 +8538,7 @@ static int _email_getargs_parse(jmap_req_t *req,
             size_t i;
             json_t *val;
 
-            args->bodyprops = xzmalloc(sizeof(hash_table));
-            construct_hash_table(args->bodyprops, json_array_size(arg) + 1, 0);
+            args->bodyprops = malloc_hash_table(json_array_size(arg) + 1);
             json_array_foreach(arg, i, val) {
                 const char *name = json_string_value(val);
                 if (strncmp(name, "header:", 7)
@@ -8612,8 +8610,7 @@ static void _cyrusmsg_free(struct cyrusmsg **msgptr)
     buf_free(&msg->_mymime);
     json_decref(msg->imagesize_by_partid);
     if (msg->_headers_by_part_id) {
-        free_hash_table(msg->_headers_by_part_id, NULL);
-        free(msg->_headers_by_part_id);
+        release_hash_table(&msg->_headers_by_part_id, NULL);
     }
     struct headers *hdrs;
     while ((hdrs = ptrarray_pop(&msg->_headers_mempool))) {
@@ -8767,8 +8764,7 @@ static int _cyrusmsg_get_headers(struct cyrusmsg *msg,
             if (*headersptr) return 0;
         }
         else {
-            msg->_headers_by_part_id = xzmalloc(sizeof(hash_table));
-            construct_hash_table(msg->_headers_by_part_id, 64, 0);
+            msg->_headers_by_part_id = malloc_hash_table(0);
         }
     }
 
@@ -9870,7 +9866,7 @@ static int _email_get_bodies(jmap_req_t *req,
 
             if (is_icsbody && hashset_add(icsguids, &part->content_guid)) {
                 if (!hash_constructed(&icsbody_by_partid)) {
-                    construct_hash_table(&icsbody_by_partid, 32, 0);
+                    construct_hash_table(&icsbody_by_partid, 0, 0);
                 }
                 hash_insert(part->part_id, part, &icsbody_by_partid);
             }
@@ -10300,8 +10296,7 @@ static int _email_parseargs_parse(jmap_req_t *req,
         if (json_is_array(arg)) {
             size_t i;
             json_t *val;
-            hash_table *props = xzmalloc(sizeof(hash_table));
-            construct_hash_table(props, json_array_size(arg) + 1, 0);
+            hash_table *props = malloc_hash_table(json_array_size(arg) + 1);
             json_array_foreach(arg, i, val) {
                 const char *s = json_string_value(val);
                 if (!s) {
@@ -10474,8 +10469,7 @@ done:
     _email_getargs_fini(&getargs);
     jmap_parser_fini(&parser);
     jmap_parse_fini(&parse);
-    free_hash_table(parseargs.props, NULL);
-    free(parseargs.props);
+    release_hash_table(&parseargs.props, NULL);
     return 0;
 }
 
@@ -14803,8 +14797,7 @@ static void _email_bulkupdate_check_readonly(struct email_bulkupdate *bulk,
 
         json_decref(cur);
         msgrecord_unref(&mr);
-        free_hash_table(args.props, NULL);
-        free(args.props);
+        release_hash_table(&args.props, NULL);
         _email_getargs_fini(&args);
     }
 }
@@ -15967,15 +15960,16 @@ gotrecord:
         /* Parse email */
         json_t *email = NULL;
         struct email_getargs getargs = _EMAIL_GET_ARGS_INITIALIZER;
-        getargs.props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(getargs.props, 1, 0);
+        struct hash_table props = HASH_TABLE_INITIALIZER;
 
+        getargs.props = &props;
+        construct_hash_table(&props, 1, 1);
         hash_insert("hasAttachment", (void*)1, getargs.props);
+
         _email_from_buf(req, &getargs, &content, NULL, &email);
         has_attachment = json_boolean_value(json_object_get(email, "hasAttachment"));
 
-        free_hash_table(getargs.props, NULL);
-        free(getargs.props);
+        free_hash_table(&props, NULL);
         getargs.props = NULL;
         _email_getargs_fini(&getargs);
         json_decref(email);

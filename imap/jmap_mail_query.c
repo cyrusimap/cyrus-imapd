@@ -227,7 +227,7 @@ HIDDEN int jmap_email_contactfilter_from_filtercondition(json_t *filter,
     /* ensure we have preconditions for lookups */
     if (!hash_constructed(&cfilter->contactgroups)) {
         /* Initialize groups lookup table */
-        construct_hash_table(&cfilter->contactgroups, 32, 0);
+        construct_hash_table(&cfilter->contactgroups, sizeof(contactfilters) / sizeof(contactfilters[0]) - 1, 0);
     }
 
     /* Open CardDAV db for accountid */

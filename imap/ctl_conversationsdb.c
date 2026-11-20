@@ -1139,8 +1139,11 @@ int main(int argc, char **argv)
                 usage(argv[0]);
             mode = ZERO;
             if (!zerocids) {
-                zerocids = xzmalloc(sizeof(hashu64_table));
-                construct_hashu64_table(zerocids, 256, 0);
+                /* If these 3 lines need to repeat elsewhere in the code,
+                 * extract them as malloc_hashu64_table() */
+                zerocids = xmalloc(sizeof(*zerocids));
+                *zerocids = HASHU64_TABLE_INITIALIZER;
+                construct_hashu64_table(zerocids, 0, 0);
             }
             strarray_t *ids = strarray_split(optarg, ",", 0);
             int i;

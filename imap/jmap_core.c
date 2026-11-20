@@ -235,8 +235,7 @@ static int jmap_userstate_get(jmap_req_t *req)
                 json_t *val;
                 size_t i;
 
-                get.props = xzmalloc(sizeof(hash_table));
-                construct_hash_table(get.props, json_array_size(arg) + 1, 0);
+                get.props = malloc_hash_table(json_array_size(arg) + 1);
 
                 json_array_foreach(arg, i, val) {
                     const char *name = json_string_value(val);

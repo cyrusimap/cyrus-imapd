@@ -1475,10 +1475,10 @@ HIDDEN void xml_add_shareaccess(struct propfind_ctx *fctx,
     const int rights = httpd_myrights(httpd_authstate, fctx->mbentry);
 
     if (rights & DACL_ADMIN) {
-        hash_table table;
+        hash_table table = HASH_TABLE_INITIALIZER;
         struct invite_rock irock = { fctx->req_tgt->userid, 0, NULL, NULL, 0 };
 
-        construct_hash_table(&table, 10, 1);
+        construct_hash_table(&table, 0, 1);
         parse_acl(&table, fctx->mbentry->acl);
         hash_enumerate(&table, &xml_add_sharee, &irock);
 
@@ -1550,10 +1550,9 @@ HIDDEN int propfind_invite(const xmlChar *name, xmlNsPtr ns,
                         &propstat[PROPSTAT_OK], name, ns, NULL, 0);
     irock.node = node;
 
-    hash_table table;
+    hash_table table = HASH_TABLE_INITIALIZER;
 
-    construct_hash_table(&table, 10, 1);
-
+    construct_hash_table(&table, 0, 1);
     parse_acl(&table, fctx->mbentry->acl);
     hash_enumerate(&table, &xml_add_sharee, &irock);
 

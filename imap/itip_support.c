@@ -405,7 +405,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
     struct hash_table rdate_table = HASH_TABLE_INITIALIZER;
 
     /* Add each override component of current object to hash table for lookup */
-    construct_hash_table(&override_table, 10, 1);
+    construct_hash_table(&override_table, 0, 0);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
     do {
@@ -418,7 +418,7 @@ static const char *deliver_merge_reply(icalcomponent *ical,  // current iCalenda
             /* Master component - get recurrence info */
             master = comp;
 
-            construct_hash_table(&rdate_table, 10, 1);
+            construct_hash_table(&rdate_table, 0, 0);
 
             for (prop = icalcomponent_get_first_property(master,
                                                          ICAL_ANY_PROPERTY);
@@ -633,7 +633,7 @@ static int deliver_merge_request(const char *attendee,
     ptrarray_t free_icalcomps = PTRARRAY_INITIALIZER;
 
     /* Add each VTIMEZONE of current object to hash table for comparison */
-    tz_table = construct_hash_table(&comp_table, 10, 1);
+    tz_table = construct_hash_table(&comp_table, 0, 1);
     for (tz = icalcomponent_get_first_component(ical,
                                                 ICAL_VTIMEZONE_COMPONENT);
          tz;
@@ -671,7 +671,7 @@ static int deliver_merge_request(const char *attendee,
     free_hash_table(tz_table, NULL);
 
     /* Add each override component of current object to hash table */
-    override_table = construct_hash_table(&comp_table, 10, 1);
+    override_table = construct_hash_table(&comp_table, 0, 0);
     comp = icalcomponent_get_first_real_component(ical);
     if (comp) {
         kind = icalcomponent_isa(comp);
@@ -889,7 +889,7 @@ static int deliver_merge_cancel(icalcomponent *ical,    // current iCalendar
     size_t num_canceled = 0;
 
     /* Add each override component of current object to hash table */
-    construct_hash_table(&override_table, 10, 1);
+    construct_hash_table(&override_table, 0, 0);
     comp = icalcomponent_get_first_real_component(ical);
     kind = icalcomponent_isa(comp);
 
