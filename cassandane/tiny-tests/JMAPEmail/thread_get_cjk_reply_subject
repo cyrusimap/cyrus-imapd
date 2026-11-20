@@ -1,0 +1,50 @@
+#!perl
+use Cassandane::Tiny;
+use utf8;
+
+sub test_thread_get_cjk_reply_subject ($self) {
+    my $jmap = $self->{jmap};
+
+    $self->make_message('foo', messageid => 'msg1@example.com');
+
+    my %replies = (
+        # 回复：foo, with a full-width colon
+        '=?utf-8?b?5Zue5aSN77yaZm9v?=' => '回复：foo',
+        # 转发：回复：　foo, with an ideographic space
+        '=?utf-8?b?6L2s5Y+R77ya5Zue5aSN77ya44CAZm9v?=' => '转发：回复：　foo',
+        'RE : foo' => 'RE : foo',
+    );
+
+    my $n = 2;
+    for my $subject (sort keys %replies) {
+        $self->make_message(
+            $subject,
+            messageid     => 'msg' . $n++ . '@example.com',
+            extra_headers => [ [ 'in-reply-to', '<msg1@example.com>' ] ],
+        );
+    }
+
+    my $res = $jmap->CallMethods([
+        [ 'Email/query', {}, 'R1' ],
+        [
+            'Email/get',
+            {
+                '#ids' => {
+                    resultOf => 'R1',
+                    name     => 'Email/query',
+                    path     => '/ids'
+                },
+                properties => [ 'subject', 'threadId' ],
+            },
+            'R2'
+        ],
+    ]);
+
+    my %got = map { $_->{subject} => $_->{threadId} } $res->[1][1]{list}->@*;
+    my $threadId = $got{foo};
+    $self->assert_not_null($threadId);
+    $self->assert_cmp_deeply(
+        { foo => $threadId, map { $_ => $threadId } values %replies },
+        \%got
+    );
+}

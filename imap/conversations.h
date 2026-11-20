@@ -44,7 +44,8 @@ struct mailbox;
 // 0: original version - no version field in record
 // 1: counts messages per folder and GUID, not UID
 // 2: NFC-normalizes conversation subject
-#define CONVERSATIONS_RECORD_VERSION 2
+// 3: NFKC-normalizes conversation subject, strips prefixes like "RE :"
+#define CONVERSATIONS_RECORD_VERSION 3
 
 #define CONV_ISDIRTY     (1<<0)
 #define CONV_WITHFOLDERS (1<<1)
@@ -255,7 +256,13 @@ extern int conversations_get_msgid(struct conversations_state *state,
 extern conv_folder_t *conversation_get_folder(conversation_t *conv,
                                               int number, int create_flag);
 
-extern void conversation_normalise_subject(struct buf *);
+/**
+ * Normalise a subject for matching a message to the conversation of the
+ * messages it refers to.
+ *
+ * @param s the subject, decoded to UTF-8; normalised in place
+ */
+extern void conversation_normalise_subject(struct buf *s);
 
 /* G record */
 extern int conversations_guid_foreach(struct conversations_state *state,

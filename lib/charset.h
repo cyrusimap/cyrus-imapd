@@ -82,6 +82,15 @@ extern char *charset_utf8_to_searchform(const char *s, int flags);
  * Also see http://www.unicode.org/reports/tr15/ and RFC 5198 */
 extern char *charset_utf8_normalize(const char *s);
 
+/**
+ * Normalize a UTF-8 string to Unicode NFKC.
+ *
+ * @param s the zero-terminated UTF-8 string
+ * @return the normalized string, to be freed by the caller, or NULL
+ *         if s is not valid UTF-8
+ */
+extern char *charset_utf8_normalize_nfkc(const char *s);
+
 extern charset_t charset_lookupname(const char *name);
 extern charset_t charset_lookupnumid(int id);
 extern void charset_free(charset_t *charset);
