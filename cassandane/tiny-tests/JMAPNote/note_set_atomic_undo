@@ -1,0 +1,46 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_note_set_atomic_undo
+    :JMAPExtensions :NoAltNameSpace :NoStartInstances
+    ($self)
+{
+    $self->config_set(debug_jmap_atomic_failstep => 2);
+    $self->_start_instances();
+
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Note/set', {
+            create => {
+                old => { title => 'Old', body => 'old', isHTML => JSON::false },
+            },
+        } ],
+    ]);
+    my $idOld = $res->single_sentence('Note/set')->arguments->{created}{old}{id};
+    $self->assert_not_null($idOld);
+
+    xlog $self, "a write failure in an atomic method undoes its earlier writes";
+    $res = $jmap->request([
+        [ 'Note/set', {
+            atomic => JSON::true,
+            create => {
+                n1 => { title => 'N1', body => 'n1', isHTML => JSON::false },
+                n2 => { title => 'N2', body => 'n2', isHTML => JSON::false },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        superhashof({ type => 'serverFail' }),
+        $res->single_sentence('error')->arguments,
+    );
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=jmap\.note\.set\.failed});
+
+    $res = $jmap->request([ [ 'Note/get', { properties => ['title'] } ] ]);
+    $self->assert_cmp_deeply(
+        [ { id => $idOld, title => 'Old' } ],
+        $res->single_sentence('Note/get')->arguments->{list},
+    );
+}

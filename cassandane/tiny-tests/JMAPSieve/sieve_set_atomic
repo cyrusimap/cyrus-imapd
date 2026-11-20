@@ -1,0 +1,166 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_atomic
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:sieve');
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+            d => { data => [ { 'data:asText' => "discard;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', { create => {
+            a => { name => 'A', blobId => '#k' },
+            b => { name => 'B', blobId => '#k' },
+            c => { name => 'C', blobId => '#d' },
+            d => { name => 'D', blobId => '#k' },
+        } } ],
+    ]);
+    my $created = $res->sentence_named('SieveScript/set')->arguments->{created};
+    my ($idA, $idB, $idC, $idD) = map { $created->{$_}{id} } qw(a b c d);
+    $self->assert_not_null($_) for ($idA, $idB, $idC, $idD);
+
+    xlog $self, "rename A into the name of B, destroyed in the same call";
+    $res = $jmap->request([
+        [ 'SieveScript/set', {
+            atomic                  => JSON::true,
+            update                  => { $idA => { name => 'B' } },
+            destroy                 => [ $idB ],
+            onSuccessActivateScript => $idA,
+        } ],
+    ]);
+    my $set = $res->single_sentence('SieveScript/set')->arguments;
+    $self->assert_cmp_deeply(
+        {
+            updated   => { $idA => { isActive => JSON::true } },
+            destroyed => [ $idB ],
+        },
+        { updated => $set->{updated}, destroyed => $set->{destroyed} },
+    );
+
+    $res = $jmap->request([
+        [ 'SieveScript/get', { properties => [ 'name', 'isActive' ] } ],
+    ]);
+    my $get = $res->single_sentence('SieveScript/get')->arguments;
+    $self->assert_cmp_deeply(
+        bag(
+            { id => $idA, name => 'B', isActive => JSON::true },
+            { id => $idC, name => 'C', isActive => JSON::false },
+            { id => $idD, name => 'D', isActive => JSON::false },
+        ),
+        $get->{list},
+    );
+    my %blobIds = map { $_->{id} => $_->{blobId} } @{
+        $jmap->request([ [ 'SieveScript/get', {} ] ])
+             ->single_sentence('SieveScript/get')->arguments->{list}
+    };
+
+    my $sievedir = $self->{instance}->get_sieve_script_dir('cassandane');
+    my $check = sub ($names, $active) {
+        my $res = $jmap->request([ [ 'SieveScript/get', {} ] ]);
+        my $get = $res->single_sentence('SieveScript/get')->arguments;
+        $self->assert_cmp_deeply(
+            bag(map {
+                +{
+                    id       => $_,
+                    name     => $names->{$_},
+                    isActive => $_ eq $active ? JSON::true : JSON::false,
+                    blobId   => $blobIds{$_},
+                }
+            } keys %$names),
+            $get->{list},
+        );
+        $self->assert_cmp_deeply(
+            [ sort map {
+                qq{"$names->{$_}"} . ($_ eq $active ? ' ACTIVE' : '')
+            } keys %$names ],
+            $self->managesieve_listscripts(),
+        );
+        $self->assert_str_equals("$names->{$active}.bc",
+                                 readlink("$sievedir/defaultbc"));
+        $self->assert_cmp_deeply(
+            [ sort map { "$sievedir/$names->{$_}.bc" } keys %$names ],
+            [ sort grep { !m{/defaultbc$} } glob("$sievedir/* $sievedir/.*.bc") ],
+        );
+        return $get->{state};
+    };
+
+    xlog $self, "two scripts swap names";
+    $res = $jmap->request([
+        [ 'SieveScript/set', {
+            atomic => JSON::true,
+            update => {
+                $idA => { name => 'C' },
+                $idC => { name => 'B' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $idA => undef, $idC => undef },
+        $res->single_sentence('SieveScript/set')->arguments->{updated},
+    );
+    $check->({ $idA => 'C', $idC => 'B', $idD => 'D' }, $idA);
+
+    xlog $self, "a chain of renames moves each name on";
+    $res = $jmap->request([
+        [ 'SieveScript/set', {
+            atomic => JSON::true,
+            update => {
+                $idA => { name => 'D' },
+                $idD => { name => 'E' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { $idA => undef, $idD => undef },
+        $res->single_sentence('SieveScript/set')->arguments->{updated},
+    );
+    my $state = $check->({ $idA => 'D', $idC => 'B', $idD => 'E' }, $idA);
+
+    xlog $self, "two scripts renamed to one name fail the whole method";
+    $res = $jmap->request([
+        [ 'SieveScript/set', {
+            atomic => JSON::true,
+            update => {
+                $idC => { name => 'Z' },
+                $idD => { name => 'Z' },
+            },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => {
+                $idC => { type => 'alreadyExists' },
+                $idD => { type => 'alreadyExists' },
+            },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "a rename onto a name that stays put fails";
+    $res = $jmap->request([
+        [ 'SieveScript/set', {
+            atomic => JSON::true,
+            update => { $idC => { name => 'D' } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        {
+            type       => 'atomicFailure',
+            notUpdated => { $idC => { type => 'alreadyExists' } },
+        },
+        $res->single_sentence('error')->arguments,
+    );
+
+    $self->assert_str_equals(
+        $state,
+        $check->({ $idA => 'D', $idC => 'B', $idD => 'E' }, $idA),
+    );
+}

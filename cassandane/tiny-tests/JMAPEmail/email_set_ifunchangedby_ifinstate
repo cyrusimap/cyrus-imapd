@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+# ifInState is checked before ifUnchangedBy, so when both fail the error
+# doesn't name the failed preconditions.
+sub test_email_set_ifunchangedby_ifinstate
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    $jmap->AddUsing('urn:ietf:params:jmap:conditional');
+
+    my $inbox = $user->mailboxes->inbox;
+    my $id = $user->emails->create({
+        mailboxIds    => { $inbox->id => JSON::true },
+        subject       => 'a',
+        bodyStructure => { type => 'text/plain', partId => 'p' },
+        bodyValues    => { p => { value => 'body' } },
+    })->id;
+
+    my $res = $jmap->request([
+        [ 'Email/get', { ids => [], properties => ['id'] } ],
+    ]);
+    my $state = $res->single_sentence('Email/get')->arguments->{state};
+
+    xlog $self, "a current ifInState lets a failed precondition be named";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            ifInState     => $state,
+            ifUnchangedBy => { $id => { 'keywords/$seen' => JSON::true } },
+            update        => { $id => { 'keywords/$flagged' => JSON::true } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch', failed => [ $id ] },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "a stale ifInState fails first";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            update => { $id => { 'keywords/$answered' => JSON::true } },
+        } ],
+    ]);
+    $res->assert_single_successful_set('Email/set');
+    $res = $jmap->request([
+        [ 'Email/set', {
+            ifInState     => $state,
+            ifUnchangedBy => { $id => { 'keywords/$seen' => JSON::true } },
+            update        => { $id => { 'keywords/$flagged' => JSON::true } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch' },
+        $res->single_sentence('error')->arguments,
+    );
+
+    xlog $self, "a stale ifInState fails a satisfied precondition too";
+    $res = $jmap->request([
+        [ 'Email/set', {
+            ifInState     => $state,
+            ifUnchangedBy => { $id => { 'keywords/$answered' => JSON::true } },
+            update        => { $id => { 'keywords/$flagged' => JSON::true } },
+        } ],
+    ]);
+    $self->assert_cmp_deeply(
+        { type => 'stateMismatch' },
+        $res->single_sentence('error')->arguments,
+    );
+}

@@ -982,6 +982,22 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-conditional
+
+    JMAP Conditional Set (-03).  "ifUnchangedBy" is supported on every
+    Foo/set.  A precondition on a property Foo/get withholds from the user
+    (a sharee's view of a non-public CalendarEvent, the counts of a Mailbox
+    the user may only look up) fails with "forbidden".
+
+    "atomic" is supported on CalendarEventNotification/set,
+    ParticipantIdentity/set, Principal/set, ShareNotification/set,
+    SieveScript/set, VacationResponse/set and the Cyrus Note/set, each of
+    which commits as one mailbox transaction.  Every other Foo/set returns
+    "cannotApplyAtomically" for "atomic": true, before evaluating
+    "ifUnchangedBy".  An unexpected failure while applying returns
+    "serverFail", or "serverPartialFail" if putting back what was written
+    outside the transaction fails too.
+
 draft-ietf-mailmaint-imap-objectid-bis
 
     IMAP Extension for Object Identifiers (OBJECTID+)

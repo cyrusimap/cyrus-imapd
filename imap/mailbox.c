@@ -2070,6 +2070,10 @@ static int _store_change(struct mailbox *mailbox, struct index_record *record, i
 
     /* finally always copy the data into place */
     change->record = *record;
+    /* The parsed cache can point at a shared buffer, such as
+     * message_write_cache's, which the next message parsed overwrites.
+     * Readers reparse it from the cache file, which already holds it. */
+    memset(&change->record.crec, 0, sizeof(change->record.crec));
     /* rewrite might set extra flags, keep all of them */
     change->flags |= flags;
 
@@ -4114,6 +4118,18 @@ static int mailbox_update_sieve(struct mailbox *mailbox,
                 xsyslog_ev(LOG_ERR, "sieve.script.write.failed",
                            lf_mailbox(mailbox),
                            lf_s("sieve.script", name));
+                r = IMAP_IOERROR;
+                goto done;
+            }
+        }
+
+        /* a rename stores a new record; the old name's bytecode goes */
+        if (sdata->alive && sdata->imap_uid && strcmpsafe(sdata->name, name)) {
+            r = sievedir_delete_script(mailbox->sievedir, sdata->name);
+            if (r) {
+                xsyslog_ev(LOG_ERR, "sieve.script.write.failed",
+                           lf_mailbox(mailbox),
+                           lf_s("sieve.script", sdata->name));
                 r = IMAP_IOERROR;
                 goto done;
             }
