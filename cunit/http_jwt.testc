@@ -6,7 +6,8 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/pem.h>
-#include <sasl/sasl.h>
+
+#include "libsasl_min/sasl.h"
 
 #include "charset.h"
 #include "util.h"

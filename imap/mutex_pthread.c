@@ -5,7 +5,8 @@
 #include <config.h>
 
 #include <pthread.h>
-#include <sasl/sasl.h>
+
+#include "libsasl_min/sasl.h"
 
 #include "xmalloc.h"
 

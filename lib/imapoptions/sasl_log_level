@@ -1,0 +1,25 @@
+Name: sasl_log_level
+Type: INT
+Default-Value: 1
+Last-Modified: UNRELEASED
+For-Documentation-Only: 1
+SASL-Option: log_level
+
+Specify how verbosely SASL operations should log:
+
+0 (SASL_LOG_NONE)
+  don't log anything
+1 (SASL_LOG_ERR)
+  log unusual errors (default)
+2 (SASL_LOG_FAIL)
+  log all authentication failures
+3 (SASL_LOG_WARN)
+  log non-fatal warnings
+4 (SASL_LOG_NOTE)
+  more verbose than LOG_WARN
+5 (SASL_LOG_DEBUG)
+  more verbose than LOG_NOTE
+6 (SASL_LOG_TRACE)
+  traces of internal protocols
+7 (SASL_LOG_PASS)
+  traces of internal protocols, including passwords

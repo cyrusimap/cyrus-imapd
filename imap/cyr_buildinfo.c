@@ -118,6 +118,11 @@ static json_t *buildinfo()
     /* Build dependencies */
     json_object_set_new(dependency, "openssl", json_true());
     json_object_set_new(dependency, "openssl_alpn", json_true());
+#ifdef USE_INTERNAL_SASL
+    json_object_set_new(dependency, "libsasl2", json_false());
+#else
+    json_object_set_new(dependency, "libsasl2", json_true());
+#endif
 #ifdef HAVE_LDAP
     json_object_set_new(dependency, "ldap", json_true());
 #else

@@ -4,7 +4,7 @@
 
 #include <config.h>
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
 
 EXPORTED void *cyrus_mutex_alloc(void)
 {

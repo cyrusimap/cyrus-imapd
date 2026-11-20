@@ -7,13 +7,36 @@ use IO::Handle;
 use IO::Socket::UNIX;
 use Sys::Syslog qw(:standard :macros);
 
+sub validate_creds
+{
+    my ($LoginName, $Password, $Service, $Realm) = @_;
+
+    # Using this as an example for how to build a custom saslauthd? This is
+    # where you validate the supplied credentials against your auth system.
+
+    # For testing, accept any credentials unless password is the string 'bad'
+    if ($Password eq 'bad') {
+        return undef;
+    }
+    else {
+        return 1;
+    }
+}
+
 sub get_counted_string
 {
-    my $sock = shift;
+    my ($sock) = @_;
+
     my $data;
-    $sock->read($data, 2);
+
+    # uint16_t size, in "network" (big-endian) order
+    my $bytes = $sock->read($data, 2);
+    die "short read for length\n" if $bytes < 2;
     my $size = unpack('n', $data);
-    $sock->read($data, $size);
+
+    # size bytes of ASCII string data
+    $bytes = $sock->read($data, $size);
+    die "short read for string\n" if $bytes < $size;
     return unpack("A$size", $data);
 }
 
@@ -63,20 +86,27 @@ if ($ENV{CYRUS_ISDAEMON} && $status_fd) {
 }
 
 while (my $client = $sock->accept()) {
-    my $LoginName = get_counted_string($client);
-    my $Password = get_counted_string($client);
-    my $Service = lc get_counted_string($client);
-    my $Realm = get_counted_string($client);
-    syslog LOG_INFO, "connection: $LoginName $Password $Service $Realm";
+    my ($LoginName, $Password, $Service, $Realm);
 
-    # XXX - custom logic?
-
-    # OK :)
-    if ($Password eq 'bad') {
-        $client->print(pack("nA3", 2, "NO\000"));
+    eval {
+        $LoginName = get_counted_string($client);
+        $Password = get_counted_string($client);
+        $Service = lc get_counted_string($client);
+        $Realm = get_counted_string($client);
+    };
+    if ($@) {
+        syslog LOG_INFO, "bad client: $@";
+        # don't respond
     }
     else {
-        $client->print(pack("nA3", 2, "OK\000"));
+        syslog LOG_INFO, "connection: $LoginName $Password $Service $Realm";
+
+        if (validate_creds($LoginName, $Password, $Service, $Realm)) {
+            $client->print(pack("nA3", 2, "OK\000"));
+        }
+        else {
+            $client->print(pack("nA3", 2, "NO\000"));
+        }
     }
     $client->close();
 
