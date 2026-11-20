@@ -46,6 +46,7 @@
 
 #include "caldav_alarm.h"
 #include "dav_util.h"
+#include "jmap_util.h"
 
 #define CAL_TZ_ANNOT  DAV_ANNOT_NS "<" XML_NS_CALDAV ">calendar-timezone"
 
@@ -234,6 +235,11 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
 static int annotation_set_fuzzyalways(annotate_state_t *state,
                                         struct annotate_entry_list *entry,
                                         int maywrite);
+static void annotation_get_accountid(annotate_state_t *state,
+                                     struct annotate_entry_list *entry);
+static int annotation_set_accountid(annotate_state_t *state,
+                                    struct annotate_entry_list *entry,
+                                    int maywrite);
 static int annotation_set_specialuse(annotate_state_t *state,
                                      struct annotate_entry_list *entry,
                                      int maywrite);
@@ -2335,6 +2341,16 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
         NULL,
         NULL
     },{
+        IMAP_ANNOT_NS "accountid",
+        ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+        ATTRIB_VALUE_SHARED,
+        0,
+        annotation_get_accountid,
+        annotation_set_accountid,
+        NULL,
+        NULL
+    },{
         IMAP_ANNOT_NS "annotsize",
         ATTRIB_TYPE_STRING,
         BACKEND_ONLY,
@@ -3764,6 +3780,81 @@ static int annotation_set_fuzzyalways(annotate_state_t *state,
     }
 
     return annotation_set_todb(state, entry, maywrite);
+}
+
+/* An INBOX's accountid lives in its mbentry, beside the U record that
+ * maps it back, so the annotation only reads and writes that */
+static void annotation_get_accountid(annotate_state_t *state,
+                                     struct annotate_entry_list *entry)
+{
+    struct buf value = BUF_INITIALIZER;
+
+    assert(state->mailbox);
+
+    const mbentry_t *mbentry = mailbox_mbentry(state->mailbox);
+    if (mbentry->accountid) buf_setcstr(&value, mbentry->accountid);
+
+    output_entryatt(state, entry->name, "", &value);
+    buf_free(&value);
+}
+
+/* Set only by an admin and only on an INBOX, and unique among INBOXes */
+static int annotation_set_accountid(annotate_state_t *state,
+                                    struct annotate_entry_list *entry,
+                                    int maywrite)
+{
+    struct mailbox *mailbox = state->mailbox;
+    const char *value = NULL;
+    mbentry_t *holder = NULL;
+    int r = 0;
+
+    assert(mailbox);
+    const mbentry_t *mbentry = mailbox_mbentry(mailbox);
+
+    /* ACL_ADMIN in extra_rights would let an INBOX's owner set it */
+    if (!state->isadmin) {
+        return IMAP_PERMISSION_DENIED;
+    }
+    if (!mboxname_isusermailbox(mailbox_name(mailbox), /*isinbox*/1)) {
+        return IMAP_PERMISSION_DENIED;
+    }
+    if (buf_len(&entry->shared)) {
+        value = buf_cstring(&entry->shared);
+        if (!jmap_is_valid_id(value)) {
+            return IMAP_ANNOTATION_BADVALUE;
+        }
+    }
+
+    if (!strcmpnull(mbentry->accountid, value)) {
+        return 0;
+    }
+    if (!maywrite) return IMAP_PERMISSION_DENIED;
+
+    if (value && !mboxlist_lookup_by_accountid(value, &holder)) {
+        bool taken = strcmpsafe(holder->uniqueid, mailbox_uniqueid(mailbox));
+        mboxlist_entry_free(&holder);
+        if (taken) return IMAP_ANNOTATION_BADVALUE;
+    }
+
+    mbentry_t *copy = mboxlist_entry_copy(mbentry);
+    free(copy->accountid);
+    copy->accountid = xstrdupnull(value);
+
+    /* bump the modseq so that replication sends the mailbox */
+    if (!state->silent) {
+        copy->foldermodseq = mailbox_modseq_dirty(mailbox);
+    }
+
+    /* mupdate doesn't track it */
+    r = mboxlist_update(copy, /*localonly*/1);
+    if (!r) {
+        free(mailbox->mbentry->accountid);
+        mailbox->mbentry->accountid = xstrdupnull(value);
+        mailbox->mbentry->foldermodseq = copy->foldermodseq;
+    }
+    mboxlist_entry_free(&copy);
+
+    return r;
 }
 
 EXPORTED int specialuse_check_location(const char *mboxname)

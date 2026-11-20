@@ -175,6 +175,14 @@ extern json_t *jmap_header_as_groupedaddresses(const char *raw);
 extern json_t *jmap_emailaddresses_from_addr(struct address *addr,
                                              enum header_form form);
 
+/** The most octets an Id may have, per RFC 8620 section 1.2 */
+#define JMAP_MAX_ID_LEN 255
+
+/**
+ * Is @p id a valid JMAP Id: 1 to JMAP_MAX_ID_LEN characters from A-Z,
+ * a-z, 0-9, "-" and "_"?  Stops reading at the first character past the
+ * limit, so a long string costs no more than that.
+ */
 extern int jmap_is_valid_id(const char *id);
 
 #define JMAP_BLOBID_SIZE 42
@@ -209,8 +217,17 @@ extern void jmap_set_mailboxid(struct conversations_state *cstate,
 #define OBJECTID_SHARED_ACCOUNTID "anyone"
 
 /**
- * Fill the OBJECTID+ ACCOUNTID of a mailbox: its owner's userid, or
- * OBJECTID_SHARED_ACCOUNTID for a shared mailbox.
+ * Fill a user's OBJECTID+ ACCOUNTID: their INBOX's accountid if an admin
+ * has set one, else the userid.
+ *
+ * @param userid     the user, or NULL for OBJECTID_SHARED_ACCOUNTID
+ * @param accountid  receives the ACCOUNTID
+ */
+extern void jmap_user_accountid(const char *userid, struct buf *accountid);
+
+/**
+ * Fill the OBJECTID+ ACCOUNTID of a mailbox: jmap_user_accountid() of
+ * its owner, or OBJECTID_SHARED_ACCOUNTID for a shared mailbox.
  *
  * @param mboxname   internal name of the mailbox
  * @param accountid  receives the ACCOUNTID

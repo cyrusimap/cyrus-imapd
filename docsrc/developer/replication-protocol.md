@@ -1149,6 +1149,7 @@ RECORD entries (contrast with GET FULLMAILBOX).
 | POP3\_LAST\_LOGIN | num32 | Last POP3 login timestamp |
 | POP3\_SHOW\_AFTER | num32 | POP3 show-after timestamp |
 | UIDVALIDITY | num32 | IMAP UIDVALIDITY value |
+| ACCOUNTID | atom | INBOX only: the accountid, empty if unset; absent leaves the replica's unchanged |
 | PARTITION | atom | Storage partition name |
 | ACL | atom | Tab-separated ACL string |
 | OPTIONS | atom | Mailbox option flags |

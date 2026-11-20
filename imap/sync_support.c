@@ -2149,6 +2149,11 @@ static int sync_prepare_dlists(struct mailbox *mailbox,
     }
     dlist_setnum32(kl, "VERSION", mailbox->i.minor_version);
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
+    if (mboxname_isusermailbox(mailbox_name(mailbox), /*isinbox*/1)) {
+        /* always sent, even empty, so that removing it reaches the replica */
+        const char *accountid = mailbox_mbentry(mailbox)->accountid;
+        dlist_setatom(kl, "ACCOUNTID", accountid ? accountid : "");
+    }
     dlist_setatom(kl, "PARTITION", topartition);
     dlist_setatom(kl, "ACL", mailbox_acl(mailbox));
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
@@ -3361,6 +3366,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     modseq_t deletedmodseq = 0;
     const char *groups = NULL;
     const char *jmapid = NULL;
+    const char *accountid = NULL;
 
     /* previous state markers */
     modseq_t since_modseq = 0;
@@ -3448,6 +3454,7 @@ static int sync_apply_mailbox(struct dlist *kin,
     dlist_getlist(kin, "USERFLAGS", &userflags);
     dlist_getatom(kin, "USERGROUPS", &groups);
     dlist_getatom(kin, "JMAPID", &jmapid);
+    dlist_getatom(kin, "ACCOUNTID", &accountid);
     dlist_getnum32(kin, "VERSION", &version);
 
     /* Get the CRCs */
@@ -3749,6 +3756,23 @@ static int sync_apply_mailbox(struct dlist *kin,
         strarray_free(usergroups);
         free(userid);
         strarray_fini(&mygroups);
+    }
+
+    const mbentry_t *mbentry = mailbox_mbentry(mailbox);
+
+    /* an older master doesn't send it, so absent means unchanged */
+    if (accountid) {
+        const char *want = *accountid ? accountid : NULL;
+        if (strcmpnull(mbentry->accountid, want)) {
+            mbentry_t *copy = mboxlist_entry_copy(mbentry);
+            free(copy->accountid);
+            copy->accountid = xstrdupnull(want);
+            r = mboxlist_update_full(copy, /*localonly*/1, /*silent*/1);
+            mboxlist_entry_free(&copy);
+            if (r) goto done;
+            free(mailbox->mbentry->accountid);
+            mailbox->mbentry->accountid = xstrdupnull(want);
+        }
     }
 
     /* the JMAP id and the createdmodseq it encodes only change when the
