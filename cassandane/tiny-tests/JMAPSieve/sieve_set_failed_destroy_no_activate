@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_sieve_set_failed_destroy_no_activate
+    :JMAPExtensions
+    ($self)
+{
+    my $jmap = $self->default_user->new_jmaptester;
+    $jmap->AddUsing('urn:ietf:params:jmap:sieve');
+    $jmap->AddUsing('urn:ietf:params:jmap:blob');
+
+    my $res = $jmap->request([
+        [ 'Blob/upload', { create => {
+            k => { data => [ { 'data:asText' => "keep;\r\n" } ] },
+        } } ],
+        [ 'SieveScript/set', { create => {
+            a => { name => 'A', blobId => '#k' },
+        } } ],
+    ]);
+    my $id = $res->sentence_named('SieveScript/set')->arguments->{created}{a}{id};
+    $self->assert_not_null($id);
+
+    xlog $self, "a failed destroy blocks onSuccessActivateScript";
+    $res = $jmap->request([
+        [ 'SieveScript/set', {
+            destroy                 => [ 'no-such-script' ],
+            onSuccessActivateScript => $id,
+        } ],
+    ]);
+    my $set = $res->single_sentence('SieveScript/set')->arguments;
+    $self->assert_cmp_deeply(
+        { 'no-such-script' => { type => 'notFound' } },
+        $set->{notDestroyed},
+    );
+    $self->assert_null($set->{updated});
+
+    $res = $jmap->request([
+        [ 'SieveScript/get', { properties => [ 'isActive' ] } ],
+    ]);
+    $self->assert_cmp_deeply(
+        [ { id => $id, isActive => JSON::false } ],
+        $res->single_sentence('SieveScript/get')->arguments->{list},
+    );
+}

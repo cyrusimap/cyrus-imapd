@@ -3148,7 +3148,7 @@ static int prunecb(void *rock,
     if (prock->cidfilter) {
         size_t i;
         for (i = 0; i < arrayu64_size(&prock->cids); i++) {
-            if (arrayu64_bsearch(prock->cidfilter, arrayu64_nth(&prock->cids, i)))
+            if (arrayu64_bsearch(prock->cidfilter, arrayu64_nth(&prock->cids, i)) >= 0)
                 return 0; // found a match
         }
     }

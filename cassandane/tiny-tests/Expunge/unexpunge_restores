@@ -1,0 +1,30 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_unexpunge_restores
+    :DelayedExpunge
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    $self->make_message("Message one");
+    $self->make_message("Message two");
+
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    $self->assert_num_equals(1, $talk->status('INBOX', '(messages)')->{messages});
+
+    $self->{instance}->run_command({ cyrus => 1 },
+        'unexpunge', '-a', '-d', 'user.cassandane');
+
+    $talk->select('INBOX');
+    my $res = $talk->fetch('1:*', '(uid flags envelope)');
+    $self->assert_num_equals(2, scalar keys %$res);
+    my ($restored) = grep { $_->{envelope}{Subject} eq 'Message one' }
+                     values %$res;
+    $self->assert_not_null($restored);
+    $self->assert_num_equals(3, $restored->{uid});
+    $self->assert_cmp_deeply([ "\\Recent" ], $restored->{flags});
+}

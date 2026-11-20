@@ -146,12 +146,7 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
                      unsigned nuids, time_t time_since, unsigned *numrestored,
                      const char *extname)
 {
-    struct index_record newrecord;
-    annotate_state_t *astate = NULL;
     unsigned uidnum = 0;
-    char oldfname[MAX_MAILBOX_PATH];
-    const char *fname;
-    char *userid = mboxname_to_userid(mailbox_name(mailbox));
     int r = 0;
 
     *numrestored = 0;
@@ -179,70 +174,21 @@ static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *ui
             /* otherwise we want this one */
         }
 
-        /* work on a copy */
-        newrecord = *record;
-
-        /* duplicate the old filename */
-        fname = mailbox_record_fname(mailbox, record);
-        xstrncpy(oldfname, fname, MAX_MAILBOX_PATH);
-
-        /* bump the UID, strip the flags */
-        newrecord.uid = mailbox->i.last_uid + 1;
-        newrecord.internal_flags &= ~FLAG_INTERNAL_EXPUNGED;
-        if (unsetdeleted)
-            newrecord.system_flags &= ~FLAG_DELETED;
-
-        /* copy the message file */
-        fname = mailbox_record_fname(mailbox, &newrecord);
-        int *fdptr = (newrecord.internal_flags & FLAG_INTERNAL_ARCHIVED)
-                   ? &mailbox->archive_dirfd : &mailbox->spool_dirfd;
-        r = mailbox_copyfile_fdptr(oldfname, fname, 0, fdptr);
-        if (r) break;
-
-        /* add the flag if requested */
-        if (addflag) {
-            int userflag = 0;
-            r = mailbox_user_flag(mailbox, addflag, &userflag, 1);
-            if (r) break;
-            newrecord.user_flags[userflag/32] |= 1U<<(userflag&31);
-        }
-
-        /* and append the new record */
-        r = mailbox_append_index_record(mailbox, &newrecord);
-        if (r) break;
-
-        /* ensure we have an astate connected to the destination
-         * mailbox, so that the annotation txn will be committed
-         * when we close the mailbox */
-        r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
-        if (r) break;
-
-        /* and copy over any annotations */
-        r = annotate_msg_copy(mailbox, record->uid,
-                              mailbox, newrecord.uid,
-                              userid);
+        uint32_t newuid;
+        r = mailbox_restore_record(mailbox,
+                                   record,
+                                   unsetdeleted,
+                                   addflag,
+                                   &newuid);
         if (r) break;
 
         if (verbose)
-            printf("Unexpunged %s: %u => %u\n",
-                   extname, record->uid, newrecord.uid);
-
-        /* mark the old one unlinked so we don't see it again */
-        struct index_record oldrecord = *record;
-        oldrecord.internal_flags |= FLAG_INTERNAL_UNLINKED |
-            FLAG_INTERNAL_NEEDS_CLEANUP;
-        r = mailbox_rewrite_index_record(mailbox, &oldrecord);
-        if (r) break;
+            printf("Unexpunged %s: %u => %u\n", extname, record->uid, newuid);
 
         (*numrestored)++;
     }
 
-    /* better get that seen to */
-    if (*numrestored)
-        mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
-
     mailbox_iter_done(&iter);
-    free(userid);
     return r;
 }
 
