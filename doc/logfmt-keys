@@ -366,7 +366,7 @@ http.reqline.extra      anything the client sent after the version on the reques
 http.requested_with     the X-Requested-With header, naming the client application
 http.status             the HTTP status code of a response
 http.step               which step of a multi-step HTTP operation is being logged
-http.stream.id          the HTTP/2 stream a request or frame belongs to
+http.stream.id          the HTTP/2 or HTTP/3 stream a request or frame belongs to
 http.te                 the TE header of a request
 http.te.flags           the transfer codings applied to a response, as a hex mask
 http.tls.required       1 if the connection must be under TLS before it is used
@@ -635,6 +635,18 @@ pts.time                the current time, as the PTS code compared it
 pts.timeout             how long the PTS client will wait, in seconds
 pts.waited              1 if the PTS client had to wait to connect
 pts.write               1 if the PTS client is waiting to write
+quic.bpf_obj            path to the compiled cyr_quic_steer eBPF object
+quic.close.code         a QUIC CONNECTION_CLOSE error code, in hex
+quic.close.reason       the reason phrase of a QUIC CONNECTION_CLOSE
+quic.close.type         whether a QUIC close code is a transport or an application one
+quic.dropped            how many datagrams a QUIC connection lost to a full queue
+quic.family             an address family, as a string: ipv4, ipv6 or unix
+quic.nofile.hard        master's hard RLIMIT_NOFILE, the ceiling it may raise to
+quic.nofile.soft        master's soft RLIMIT_NOFILE after it was raised to the hard limit
+quic.rcvbuf.granted     a socket receive buffer size the kernel granted, in bytes
+quic.rcvbuf.requested   a socket receive buffer size asked of the kernel, in bytes
+quic.version            the QUIC version a connection negotiated: 1, 2 or hex
+quic.worker_pid         the pid of a QUIC worker process (master)
 quota.detail            what the quota tool was doing when it failed
 quota.diff.message      the change in message count a quota update carried
 quota.diff.storage      the change in storage a quota update carried, in bytes
@@ -702,6 +714,7 @@ search.updates          how many update passes indexed nothing
 search.value            a search term's value, as given
 seen.op                 which seen database operation is being logged
 seen.uids               a seen state's uid sequence, as stored
+service.name            a service's name, as configured in cyrus.conf
 shutdown_file.text      the contents of the shutdown file
 sieve.bytecode.length   the length of a compiled Sieve script, in bytes
 sieve.duration          how long a Sieve operation took, in seconds
@@ -772,7 +785,7 @@ tls.client_cert.required  1 if the server refuses clients without a certificate
 tls.direction           read or write: which way a TLS alert went
 tls.dump                one line of a TLS hex dump
 tls.early_data          1 if the server accepted TLS 1.3 early data
-tls.engine              which TLS engine logged: server or client
+tls.engine              which TLS engine logged: server, client or quic
 tls.group               a TLS key exchange group, or a colon-separated list of them
 tls.key.path            the private key file paired with the certificate in sys.path
 tls.peer.fingerprint    the MD5 fingerprint of the peer's certificate

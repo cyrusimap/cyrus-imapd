@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+use Time::HiRes qw(sleep);
+
+# The audit log counts an HTTP/3 connection's stream data, as HTTP/2's is
+# counted over TCP: a body plus a little framing, not QUIC's packet overhead,
+# padding and handshake
+sub test_auditlog_traffic
+    ($self)
+{
+    $self->{caldav}->GetCalendars();
+
+    my $rpath = '/dav/calendars/user/cassandane/Default/traffic.ics';
+    my $ical = join "\r\n",
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cassandane//HttpH3//EN',
+        'BEGIN:VEVENT', 'UID:h3-auditlog-traffic@example.com',
+        'DTSTAMP:20260101T000000Z', 'DTSTART:20260101T100000Z',
+        'DURATION:PT1H', 'DESCRIPTION:' . ('x' x 20000),
+        'END:VEVENT', 'END:VCALENDAR', '';
+
+    # each request is its own QUIC connection, logged when it ends
+    my $traffic = sub {
+        my @lines;
+        for (1 .. 50) {
+            @lines = $self->{instance}->getsyslog(
+                qr{/http3\[\d+\]: event=auditlog\.traffic\b});
+            last if @lines;
+            sleep 0.1;
+        }
+        $self->assert_num_equals(1, scalar @lines);
+        my ($in)  = $lines[0] =~ m/\bused\.bytes\.in=(\d+)/;
+        my ($out) = $lines[0] =~ m/\bused\.bytes\.out=(\d+)/;
+        return ($in, $out);
+    };
+
+    $self->{instance}->getsyslog();
+
+    xlog $self, "PUT a 20KB event over HTTP/3";
+    my $put = $self->http3_request(
+        method => 'PUT',
+        path => $rpath,
+        headers => [ 'Content-Type' => 'text/calendar; charset=utf-8' ],
+        body => $ical,
+    );
+    $self->assert_num_equals(201, $put->{status});
+
+    my ($in, $out) = $traffic->();
+    $self->assert_num_gte(length $ical, $in);
+    $self->assert_num_lt(length($ical) + 2048, $in);
+    $self->assert_num_lt(2048, $out);
+
+    xlog $self, "GET it back over HTTP/3";
+    my $get = $self->http3_request(method => 'GET', path => $rpath);
+    $self->assert_num_equals(200, $get->{status});
+
+    ($in, $out) = $traffic->();
+    $self->assert_num_lt(2048, $in);
+    $self->assert_num_gte(length $get->{body}, $out);
+    $self->assert_num_lt(length($get->{body}) + 2048, $out);
+}
