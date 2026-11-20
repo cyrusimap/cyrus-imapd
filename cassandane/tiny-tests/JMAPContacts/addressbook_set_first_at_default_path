@@ -1,0 +1,67 @@
+#!perl
+use Cassandane::Tiny;
+
+# With carddav_create_default off, the first addressbook made through JMAP
+# still gets the DAV path that the autoprovisioned one would have had.
+sub test_addressbook_set_first_at_default_path
+    :CardDAVNoDefaultAddressBook
+    ($self)
+{
+    my sub create_books ($desc, $arg) {
+        my $res = $arg->{user}->jmap->request([[
+            'AddressBook/set', {
+                create => { map {; $_ => { name => $_ } } $arg->{names}->@* },
+            },
+        ]])->single_sentence('AddressBook/set')->arguments;
+
+        my @at_default = grep {
+            $res->{created}{$_}{'cyrusimap.org:href'} =~ m{/Default\z}
+        } keys $res->{created}->%*;
+
+        $self->assert_cmp_deeply(
+            {
+                created_count => scalar $arg->{names}->@*,
+                at_default    => $arg->{at_default},
+            },
+            {
+                created_count => scalar keys $res->{created}->%*,
+                at_default    => scalar @at_default,
+            },
+            $desc,
+        );
+    }
+
+    my $alice = $self->{instance}->create_user('alice');
+    create_books("first book goes to Default", {
+        user => $alice, names => [ 'one' ], at_default => 1,
+    });
+    create_books("later books get a uuid", {
+        user => $alice, names => [ 'two' ], at_default => 0,
+    });
+
+    my $bob = $self->{instance}->create_user('bob');
+    create_books("only one of several first books goes to Default", {
+        user => $bob, names => [ 'one', 'two', 'three' ], at_default => 1,
+    });
+
+    xlog $self, "the book at Default is the default without being asked";
+    my $list = $alice->jmap->request([[
+        'AddressBook/get', {
+            properties => [ 'isDefault', 'cyrusimap.org:href' ],
+        },
+    ]])->single_sentence('AddressBook/get')->arguments->{list};
+
+    $self->assert_cmp_deeply(
+        bag(
+            superhashof({
+                isDefault => JSON::true,
+                'cyrusimap.org:href' => re(qr{/Default\z}),
+            }),
+            superhashof({
+                isDefault => JSON::false,
+                'cyrusimap.org:href' => none(re(qr{/Default\z})),
+            }),
+        ),
+        $list,
+    );
+}

@@ -1,0 +1,66 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_account_create_id
+    ($self)
+{
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/accountid';
+    my $admin_user = $self->{instance}->create_user_without_setup('admin');
+    my $adminJmap = $admin_user->jmap;
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my $email = 'u98765@example.com';
+    my $email2 = 'u43210@example.com';
+
+    my sub create ($creation_id, $props) {
+        return $adminJmap->request([[
+            'Account/create', { accountId => \undef, $creation_id => $props }
+        ]])->sentence_named('Account/create')->arguments;
+    }
+
+    xlog $self, "An id is required, and must be a valid JMAP Id";
+    for my $props ({ email => $email },
+                   { email => $email, id => JSON::null },
+                   { email => $email, id => 'u1.a48' })
+    {
+        $self->assert_cmp_deeply(
+            superhashof({
+                created => JSON::null,
+                notCreated => {
+                    1 => superhashof({
+                        type => 'invalidProperties',
+                        properties => [ 'id' ],
+                    }),
+                },
+            }),
+            create(1, $props),
+        );
+    }
+    $self->assert_null($admintalk->list('', "user.$email"));
+
+    xlog $self, "The id becomes the INBOX's accountid annotation";
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => { 2 => { id => 'u1a48e8e3' } },
+            notCreated => JSON::null,
+        }),
+        create(2, { email => $email, id => 'u1a48e8e3' }),
+    );
+    my $res = $admintalk->getmetadata("user.$email", $entry);
+    $self->assert_str_equals('u1a48e8e3', $res->{"user.$email"}{$entry});
+
+    xlog $self, "An id another INBOX holds is refused, and no INBOX is made";
+    $self->assert_cmp_deeply(
+        superhashof({
+            created => JSON::null,
+            notCreated => {
+                3 => {
+                    type => 'alreadyExists',
+                    description => 'id is already in use',
+                },
+            },
+        }),
+        create(3, { email => $email2, id => 'u1a48e8e3' }),
+    );
+    $self->assert_null($admintalk->list('', "user.$email2"));
+}
