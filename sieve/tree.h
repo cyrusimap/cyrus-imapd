@@ -207,6 +207,11 @@ struct Commandlist {
             char *name;
             strarray_t *values;
         } dh;
+        struct { /* it's an addannotation action */
+            int scope;       /* 0 = value.shared (default), 1 = value.priv */
+            char *entry;
+            char *value;
+        } aan;
         struct { /* it's a log action */
             char *text;
         } l;

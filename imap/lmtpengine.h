@@ -41,6 +41,8 @@ struct message_data {
     void *rock;
 
     hdrcache_t hdrcache;
+
+    struct entryattlist *annotations;   /* set by sieve addannotation */
 };
 
 /* return the corresponding header */

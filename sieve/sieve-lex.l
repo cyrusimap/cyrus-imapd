@@ -253,6 +253,11 @@ ws              [ \t]+
     /*   :index               defined in 'index' */
     /*   :last                defined in 'index' */
 
+    /* vnd.cyrus.addannotation */
+<INITIAL>addannotation        return ADDANNOTATION;
+<INITIAL>:priv                return PRIV;
+<INITIAL>:shared              return SHARED;
+
     /* [e]reject - RFC 5429 */
 <INITIAL>reject               return yylval->nval = REJCT;
 <INITIAL>ereject              return yylval->nval = EREJECT;

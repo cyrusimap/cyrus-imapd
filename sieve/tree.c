@@ -271,6 +271,11 @@ commandlist_t *new_command(int type, sieve_script_t *parse_script)
         supported = parse_script->support & SIEVE_CAPA_EDITHEADER;
         break;
 
+    case B_ADDANNOTATION:
+        capability = "vnd.cyrus.addannotation";
+        supported = parse_script->support & SIEVE_CAPA_ADDANNOTATION;
+        break;
+
     case B_LOG:
         capability = "vnd.cyrus.log";
         supported = parse_script->support & SIEVE_CAPA_LOG;
@@ -500,6 +505,11 @@ void free_tree(commandlist_t *cl)
         case B_ADDHEADER:
             free(cl->u.ah.name);
             free(cl->u.ah.value);
+            break;
+
+        case B_ADDANNOTATION:
+            free(cl->u.aan.entry);
+            free(cl->u.aan.value);
             break;
 
         case B_DELETEHEADER:
