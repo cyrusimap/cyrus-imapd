@@ -132,7 +132,7 @@ EXPORTED void seqset_remove(seqset_t *seq, unsigned num)
         }
 
         cur = &seq->set[seq->current];  // xrealloc may have changed ptr location
-        memmove(cur+1, cur, (seq->len - seq->current) + RANGE_SIZE);
+        memmove(cur+1, cur, (seq->len - seq->current) * RANGE_SIZE);
         seq->len++;
 
         cur->high = num - 1;
