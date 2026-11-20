@@ -2025,8 +2025,7 @@ static json_t *set_check_preconditions(jmap_req_t *req,
 
     /* Fetch only the properties the preconditions reference */
     json_t *ids = json_array();
-    json_t *props = json_object();
-    json_object_set_new(props, "id", json_true());
+    json_t *proplist = json_pack("[s]", "id");
     const char *key;
     json_t *patch;
     json_object_foreach (if_unchanged_by, key, patch) {
@@ -2038,17 +2037,12 @@ static json_t *set_check_preconditions(jmap_req_t *req,
         const char *path;
         json_t *jval;
         json_object_foreach (patch, path, jval) {
+            /* Foo/get ignores repeated properties */
             char *pname = pointer_propname(path);
-            json_object_set_new(props, pname, json_true());
+            json_array_append_new(proplist, json_string(pname));
             free(pname);
         }
     }
-    json_t *proplist = json_array();
-    json_t *jtrue;
-    json_object_foreach (props, key, jtrue) {
-        json_array_append_new(proplist, json_string(key));
-    }
-    json_decref(props);
 
     /* Run Foo/get in this request's context, collecting its response */
     struct jmap_req getreq = *req;
