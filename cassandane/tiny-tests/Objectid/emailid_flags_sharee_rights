@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A sharee's flag change reaches only the copies the sharee may read, and
+# only flags the sharee may set there.
+#
+sub test_emailid_flags_sharee_rights
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $self->{instance}->create_user('other');
+
+    for my $folder (qw(shared shared2 private)) {
+        $talk->create("INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    $talk->setacl('INBOX.shared', other => 'lrsw');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setacl('INBOX.shared2', other => 'lrs');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->make_message("Test message");
+
+    $talk->select('INBOX');
+    for my $folder (qw(shared shared2 private)) {
+        $talk->copy('1', "INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->select('user.cassandane.shared');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    my $res = $othertalk->store('1', '+flags', '($Foo)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply([1], [ keys %$res ]);
+    $self->assert_cmp_deeply(['$Foo'], nonrecent($res->{1}{flags}));
+
+    my %want = (
+        'INBOX.shared'  => ['$Foo'],
+        'INBOX.shared2' => [],
+        'INBOX.private' => [],
+        'INBOX'         => [],
+    );
+    my %got;
+    for my $folder (keys %want) {
+        $talk->select($folder);
+        $res = $talk->fetch('1', '(flags)');
+        $got{$folder} = nonrecent($res->{1}{flags});
+    }
+    $self->assert_cmp_deeply(\%want, \%got);
+}

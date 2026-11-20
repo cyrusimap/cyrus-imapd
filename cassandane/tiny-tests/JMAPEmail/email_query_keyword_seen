@@ -53,15 +53,23 @@ sub test_email_query_keyword_seen
         $id_by_subject{$spec->{subject}} = q{} . $email->id;
     }
 
+    # Without the seen right on the other copies' folders, a \Seen change
+    # stays on the copy it was made to.
     xlog $self, 'set \\Seen on some copies only';
     my $imap = $self->{store}->get_client();
+    $imap->setacl('B', cassandane => '-s');
+    $imap->setacl('Trash', cassandane => '-s');
     $imap->select('A');
     $imap->store('1,2,5', '+flags', '(\\Seen)'); # allseen, partseen,
                                                  # trashunseen
+    $imap->setacl('B', cassandane => '+s');
+    $imap->setacl('Trash', cassandane => '+s');
     $imap->select('B');
     $imap->store('1', '+flags', '(\\Seen)');     # allseen
+    $imap->setacl('A', cassandane => '-s');
     $imap->select('Trash');
     $imap->store('1', '+flags', '(\\Seen)');     # trashseen
+    $imap->setacl('A', cassandane => '+s');
 
     xlog $self, 'run squatter';
     $self->{instance}->run_command({cyrus => 1}, 'squatter');

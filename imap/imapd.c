@@ -45,6 +45,7 @@
 #include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
+#include "emailid_flags.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
@@ -1042,6 +1043,7 @@ static void imapd_reset(void)
         free(imapd_magicplus);
         imapd_magicplus = NULL;
     }
+    emailid_flags_set_actor(NULL, NULL, false);
     if (imapd_authstate) {
         auth_freestate(imapd_authstate);
         imapd_authstate = NULL;
@@ -3159,6 +3161,7 @@ static void authentication_success(const char *tag, int ssf, const char *reply)
 
     /* authstate already created by mysasl_proxy_policy() */
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
+    emailid_flags_set_actor(imapd_userid, imapd_authstate, imapd_userisadmin);
 
     prot_printf(imapd_out, "%s OK", tag);
     if (!ssf) {
@@ -3579,6 +3582,7 @@ static void cmd_unauthenticate(char *tag)
         free(imapd_magicplus);
         imapd_magicplus = NULL;
     }
+    emailid_flags_set_actor(NULL, NULL, false);
     if (imapd_authstate) {
         auth_freestate(imapd_authstate);
         imapd_authstate = NULL;

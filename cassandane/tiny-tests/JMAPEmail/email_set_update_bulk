@@ -32,7 +32,9 @@ sub test_email_set_update_bulk
     $store->set_folder('INBOX.A');
     $self->make_message('Email1') || die;
     $talk->copy(1, 'INBOX.B');
+    $talk->setacl('INBOX.B', cassandane => '-sw');
     $talk->store(1, "+flags", "(\\Seen hello)");
+    $talk->setacl('INBOX.B', cassandane => '+sw');
 
     # check that the flags aren't on B
     $talk->select("INBOX.B");
