@@ -548,6 +548,15 @@ static void test_remove(void)
     free(s);
 
     seqset_free(&seq);
+
+    /* splitting a range keeps every range after it */
+    seq = seqset_parse("1:5,7,9,11:12", NULL, 0);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(seq);
+    seqset_remove(seq, 3);
+    s = seqset_cstring(seq);
+    CU_ASSERT_STRING_EQUAL(s, "1:2,4:5,7,9,11:12");
+    free(s);
+    seqset_free(&seq);
 }
 
 /* vim: set ft=c: */
