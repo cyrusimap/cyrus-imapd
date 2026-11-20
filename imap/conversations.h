@@ -63,6 +63,13 @@ struct conv_quota {
 
 #define CONV_QUOTA_INIT { 0, 0 }
 
+/** How a newly arrived copy of an email merges with its other copies */
+enum conv_arrival {
+    CONV_ARRIVAL_NONE = 0, /**< not an arrival */
+    CONV_ARRIVAL_NEW,      /**< a new message: merge every flag */
+    CONV_ARRIVAL_COPY      /**< from another account: merge all but \\Seen */
+};
+
 /**
  * A flag change made to some copies of one email, waiting to be applied to
  * its other copies.  Queued by conversations_queue_flagchange().
@@ -75,7 +82,9 @@ struct conv_flagchange
     strarray_t origin_mboxnames; /**< copies already changed, which the drain
                                       skips; pairs with origin_uids */
     arrayu64_t origin_uids;
-    bool arrival; /**< a new copy arrived */
+    bool arrival;    /**< a new copy arrived */
+    bool seen_merge; /**< an arrival's \\Seen merges too: not a copy from
+                          another account */
 };
 
 struct conversations_state {
@@ -373,7 +382,7 @@ extern int conversations_update_record(struct conversations_state *cstate,
  * @param added     flag names set on it: system flags as "\\Flagged" and so
  *                  on, user flags by name.  May be NULL.
  * @param removed   flag names cleared on it.  May be NULL.
- * @param arrival   the copy is new
+ * @param arrival   whether the copy is new, and how it merges
  */
 extern void conversations_queue_flagchange(struct conversations_state *cstate,
                                            const struct message_guid *guid,
@@ -381,7 +390,7 @@ extern void conversations_queue_flagchange(struct conversations_state *cstate,
                                            uint32_t uid,
                                            const strarray_t *added,
                                            const strarray_t *removed,
-                                           bool arrival);
+                                           enum conv_arrival arrival);
 
 /**
  * Discard every queued flag change.

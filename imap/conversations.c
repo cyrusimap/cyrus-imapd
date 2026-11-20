@@ -2664,7 +2664,7 @@ EXPORTED void conversations_queue_flagchange(struct conversations_state *cstate,
                                              uint32_t uid,
                                              const strarray_t *added,
                                              const strarray_t *removed,
-                                             bool arrival)
+                                             enum conv_arrival arrival)
 {
     if (cstate->draining_flags) {
         return;
@@ -2695,6 +2695,9 @@ EXPORTED void conversations_queue_flagchange(struct conversations_state *cstate,
 
     if (arrival) {
         change->arrival = true;
+    }
+    if (arrival == CONV_ARRIVAL_NEW) {
+        change->seen_merge = true;
     }
 
     for (size_t i = 0; i < arrayu64_size(&change->origin_uids); i++) {

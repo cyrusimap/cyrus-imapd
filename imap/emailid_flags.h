@@ -49,14 +49,21 @@ void emailid_flags_set_actor(const char *userid,
  * folders, and the copies a change came from are left alone.  Each mailbox
  * is opened once.
  *
+ * Then each new copy merges with the other copies the acting user can read:
+ * every copy gets the union of their flags other than \\Seen, and loses
+ * \\Seen unless every one of them is seen.  This opens the mailboxes holding
+ * those copies twice more, once to read and once to write.
+ *
  * Where \\Seen isn't the record's flag for the acting user (see
  * mailbox_internal_seen()), it is changed in their seen.db instead, and the
  * record's own \\Seen is left alone.
  *
  * The caller holds the user's namespace lock, and calls this before
- * committing the conversations db.
+ * committing the conversations db.  On error, mailboxes already rewritten
+ * have committed their index, so the caller still commits the conversations
+ * db.
  *
- * @return 0, or an IMAP error, which must abort the commit.
+ * @return 0, or an IMAP error
  */
 int emailid_flags_drain(struct conversations_state *cstate);
 

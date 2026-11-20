@@ -1,0 +1,60 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Importing a blob identical to an email the user can read makes no new copy,
+# so the existing copy's keywords are left alone.
+#
+sub test_email_import_emailid_flags
+    ($self)
+{
+    my $user = $self->default_user;
+    my $jmap = $user->jmap;
+    my $imap = $self->{store}->get_client();
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: import emailid flags\r\n"
+                . "Message-ID: <import-emailid-flags\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    my $mboxa = $user->mailboxes->create({ name => 'A' });
+
+    $imap->append('INBOX', '($Old)', $literal);
+    $self->assert_str_equals('ok', $imap->get_last_completion_response());
+
+    my $res = $jmap->request([
+        ['Email/query', {}, 'R1'],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['blobId'],
+        }, 'R2'],
+    ]);
+    my $existing = $res->sentence_named('Email/get')->arguments->{list}[0];
+
+    $res = $jmap->request([
+        ['Email/import', {
+            emails => {
+                1 => {
+                    blobId     => $existing->{blobId},
+                    mailboxIds => { $mboxa->id => JSON::true },
+                    keywords   => { '$seen' => JSON::true, '$new' => JSON::true },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(
+        { 1 => superhashof({ type => 'alreadyExists',
+                             existingId => $existing->{id} }) },
+        $res->single_sentence('Email/import')->arguments->{notCreated});
+
+    $imap->select('INBOX');
+    my $fetched = $imap->fetch('1:*', '(flags)');
+    $self->assert_cmp_deeply(
+        { 1 => [ '$Old' ] },
+        { map { $_ => [ grep { $_ ne q{\Recent} } $fetched->{$_}{flags}->@* ] }
+              keys %$fetched });
+    $imap->select('A');
+    $self->assert_num_equals(0, $imap->get_response_code('exists'));
+}

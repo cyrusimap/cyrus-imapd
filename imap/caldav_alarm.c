@@ -1590,7 +1590,9 @@ static int move_to_mailboxid(struct mailbox *srcmbox,
         &record->internaldate, savedate, record->createdmodseq,
         flags, &annots, /*nolink*/ 0
     };
+    destmbox->copy_from = COPY_FROM_SAME_ACCOUNT;
     r = append_fromstage_full(&as, &body, stage, &meta);
+    destmbox->copy_from = COPY_FROM_NONE;
     if (r) {
         append_abort(&as);
         goto done;

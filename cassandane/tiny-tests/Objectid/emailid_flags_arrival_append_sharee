@@ -1,0 +1,88 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A sharee's appended copy merges with the copies the sharee can read, using
+# the sharee's own \Seen.  The owner's \Seen and copies the sharee can't read
+# are left alone.
+#
+sub test_emailid_flags_arrival_append_sharee
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub flags_by_folder ($imap, @folders) {
+        my %got;
+        for my $folder (@folders) {
+            $imap->select($folder);
+            my $res = $imap->fetch('1:*', '(flags)');
+            $got{$folder} = [
+                map { [ grep { $_ ne q{\Recent} } $res->{$_}{flags}->@* ] }
+                sort { $a <=> $b } keys %$res
+            ];
+        }
+        return \%got;
+    }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: arrival append sharee\r\n"
+                . "Message-ID: <arrival-append-sharee\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $self->{instance}->create_user('other');
+    for my $folder (qw(s1 s2 s3 private)) {
+        $talk->create("INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    for my $folder (qw(s1 s2 s3)) {
+        $talk->setacl("INBOX.$folder", other => 'lrswi');
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    $talk->append('INBOX.s1', '($Old)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->append('INBOX.private', '($Private)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        'INBOX.s1'      => [ bag('$Old', '$Private') ],
+        'INBOX.private' => [ bag('$Old', '$Private') ],
+    }, flags_by_folder($talk, qw(INBOX.s1 INBOX.private)));
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->select('user.cassandane.s1');
+    $othertalk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $othertalk->unselect();
+
+    xlog $self, "seen in the sharee's view, so the seen arrival stays seen";
+    $othertalk->append('user.cassandane.s2', '(\\Seen $New)', $literal);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        'user.cassandane.s1' => [ bag('$Old', '$Private', '$New', '\\Seen') ],
+        'user.cassandane.s2' => [ bag('$Old', '$Private', '$New', '\\Seen') ],
+    }, flags_by_folder($othertalk, qw(user.cassandane.s1 user.cassandane.s2)));
+
+    xlog $self, "an unseen arrival makes the sharee's copies unseen";
+    $othertalk->append('user.cassandane.s3', '()', $literal);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        'user.cassandane.s1' => [ bag('$Old', '$Private', '$New') ],
+        'user.cassandane.s2' => [ bag('$Old', '$Private', '$New') ],
+        'user.cassandane.s3' => [ bag('$Old', '$Private', '$New') ],
+    }, flags_by_folder($othertalk,
+                       qw(user.cassandane.s1 user.cassandane.s2 user.cassandane.s3)));
+
+    # $New didn't reach the copy the sharee can't read
+    $self->assert_cmp_deeply({
+        'INBOX.s1'      => [ bag('$Old', '$Private', '$New') ],
+        'INBOX.s2'      => [ bag('$Old', '$Private', '$New') ],
+        'INBOX.s3'      => [ bag('$Old', '$Private', '$New') ],
+        'INBOX.private' => [ bag('$Old', '$Private') ],
+    }, flags_by_folder($talk,
+                       qw(INBOX.s1 INBOX.s2 INBOX.s3 INBOX.private)));
+}

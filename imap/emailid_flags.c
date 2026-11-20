@@ -41,6 +41,7 @@ static struct
 /* The copies of queued emails in one mailbox */
 struct emailid_flags_mbox
 {
+    bool hidden;   /* the actor can't read the mailbox */
     bool skip;     /* the actor may change nothing here */
     bool mayseen;  /* the actor may set \Seen */
     bool maywrite; /* the actor may set every other flag */
@@ -48,11 +49,25 @@ struct emailid_flags_mbox
     ptrarray_t changes; /* struct conv_flagchange *, pairs with uids */
 };
 
+/* A new copy's merge with the other copies of its email */
+struct merge
+{
+    /* first, so a pointer to it is a pointer to the merge: added is the
+     * union of every flag but \Seen, and removed is \Seen unless every
+     * copy is seen */
+    struct conv_flagchange change;
+    bool allseen;
+    bool keepseen;     /* leave \Seen as each copy has it */
+    ptrarray_t groups; /* struct emailid_flags_mbox *, pairs with uids */
+    arrayu64_t uids;
+};
+
 struct collect_rock
 {
     struct conversations_state *cstate;
     const struct conv_flagchange *change;
     hash_table *mboxes;
+    struct merge *merge; /* collecting the copies a merge counts */
 };
 
 struct apply_rock
@@ -79,6 +94,19 @@ static void emailid_flags_mbox_free(void *data)
     free(mbox);
 }
 
+static void merge_free(void *data)
+{
+    struct merge *merge = data;
+
+    strarray_fini(&merge->change.added);
+    strarray_fini(&merge->change.removed);
+    strarray_fini(&merge->change.origin_mboxnames);
+    arrayu64_fini(&merge->change.origin_uids);
+    ptrarray_fini(&merge->groups);
+    arrayu64_fini(&merge->uids);
+    free(merge);
+}
+
 EXPORTED void emailid_flags_set_actor(const char *userid,
                                       const struct auth_state *authstate,
                                       bool isadmin)
@@ -99,9 +127,10 @@ static struct emailid_flags_mbox *new_mbox(const mbentry_t *mbentry)
     }
 
     int rights = cyrus_acl_myrights(actor.authstate, mbentry->acl);
+    mbox->hidden = !(rights & ACL_READ);
     mbox->mayseen = (rights & ACL_SETSEEN);
     mbox->maywrite = (rights & ACL_WRITE);
-    mbox->skip = !(rights & ACL_READ) || !(mbox->mayseen || mbox->maywrite);
+    mbox->skip = mbox->hidden || !(mbox->mayseen || mbox->maywrite);
     if (mbox->skip || !mbox->mayseen || !mbox->maywrite) {
         char rightstr[ACL_MAXSTR];
         xsyslog_ev(LOG_DEBUG, "emailid.flags.restricted",
@@ -154,7 +183,13 @@ static int collect_cb(const conv_guidrec_t *rec, void *vrock)
             mbox = new_mbox(mbentry);
             hash_insert(mbentry->name, mbox, rock->mboxes);
         }
-        if (!mbox->skip) {
+        if (rock->merge) {
+            if (!mbox->hidden) {
+                ptrarray_append(&rock->merge->groups, mbox);
+                arrayu64_append(&rock->merge->uids, rec->uid);
+            }
+        }
+        else if (!mbox->skip) {
             arrayu64_append(&mbox->uids, rec->uid);
             ptrarray_append(&mbox->changes, (void *) rock->change);
         }
@@ -176,6 +211,44 @@ static void collect_change(const char *guidrep, void *data, void *rock)
 
     crock->change = change;
     conversations_guid_foreach(crock->cstate, guidrep, collect_cb, crock);
+}
+
+struct arrival_rock
+{
+    struct collect_rock *crock;
+    ptrarray_t *merges;
+};
+
+static void collect_arrival(const char *guidrep, void *data, void *rock)
+{
+    const struct conv_flagchange *change = data;
+    struct arrival_rock *arock = rock;
+    struct collect_rock *crock = arock->crock;
+
+    if (!change->arrival) {
+        return;
+    }
+
+    struct merge *merge = xzmalloc(sizeof(*merge));
+    merge->allseen = true;
+    merge->keepseen = !change->seen_merge;
+    crock->change = &merge->change;
+    crock->merge = merge;
+    conversations_guid_foreach(crock->cstate, guidrep, collect_cb, crock);
+    crock->merge = NULL;
+
+    /* a copy on its own is already merged */
+    if (arrayu64_size(&merge->uids) < 2) {
+        merge_free(merge);
+        return;
+    }
+
+    for (size_t i = 0; i < arrayu64_size(&merge->uids); i++) {
+        struct emailid_flags_mbox *mbox = ptrarray_nth(&merge->groups, i);
+        arrayu64_append(&mbox->uids, arrayu64_nth(&merge->uids, i));
+        ptrarray_append(&mbox->changes, &merge->change);
+    }
+    ptrarray_append(arock->merges, merge);
 }
 
 /* The MsgFlags bit for a system flag name, or 0 for \Deleted and unknowns */
@@ -414,33 +487,163 @@ static void seen_end(struct mailbox *mailbox, struct seen_change *seen)
     arrayu64_fini(&seen->del);
 }
 
-static void apply_mbox(const char *mboxname, void *data, void *vrock)
+/* Open a sibling mailbox, write-locked.  Returns the mailbox another
+ * reference holds open but unlocked, which close_sibling must unlock. */
+static int open_sibling(const char *mboxname,
+                        struct mailbox **mailboxp,
+                        struct mailbox **outerp)
 {
-    struct emailid_flags_mbox *group = data;
-    struct apply_rock *rock = vrock;
-    struct mailbox *mailbox = NULL;
-
-    if (rock->r || !arrayu64_size(&group->uids)) {
-        return;
-    }
-
     /* opening a mailbox that is open but unlocked locks it, and our close
      * won't unlock it while another reference holds it */
     struct mailbox *outer = mailbox_findopen(mboxname);
-    bool unlock_outer = outer && !mailbox_index_islocked(outer, /*write*/ 0);
+    *outerp =
+        outer && !mailbox_index_islocked(outer, /*write*/ 0) ? outer : NULL;
 
-    int r = mailbox_open_iwl(mboxname, &mailbox);
+    int r = mailbox_open_iwl(mboxname, mailboxp);
     if (r) {
         xsyslog_ev(LOG_WARNING, "emailid.flags.open.failed",
                    lf_intname("mbox.name", mboxname),
                    lf_err("error", r));
+    }
+    return r;
+}
+
+static void close_sibling(struct mailbox **mailboxp, struct mailbox *outer)
+{
+    mailbox_close(mailboxp);
+    if (outer) {
+        mailbox_unlock_index(outer, NULL);
+    }
+}
+
+/* Whether the actor's \Seen is the record's flag */
+static bool actor_internal_seen(const struct mailbox *mailbox)
+{
+    return !actor.userid || mailbox_internal_seen(mailbox, actor.userid);
+}
+
+/* Where the actor's \Seen comes from when reading a copy for a merge */
+enum merge_seen {
+    MERGE_SEEN_RECORD,
+    MERGE_SEEN_DB,      /* the actor's seen.db */
+    MERGE_SEEN_UNKNOWN, /* left out, so it can't unsee the other copies */
+};
+
+/* Add one copy's flags to its merge */
+
+static void read_copy(struct mailbox *mailbox,
+                      uint32_t uid,
+                      struct merge *merge,
+                      enum merge_seen seen,
+                      const seqset_t *seenuids)
+{
+    static const struct
+    {
+        uint32_t bit;
+        const char *name;
+    } sysflags[] = {
+        { FLAG_ANSWERED, "\\Answered" },
+        { FLAG_FLAGGED,  "\\Flagged"  },
+        { FLAG_DRAFT,    "\\Draft"    },
+    };
+    struct index_record record;
+
+    if (mailbox_find_index_record(mailbox, uid, &record)
+        || (record.system_flags & FLAG_DELETED)
+        || (record.internal_flags & FLAG_INTERNAL_EXPUNGED))
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < sizeof(sysflags) / sizeof(sysflags[0]); i++) {
+        if (record.system_flags & sysflags[i].bit) {
+            strarray_add_case(&merge->change.added, sysflags[i].name);
+        }
+    }
+    for (int i = 0; i < MAX_USER_FLAGS; i++) {
+        if (mailbox->h.flagname[i]
+            && (record.user_flags[i / 32] & (1U << (i & 31))))
+        {
+            strarray_add_case(&merge->change.added, mailbox->h.flagname[i]);
+        }
+    }
+
+    if ((seen == MERGE_SEEN_RECORD && !(record.system_flags & FLAG_SEEN))
+        || (seen == MERGE_SEEN_DB && !seqset_ismember(seenuids, uid)))
+    {
+        merge->allseen = false;
+    }
+}
+
+/* Add the flags of the copies in one mailbox to their merges */
+static void read_mbox(const char *mboxname,
+                      void *data,
+                      void *rock __attribute__((unused)))
+{
+    struct emailid_flags_mbox *group = data;
+    struct mailbox *mailbox = NULL, *outer = NULL;
+
+    if (!arrayu64_size(&group->uids)
+        || open_sibling(mboxname, &mailbox, &outer))
+    {
+        return;
+    }
+
+    enum merge_seen seen = MERGE_SEEN_RECORD;
+    seqset_t *seenuids = NULL;
+    if (!actor_internal_seen(mailbox)) {
+        struct seen *db = NULL;
+        struct seendata sd = SEENDATA_INITIALIZER;
+        int r = seen_open(actor.userid, SEEN_CREATE, &db);
+        if (!r) {
+            r = seen_read(db, mailbox_uniqueid(mailbox), &sd);
+        }
+        seen_close(&db);
+        if (r) {
+            xsyslog_ev(LOG_ERR, "emailid.flags.seen.failed",
+                       lf_s("u.username", actor.userid),
+                       lf_mailbox(mailbox),
+                       lf_err("error", r));
+            seen = MERGE_SEEN_UNKNOWN;
+        }
+        else {
+            seen = MERGE_SEEN_DB;
+            seenuids = seqset_parse(sd.seenuids, NULL, mailbox->i.last_uid);
+        }
+        seen_freedata(&sd);
+    }
+
+    for (size_t i = 0; i < arrayu64_size(&group->uids); i++) {
+        read_copy(mailbox,
+                  arrayu64_nth(&group->uids, i),
+                  (struct merge *) ptrarray_nth(&group->changes, i),
+                  seen,
+                  seenuids);
+    }
+
+    seqset_free(&seenuids);
+    close_sibling(&mailbox, outer);
+}
+
+static void apply_mbox(const char *mboxname, void *data, void *vrock)
+{
+    struct emailid_flags_mbox *group = data;
+    struct apply_rock *rock = vrock;
+    struct mailbox *mailbox = NULL, *outer = NULL;
+
+    if (rock->r || group->skip || !arrayu64_size(&group->uids)) {
+        return;
+    }
+
+    int r = open_sibling(mboxname, &mailbox, &outer);
+    if (r) {
         return;
     }
 
     /* a non-owner's \Seen lives in their seen.db, not the record */
     struct seen_change seenchange = { .sd = SEENDATA_INITIALIZER };
     struct seen_change *seen = NULL;
-    if (!mailbox_internal_seen(mailbox, actor.userid)) {
+    if (!actor_internal_seen(mailbox)) {
         seen = &seenchange;
         if (group->mayseen && group_has_seen(group)) {
             seen_begin(mailbox, seen);
@@ -462,10 +665,7 @@ static void apply_mbox(const char *mboxname, void *data, void *vrock)
         seen_end(mailbox, seen);
     }
 
-    mailbox_close(&mailbox);
-    if (unlock_outer) {
-        mailbox_unlock_index(outer, NULL);
-    }
+    close_sibling(&mailbox, outer);
 
     rock->r = r;
 }
@@ -490,13 +690,39 @@ EXPORTED int emailid_flags_drain(struct conversations_state *cstate)
     hash_table mboxes = HASH_TABLE_INITIALIZER;
     construct_hash_table(&mboxes, 16, 0);
 
-    struct collect_rock crock = { cstate, NULL, &mboxes };
+    struct collect_rock crock = { cstate, NULL, &mboxes, NULL };
     hash_enumerate(&cstate->flagchanges, collect_change, &crock);
 
     struct apply_rock arock = { 0 };
     hash_enumerate_sorted(&mboxes, apply_mbox, &arock, cmpstringp_raw);
 
     free_hash_table(&mboxes, emailid_flags_mbox_free);
+
+    /* then merge each new copy with the email's other copies */
+    if (!arock.r) {
+        ptrarray_t merges = PTRARRAY_INITIALIZER;
+        construct_hash_table(&mboxes, 16, 0);
+
+        struct arrival_rock rrock = { &crock, &merges };
+        hash_enumerate(&cstate->flagchanges, collect_arrival, &rrock);
+
+        if (ptrarray_size(&merges)) {
+            hash_enumerate_sorted(&mboxes, read_mbox, NULL, cmpstringp_raw);
+            for (int i = 0; i < ptrarray_size(&merges); i++) {
+                struct merge *merge = ptrarray_nth(&merges, i);
+                if (!merge->keepseen && !merge->allseen) {
+                    strarray_append(&merge->change.removed, "\\Seen");
+                }
+            }
+            hash_enumerate_sorted(&mboxes, apply_mbox, &arock, cmpstringp_raw);
+        }
+
+        free_hash_table(&mboxes, emailid_flags_mbox_free);
+        for (int i = 0; i < ptrarray_size(&merges); i++) {
+            merge_free(ptrarray_nth(&merges, i));
+        }
+        ptrarray_fini(&merges);
+    }
     conversations_clear_flagchanges(cstate);
     cstate->draining_flags = false;
 

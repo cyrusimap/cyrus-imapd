@@ -4321,6 +4321,9 @@ static void queue_flagchange(struct conversations_state *cstate,
     if (!new || mailbox->silentchanges || new->silentupdate) {
         return;
     }
+    if (!old && mailbox->copy_from == COPY_FROM_SAME_ACCOUNT) {
+        return;
+    }
     if (new->system_flags & FLAG_DELETED) {
         return;
     }
@@ -4358,6 +4361,13 @@ static void queue_flagchange(struct conversations_state *cstate,
         }
     }
 
+    enum conv_arrival arrival = CONV_ARRIVAL_NONE;
+    if (!old) {
+        arrival = mailbox->copy_from == COPY_FROM_OTHER_ACCOUNT
+                      ? CONV_ARRIVAL_COPY
+                      : CONV_ARRIVAL_NEW;
+    }
+
     if (!mboxname_isnondeliverymailbox(mailbox_name(mailbox),
                                        mailbox_mbtype(mailbox)))
     {
@@ -4367,7 +4377,7 @@ static void queue_flagchange(struct conversations_state *cstate,
                                        new->uid,
                                        &added,
                                        &removed,
-                                       /*arrival*/ !old);
+                                       arrival);
     }
 
     strarray_fini(&added);

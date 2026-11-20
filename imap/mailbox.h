@@ -136,6 +136,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <limits.h>
+#include <stdbool.h>
 #include <config.h>
 
 #include "byteorder.h"
@@ -288,6 +289,14 @@ struct index_record {
     struct cacherecord crec;
 };
 
+/** Where the records being appended to a mailbox come from, which decides
+ *  how their flags merge with the email's other copies */
+enum mailbox_copy_from {
+    COPY_FROM_NONE = 0,     /**< a new message: merge every flag */
+    COPY_FROM_SAME_ACCOUNT, /**< a copy or move: already has its flags */
+    COPY_FROM_OTHER_ACCOUNT /**< merge every flag but \\Seen */
+};
+
 /** The sync CRCs replication compares to find mailboxes that differ */
 struct synccrcs {
     uint32_t basic;     /**< XOR of the CRCs of the unexpunged records */
@@ -435,6 +444,7 @@ struct mailbox {
 
     /* change management */
     int silentchanges;
+    enum mailbox_copy_from copy_from; /* where appended records come from */
     int modseq_dirty;
     int header_dirty;
     int quota_dirty;

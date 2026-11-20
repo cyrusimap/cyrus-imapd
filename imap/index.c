@@ -1154,7 +1154,7 @@ static void index_queue_seenchange(struct index_state *state,
                                    uid,
                                    isseen ? &flags : NULL,
                                    isseen ? NULL : &flags,
-                                   /*arrival*/ false);
+                                   CONV_ARRIVAL_NONE);
     strarray_fini(&flags);
 }
 

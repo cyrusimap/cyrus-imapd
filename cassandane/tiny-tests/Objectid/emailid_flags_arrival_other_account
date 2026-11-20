@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A copy made or moved from another account merges every flag but \Seen with
+# the target account's copies; each copy keeps its own \Seen.
+#
+sub test_emailid_flags_arrival_other_account
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub flags_by_folder ($imap, @folders) {
+        my %got;
+        for my $folder (@folders) {
+            $imap->select($folder);
+            my $res = $imap->fetch('1:*', '(flags)');
+            $got{$folder} = [
+                map { [ grep { $_ ne q{\Recent} } $res->{$_}{flags}->@* ] }
+                sort { $a <=> $b } keys %$res
+            ];
+        }
+        return \%got;
+    }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: arrival other account\r\n"
+                . "Message-ID: <arrival-other-account\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $self->{instance}->create_user('other');
+    for my $folder (qw(a d1 d2)) {
+        $talk->create("INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+        $talk->setacl("INBOX.$folder", other => 'lrswi');
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    $talk->append('INBOX.a', '($Old)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->append('INBOX', '(\\Seen $Other)', $literal);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    $othertalk->select('INBOX');
+    $othertalk->copy('1', 'user.cassandane.d1');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $othertalk->move('1', 'user.cassandane.d2');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $othertalk->unselect();
+
+    $self->assert_cmp_deeply({
+        'user.cassandane.a'  => [ bag('$Old', '$Other') ],
+        'user.cassandane.d1' => [ bag('$Old', '$Other', '\\Seen') ],
+        'user.cassandane.d2' => [ bag('$Old', '$Other', '\\Seen') ],
+    }, flags_by_folder($othertalk,
+                       qw(user.cassandane.a user.cassandane.d1 user.cassandane.d2)));
+
+    $self->assert_cmp_deeply({
+        'INBOX.a'  => [ bag('$Old', '$Other') ],
+        'INBOX.d1' => [ bag('$Old', '$Other') ],
+        'INBOX.d2' => [ bag('$Old', '$Other') ],
+    }, flags_by_folder($talk, qw(INBOX.a INBOX.d1 INBOX.d2)));
+}
