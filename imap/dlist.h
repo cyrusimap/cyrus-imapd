@@ -58,25 +58,11 @@ struct dlist {
 const char *dlist_reserve_path(const char *part, int isarchive,
                                const struct message_guid *guid);
 
-/* set fields */
-void dlist_makeatom(struct dlist *dl, const char *val);
-void dlist_makeflag(struct dlist *dl, const char *val);
-void dlist_makenum32(struct dlist *dl, uint32_t val);
-void dlist_makenum64(struct dlist *dl, bit64 val);
-void dlist_makedate(struct dlist *dl, time_t val);
-void dlist_makehex64(struct dlist *dl, bit64 val);
-void dlist_makemap(struct dlist *dl, const char *val, size_t len);
-void dlist_makeguid(struct dlist *dl, const struct message_guid *guid);
-void dlist_makefile(struct dlist *dl,
-                    const char *part, const struct message_guid *guid,
-                    unsigned long size, const char *fname);
-
 /* parse fields */
 int dlist_toatom(struct dlist *dl, const char **valp);
 int dlist_toflag(struct dlist *dl, const char **valp);
 int dlist_tonum32(struct dlist *dl, uint32_t *valp);
 int dlist_tonum(struct dlist *dl, bit64 *valp);
-int dlist_todate(struct dlist *dl, time_t *valp);
 int dlist_tohex32(struct dlist *dl, uint32_t *valp);
 int dlist_tohex(struct dlist *dl, bit64 *valp);
 int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp);
@@ -90,7 +76,6 @@ int dlist_tofile(struct dlist *dl,
 
 int dlist_isatomlist(const struct dlist *dl);
 int dlist_iskvlist(const struct dlist *dl);
-int dlist_isfile(const struct dlist *dl);
 /* XXX - these two aren't const, they can fiddle internals */
 int dlist_isnum(struct dlist *dl);
 int dlist_ishex64(struct dlist *dl);

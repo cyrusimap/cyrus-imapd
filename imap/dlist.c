@@ -43,6 +43,13 @@
 
 static const char *lastkey = NULL;
 
+static int dlist_isfile(const struct dlist *dl)
+{
+    if (!dl) return 0;
+
+    return dl->type == DL_FILE;
+}
+
 static void printfile(struct protstream *out, const struct dlist *dl)
 {
     struct stat sbuf;
@@ -363,7 +370,7 @@ static void _dlist_clean(struct dlist *dl)
 }
 
 
-void dlist_makeatom(struct dlist *dl, const char *val)
+static void dlist_makeatom(struct dlist *dl, const char *val)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -376,7 +383,7 @@ void dlist_makeatom(struct dlist *dl, const char *val)
         dl->type = DL_NIL;
 }
 
-void dlist_makeflag(struct dlist *dl, const char *val)
+static void dlist_makeflag(struct dlist *dl, const char *val)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -389,7 +396,7 @@ void dlist_makeflag(struct dlist *dl, const char *val)
         dl->type = DL_NIL;
 }
 
-void dlist_makenum32(struct dlist *dl, uint32_t val)
+static void dlist_makenum32(struct dlist *dl, uint32_t val)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -397,7 +404,7 @@ void dlist_makenum32(struct dlist *dl, uint32_t val)
     dl->nval = val;
 }
 
-void dlist_makenum64(struct dlist *dl, bit64 val)
+static void dlist_makenum64(struct dlist *dl, bit64 val)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -405,7 +412,7 @@ void dlist_makenum64(struct dlist *dl, bit64 val)
     dl->nval = val;
 }
 
-void dlist_makedate(struct dlist *dl, time_t val)
+static void dlist_makedate(struct dlist *dl, time_t val)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -413,7 +420,7 @@ void dlist_makedate(struct dlist *dl, time_t val)
     dl->nval = val;
 }
 
-void dlist_makehex64(struct dlist *dl, bit64 val)
+static void dlist_makehex64(struct dlist *dl, bit64 val)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -421,7 +428,7 @@ void dlist_makehex64(struct dlist *dl, bit64 val)
     dl->nval = val;
 }
 
-void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
+static void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -434,7 +441,7 @@ void dlist_makeguid(struct dlist *dl, const struct message_guid *guid)
         dl->type = DL_NIL;
 }
 
-void dlist_makefile(struct dlist *dl,
+static void dlist_makefile(struct dlist *dl,
                     const char *part, const struct message_guid *guid,
                     unsigned long size, const char *fname)
 {
@@ -452,7 +459,7 @@ void dlist_makefile(struct dlist *dl,
         dl->type = DL_NIL;
 }
 
-EXPORTED void dlist_makemap(struct dlist *dl, const char *val, size_t len)
+static void dlist_makemap(struct dlist *dl, const char *val, size_t len)
 {
     if (!dl) return;
     _dlist_clean(dl);
@@ -1449,7 +1456,7 @@ EXPORTED int dlist_tonum32(struct dlist *dl, uint32_t *valp)
     return 0;
 }
 
-int dlist_todate(struct dlist *dl, time_t *valp)
+static int dlist_todate(struct dlist *dl, time_t *valp)
 {
     bit64 v;
 
@@ -1549,13 +1556,6 @@ int dlist_iskvlist(const struct dlist *dl)
     if (!dl) return 0;
 
     return (dl->type == DL_KVLIST);
-}
-
-int dlist_isfile(const struct dlist *dl)
-{
-    if (!dl) return 0;
-
-    return (dl->type == DL_FILE);
 }
 
 /* XXX - these ones aren't const, because they can change
