@@ -85,6 +85,7 @@ mbox.xconvmodseq        the mailbox's highest conversation modseq
 
 msg                     placeholder for "no message"; value is always ~null~
 msg.cid                 the message's conversation id
+msg.count               how many messages an operation covered
 msg.date                the message's date, as sent
 msg.draft               1 if the record is a draft
 msg.emailid             the message's JMAP id
@@ -95,6 +96,7 @@ msg.from                the message's envelope sender
 msg.guid                the message's guid
 msg.id                  the message's RFC 5322 Message-ID
 msg.imapuid             the message's IMAP uid within its mailbox
+msg.imapuids            a set of IMAP uids within a mailbox, as a sequence set
 msg.inreplyto           the first msg-id in the message's In-Reply-To
 msg.internaldate        the message's internaldate
 msg.lastupdated         when the record was last updated

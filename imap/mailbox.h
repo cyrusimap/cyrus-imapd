@@ -788,6 +788,21 @@ extern int mailbox_reload_index_record_dirty(struct mailbox *mailbox,
                                              struct index_record *record);
 extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
                                         struct index_record *record);
+/**
+ * Give each unexpunged message whose uid is in @p uids a new modseq, as any
+ * change to it would, and change nothing else.
+ *
+ * Unlike mailbox_rewrite_index_record() on each, this leaves the
+ * conversations db, cache, counts and the DAV and alarm indexes alone, and
+ * logs one auditlog line for the lot, so it is far cheaper.  Each message
+ * gets its own modseq, so that Email/changes can page through them.
+ *
+ * @param mailbox  the mailbox, index locked for writing
+ * @param uids     the uids to touch, or NULL for every message
+ * @return 0, or an error from buffering a changed record
+ */
+extern int mailbox_touch_records(struct mailbox *mailbox,
+                                 const seqset_t *uids);
 extern int mailbox_append_index_record(struct mailbox *mailbox,
                                        struct index_record *record);
 /**
