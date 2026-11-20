@@ -257,10 +257,12 @@ static int octet_matches_(const char *text, size_t tlen,
             set_var(var_num, val_start, t, match_vars);
             break;
         case '\\':
-            c = *p++;
+            /* a trailing backslash escapes nothing, so is literal */
+            if (*p) c = *p++;
             /* falls through */
         default:
-            if ((c == *t) || (casemap && (toupper(c) == toupper(*t)))) {
+            if (tlen &&
+                ((c == *t) || (casemap && (toupper(c) == toupper(*t))))) {
                 t++; tlen--;
             } else {
                 /* literal char doesn't match */
