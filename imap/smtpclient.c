@@ -750,6 +750,11 @@ static int validate_envelope(smtp_envelope_t *env)
                  lf_s("smtpclient.reason", "no_sender"));
         return IMAP_PROTOCOL_ERROR;
     }
+    if (!smtp_is_safe_mailbox(env->from.addr)) {
+        xsyslog_ev(LOG_ERR, "smtpclient.sender.invalid",
+                   lf_s("msg.from", env->from.addr));
+        return IMAP_PROTOCOL_ERROR;
+    }
     r = validate_envelope_params(&env->from.params);
     if (r) return r;
 
@@ -764,6 +769,11 @@ static int validate_envelope(smtp_envelope_t *env)
             xsyslog_ev(LOG_WARNING, "smtpclient.envelope.invalid",
                        lf_s("smtpclient.reason", "bad_recipient"),
                        lf_d("smtpclient.rcpt.index", i));
+            return IMAP_PROTOCOL_ERROR;
+        }
+        if (!smtp_is_safe_mailbox(addr->addr)) {
+            xsyslog_ev(LOG_ERR, "smtpclient.recipient.invalid",
+                       lf_s("msg.to", addr->addr));
             return IMAP_PROTOCOL_ERROR;
         }
         r = validate_envelope_params(&addr->params);
@@ -1061,6 +1071,30 @@ EXPORTED int smtp_is_valid_esmtp_value(const char *val)
         }
     }
     return 1;
+}
+
+EXPORTED bool smtp_is_safe_mailbox(const char *addr)
+{
+    const unsigned char *p = (const unsigned char *) addr;
+
+    if (*p == '"') {
+        /* quoted-string local-part: qtextSMTP or quoted-pairSMTP */
+        for (p++; *p != '"'; p++) {
+            if (!*p || *p < 0x20 || *p == 0x7f) return false;
+            if (*p == '\\') {
+                p++;
+                if (*p < 0x20 || *p > 0x7e) return false;
+            }
+        }
+        p++;
+    }
+
+    for (; *p; p++) {
+        if (*p < 0x20 || *p == 0x7f) return false;
+        if (strchr(" <>\"\\", *p)) return false;
+    }
+
+    return true;
 }
 
 /* Encodes into the current location of the struct buf.

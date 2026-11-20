@@ -1,0 +1,40 @@
+#include "cunit/unit.h"
+#include "imap/smtpclient.h"
+
+static void test_safe_mailbox(void)
+{
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox(""));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("a@example.com"));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("a.b+tag@example.com"));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("a@[192.0.2.1]"));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("Postmaster"));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("\xc3\xa9@example.com"));
+
+    /* a quoted local-part may hold what a bare one can't */
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("\"a b\"@example.com"));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("\"<a>\"@example.com"));
+    CU_ASSERT_TRUE(smtp_is_safe_mailbox("\"a\\\"b\\\\c\"@example.com"));
+}
+
+static void test_unsafe_mailbox(void)
+{
+    /* ends the command line */
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a@example.com\r\nRSET"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a@example.com\nRSET"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a\x01@example.com"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a\x7f@example.com"));
+
+    /* ends the path, to add parameters */
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a@example.com> AUTH=b"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a@example.com AUTH=b"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("<a@example.com>"));
+
+    /* quoting doesn't cover control bytes, or what follows it */
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("\"a\r\nRSET\"@example.com"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("\"a\\\r\"@example.com"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("\"a\"@example.com>"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("\"a\"b\"@example.com"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("\"unterminated@example.com"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("\"a\\"));
+    CU_ASSERT_FALSE(smtp_is_safe_mailbox("a\\b@example.com"));
+}
