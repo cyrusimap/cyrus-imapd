@@ -1,0 +1,28 @@
+Description:
+
+Conversation subjects are now NFKC-normalized, so replies join their
+conversation when the reply prefix uses compatibility forms such as the
+CJK full-width colon or ideographic space, as in "回复：foo".  A space
+before the colon, as in French "RE : foo", is now also accepted.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  Existing conversations keep matching new messages as before, and
+also accept the new forms.  Conversation records written by this version
+can't be read by older versions.
+
+
+GitHub issue:
+
+None.

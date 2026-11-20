@@ -117,6 +117,13 @@ static void test_initmcstr(void)
 
     /* we don't free(s) - the buf_free() should do that */
     buf_free(&b);
+
+    /* an empty string is still owned by the buf */
+    buf_initmcstr(&b, xstrdup(""));
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc > 0);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "");
+    buf_free(&b);
 }
 
 static void test_long(void)

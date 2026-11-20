@@ -1512,6 +1512,16 @@ static void test_subject_normalise(void)
              "nonbreakingspace");
     TESTCASE("回复: test no ascii",
              "testnoascii");
+    TESTCASE("回复：foo", "foo");
+    TESTCASE("RE：foo", "foo");
+    TESTCASE("Ｒｅ：foo", "foo");
+    TESTCASE("转发：回复：　foo", "foo");
+    TESTCASE("回复 ：foo", "foo");
+    TESTCASE("　Re: foo　bar", "foobar");
+    TESTCASE("RE : TR : foo", "foo");
+    TESTCASE("RE" "\xC2\xA0" ": foo", "foo");
+    TESTCASE("no re : foobar", "nore:foobar");
+    TESTCASE("［PATCH］ foo", "foo");
     TESTCASE("unmatched left] foobar",
              "foobar");
     TESTCASE("unmatched left] foobar [unmatched=[matched]",
@@ -1519,6 +1529,10 @@ static void test_subject_normalise(void)
     TESTCASE("no re: foobar", "nore:foobar");
     TESTCASE("re: no re: foobar", "nore:foobar");
     TESTCASE("\nfoo\rbar \tbaz ", "foobarbaz");
+    /* e, SPACE, COMBINING CIRCUMFLEX ACCENT (U+0302), x */
+    TESTCASE("e \xCC\x82x", "\xC3\xAAx");
+    /* ACUTE ACCENT (U+00B4) decomposes to SPACE, U+0301 under NFKC */
+    TESTCASE("e\xC2\xB4x", "\xC3\xA9x");
 }
 
 #undef TESTCASE
