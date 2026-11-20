@@ -186,10 +186,23 @@ Login Authentication
 This section discusses different types of authentication (ways of logging in)
 that can be used with Cyrus IMAP.
 
-The Cyrus IMAP server uses the Cyrus SASL library for authentication. This
-section describes how to configure SASL with use with Cyrus imapd. Please
-consult the :cyrus-sasl:`Cyrus SASL System Administrator's Guide </>` for more
-detailed, up-to-date information.
+The Cyrus IMAP server can use the Cyrus SASL library for authentication.  The
+Cyrus SASL library is highly flexible and can support many different
+authentication styles.  Some documentation for configuring Cyrus SASL is
+provided in this section, but please consult the
+:cyrus-sasl:`Cyrus SASL System Administrator's Guide </>`
+for more detailed, up-to-date information.
+
+The Cyrus IMAP server can be built without the Cyrus SASL library.  The options
+available in this configuration are limited, but that may be preferable if you
+don't need the complexity of Cyrus-SASL.
+
+Without Cyrus-SASL, you get:
+
+* The ``ANONYMOUS``, ``PLAIN`` and ``EXTERNAL`` mechanisms
+  (see :imapdconf:`sasl_mech_list`)
+* The ``saslauthd`` password check method
+  (see :imapdconf:`sasl_pwcheck_method`)
 
 Anonymous Login
 ===============
@@ -206,7 +219,28 @@ logins.
 Plaintext Authentication
 ========================
 
-The SASL library has several ways of verifying plaintext passwords. Plaintext
+Username and password credentials are provided over the wire in plain text.
+By default, Cyrus IMAP only advertises plaintext authentication mechanisms
+to clients after a TLS encryption layer has been negotiated, unless the
+:imapdconf:`allowplaintext` option has been enabled (but don't do that).
+
+Credentials are checked according to the :imapdconf:`sasl_pwcheck_method`
+option.  Without Cyrus SASL, this will be ``saslauthd``.
+
+You will need a local saslauthd service.  This service receives credentials
+over a UNIX socket, validates them against your authentication system, and
+returns a suitable response.  Cyrus IMAP does not provide a general
+implementation of such a service, but in the cyrus-imapd source distribution,
+``cassandane/utils/fakesaslauthd`` is a minimal example of this service that is
+used for testing.
+
+The :imapdconf:`sasl_saslauthd_path` option must be set to the path to the UNIX
+socket your saslauthd service is listening on.
+
+Plaintext Authentication with Cyrus SASL
+========================================
+
+Cyrus SASL has several ways of verifying plaintext passwords. Plaintext
 passwords are passed either by the IMAP ``LOGIN`` command or by the SASL
 ``PLAIN`` mechanism (under a TLS layer).
 
@@ -229,8 +263,8 @@ To disallow the use of plaintext passwords for authentication, you can set
 ``allowplaintext: no`` in imapd.conf. This will still allow PLAIN under TLS,
 but IMAP LOGIN commands will now fail.
 
-Kerberos Logins
-===============
+Kerberos Logins with Cyrus SASL
+===============================
 
 The Kerberos SASL mechanism supports the ``GSSAPI`` authentication mechanism.
 The mechanism requires that a ``keytab`` file exist in the location given in
@@ -248,8 +282,8 @@ If the ``loginuseacl`` configuration option is turned on, than any Kerberos
 identity that is granted the ``a`` right on the user's ``INBOX`` is permitted
 to log in as that user.
 
-Shared Secrets Logins
-=====================
+Shared Secrets Logins with Cyrus SASL
+=====================================
 
 The SCRAM mechanisms require the user and the server to share a secret
 (generally a password) that can be used for comparison without actually passing
