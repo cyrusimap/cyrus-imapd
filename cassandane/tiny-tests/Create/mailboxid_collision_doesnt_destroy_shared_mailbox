@@ -1,0 +1,44 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Verify that CREATE (MAILBOXID ...) refuses a uniqueid that already
+# belongs to another mailbox, rather than reusing it.
+#
+# :IMAPMurder bypasses imapd.c's non-admin MAILBOXID gate, so this
+# exercises the mboxlist-level check directly.
+#
+sub test_mailboxid_collision_doesnt_destroy_shared_mailbox
+    :OldJMAPIds :IMAPMurder :needs_component_murder
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "create a read-only shared mailbox with messages";
+    $admintalk->create("user.sharer") or die;
+    $admintalk->setacl("user.sharer", admin => 'lrswipkxtecdan') or die;
+    $admintalk->setacl("user.sharer", cassandane => 'lr') or die;
+
+    $self->{adminstore}->set_folder("user.sharer");
+    $self->make_message("Msg 1", store => $self->{adminstore}) or die;
+    $self->make_message("Msg 2", store => $self->{adminstore}) or die;
+
+    my $before = $admintalk->status("user.sharer", ['messages']);
+    $self->assert_num_equals(2, $before->{messages});
+
+    xlog $self, "sharee reads the sharer mailbox's uniqueid via STATUS";
+    my $shared = $talk->status("Other Users.sharer", ['mailboxid']);
+    my $sharerid = $shared->{mailboxid}[0];
+    $self->assert_not_null($sharerid);
+
+    xlog $self, "sharee tries to create a mailbox reusing that mailboxid";
+    $talk->_imap_cmd('CREATE', 0, '', "INBOX.dup_mailboxid",
+                      [ 'MAILBOXID', $sharerid ]);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "the sharer mailbox is untouched";
+    my $after = $admintalk->status("user.sharer", ['messages', 'mailboxid']);
+    $self->assert_num_equals(2, $after->{messages});
+    $self->assert_str_equals($sharerid, $after->{mailboxid}[0]);
+}
