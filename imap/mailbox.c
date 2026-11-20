@@ -55,6 +55,7 @@
 #include "sievedir.h"
 #endif
 #include "crc32.h"
+#include "emailid_flags.h"
 #include "md5.h"
 #include "global.h"
 #include "imparse.h"
@@ -245,6 +246,17 @@ static struct mailbox *find_listitem(const char *lockname)
     for (item = open_mailboxes; item; item = item->next) {
         if (!strcmp(lockname, item->lockname))
             return item;
+    }
+
+    return NULL;
+}
+
+EXPORTED struct mailbox *mailbox_findopen(const char *name)
+{
+    for (struct mailbox *item = open_mailboxes; item; item = item->next) {
+        if (item->mbentry && !strcmpsafe(name, item->mbentry->name)) {
+            return item;
+        }
     }
 
     return NULL;
@@ -2548,6 +2560,20 @@ EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int index_locktype)
     return 0;
 }
 
+EXPORTED void mailbox_drain_flags(struct mailbox *mailbox)
+{
+    if (mailbox->refcount > 1 || mailbox->cstate_flag != CSTATE_FLAG_LOCAL) {
+        return;
+    }
+
+    int r = emailid_flags_drain(mailbox->cstate_value);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "emailid.flags.drain.failed",
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
+    }
+}
+
 /*
  * Release lock on the index file for 'mailbox'
  */
@@ -2561,6 +2587,9 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 
     if (mailbox->refcount > 1)
         return;
+
+    /* sibling copies may be in this mailbox, so drain before its commit */
+    mailbox_drain_flags(mailbox);
 
     /* this is kinda awful, but too much code expects it to work, and the
      * refcounting isn't good about partial commit/abort and all the
@@ -4269,6 +4298,82 @@ EXPORTED struct conversations_state *mailbox_get_cstate_full(struct mailbox *mai
     return mailbox->cstate_value;
 }
 
+/* Queue the flags changed from old to new for the email's other copies.
+ * An arrival (no old) is queued with no flags. */
+static void queue_flagchange(struct conversations_state *cstate,
+                             struct mailbox *mailbox,
+                             const struct index_record *old,
+                             const struct index_record *new)
+{
+    static const struct
+    {
+        uint32_t bit;
+        const char *name;
+    } sysflags[] = {
+        { FLAG_ANSWERED, "\\Answered" },
+        { FLAG_FLAGGED,  "\\Flagged"  },
+        { FLAG_DRAFT,    "\\Draft"    },
+        { FLAG_SEEN,     "\\Seen"     },
+    };
+    strarray_t added = STRARRAY_INITIALIZER;
+    strarray_t removed = STRARRAY_INITIALIZER;
+
+    if (!new || mailbox->silentchanges || new->silentupdate) {
+        return;
+    }
+    if (new->system_flags & FLAG_DELETED) {
+        return;
+    }
+    if (new->internal_flags & FLAG_INTERNAL_EXPUNGED) {
+        return;
+    }
+    if (old && (old->internal_flags & FLAG_INTERNAL_EXPUNGED)) {
+        return;
+    }
+
+    if (old) {
+        for (size_t i = 0; i < sizeof(sysflags) / sizeof(sysflags[0]); i++) {
+            bool was = old->system_flags & sysflags[i].bit;
+            bool is = new->system_flags & sysflags[i].bit;
+            if (is && !was) {
+                strarray_append(&added, sysflags[i].name);
+            }
+            if (was && !is) {
+                strarray_append(&removed, sysflags[i].name);
+            }
+        }
+
+        for (int i = 0; i < MAX_USER_FLAGS; i++) {
+            uint32_t mask = 1U << (i & 31);
+            bool was = old->user_flags[i / 32] & mask;
+            bool is = new->user_flags[i / 32] & mask;
+            if (was == is || !mailbox->h.flagname[i]) {
+                continue;
+            }
+            strarray_append(is ? &added : &removed, mailbox->h.flagname[i]);
+        }
+
+        if (!strarray_size(&added) && !strarray_size(&removed)) {
+            return;
+        }
+    }
+
+    if (!mboxname_isnondeliverymailbox(mailbox_name(mailbox),
+                                       mailbox_mbtype(mailbox)))
+    {
+        conversations_queue_flagchange(cstate,
+                                       &new->guid,
+                                       mailbox_name(mailbox),
+                                       new->uid,
+                                       &added,
+                                       &removed,
+                                       /*arrival*/ !old);
+    }
+
+    strarray_fini(&added);
+    strarray_fini(&removed);
+}
+
 static int mailbox_update_conversations(struct mailbox *mailbox,
                                         const struct index_record *old,
                                         struct index_record *new)
@@ -4286,8 +4391,10 @@ static int mailbox_update_conversations(struct mailbox *mailbox,
         return 0;
 
     int ignorelimits = new ? new->ignorelimits : 1;
-    return conversations_update_record(cstate, mailbox, old, new,
-                                       /*allowrenumber*/1, ignorelimits, mailbox->silentchanges);
+    int r = conversations_update_record(cstate, mailbox, old, new,
+                                        /*allowrenumber*/1, ignorelimits, mailbox->silentchanges);
+    if (!r) queue_flagchange(cstate, mailbox, old, new);
+    return r;
 }
 
 

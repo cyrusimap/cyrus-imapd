@@ -9,6 +9,7 @@
 #include <config.h>
 #endif
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include "arrayu64.h"
@@ -62,6 +63,21 @@ struct conv_quota {
 
 #define CONV_QUOTA_INIT { 0, 0 }
 
+/**
+ * A flag change made to some copies of one email, waiting to be applied to
+ * its other copies.  Queued by conversations_queue_flagchange().
+ */
+struct conv_flagchange
+{
+    struct message_guid guid;
+    strarray_t added;   /**< flag names to set; disjoint from removed */
+    strarray_t removed; /**< flag names to clear */
+    strarray_t origin_mboxnames; /**< copies already changed, which the drain
+                                      skips; pairs with origin_uids */
+    arrayu64_t origin_uids;
+    bool arrival; /**< a new copy arrived */
+};
+
 struct conversations_state {
     struct db *db;
     struct txn *txn;
@@ -82,6 +98,8 @@ struct conversations_state {
     unsigned quota_dirty:1;
     unsigned is_shared:1;
     unsigned compact_emailids:1;
+    hash_table flagchanges; /**< GUID hex -> struct conv_flagchange */
+    bool draining_flags;    /**< emailid_flags_drain() is running */
 };
 
 typedef struct conversation conversation_t;
@@ -339,6 +357,36 @@ extern int conversations_update_record(struct conversations_state *cstate,
                                        int allowrenumber,
                                        int ignorelimits,
                                        int silent);
+
+/**
+ * Queue a flag change for the other copies of an email.
+ *
+ * emailid_flags_drain() applies the queue before the conversations db
+ * commits.  Calls for the same GUID compose in order: an add cancels an
+ * earlier remove of the same flag, and the reverse.  A no-op while
+ * cstate->draining_flags is set.
+ *
+ * @param cstate    the conversations state to queue on
+ * @param guid      the email's GUID
+ * @param mboxname  mailbox of the copy already changed, which the drain skips
+ * @param uid       UID of that copy
+ * @param added     flag names set on it: system flags as "\\Flagged" and so
+ *                  on, user flags by name.  May be NULL.
+ * @param removed   flag names cleared on it.  May be NULL.
+ * @param arrival   the copy is new
+ */
+extern void conversations_queue_flagchange(struct conversations_state *cstate,
+                                           const struct message_guid *guid,
+                                           const char *mboxname,
+                                           uint32_t uid,
+                                           const strarray_t *added,
+                                           const strarray_t *removed,
+                                           bool arrival);
+
+/**
+ * Discard every queued flag change.
+ */
+extern void conversations_clear_flagchanges(struct conversations_state *cstate);
 
 extern int conversation_update(struct conversations_state *state,
                                 conversation_t *conv,

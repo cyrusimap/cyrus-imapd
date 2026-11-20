@@ -24,6 +24,7 @@
 #include "charset.h"
 #include "crc32.h"
 #include "dlist.h"
+#include "emailid_flags.h"
 #include "hash.h"
 #include "global.h"
 #include "imapd.h"
@@ -624,6 +625,7 @@ static void _conv_remove(struct conversations_state *state)
                 strarray_free(cur->s.folders);
             if (cur->s.altrep)
                 strarray_free(cur->s.altrep);
+            conversations_clear_flagchanges(&cur->s);
             user_nslock_release(&cur->user_nslock);
             free(cur);
             return;
@@ -697,6 +699,15 @@ EXPORTED int conversations_commit(struct conversations_state **statep)
     int r = 0;
 
     if (!state) return 0;
+
+    /* mailboxes the drain rewrote before failing have committed their index,
+     * so their conversations updates must commit too */
+    r = emailid_flags_drain(state);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "emailid.flags.drain.failed",
+                   lf_s("u.username", state->userid),
+                   lf_err("error", r));
+    }
 
     *statep = NULL;
 
@@ -2626,6 +2637,75 @@ EXPORTED int conversations_nanosecfix_record(struct conversations_state *cstate,
     }
 
     return r;
+}
+
+static void conv_flagchange_free(void *data)
+{
+    struct conv_flagchange *change = data;
+
+    strarray_fini(&change->added);
+    strarray_fini(&change->removed);
+    strarray_fini(&change->origin_mboxnames);
+    arrayu64_fini(&change->origin_uids);
+    free(change);
+}
+
+EXPORTED void conversations_clear_flagchanges(
+    struct conversations_state *cstate)
+{
+    if (hash_constructed(&cstate->flagchanges)) {
+        free_hash_table(&cstate->flagchanges, conv_flagchange_free);
+    }
+}
+
+EXPORTED void conversations_queue_flagchange(struct conversations_state *cstate,
+                                             const struct message_guid *guid,
+                                             const char *mboxname,
+                                             uint32_t uid,
+                                             const strarray_t *added,
+                                             const strarray_t *removed,
+                                             bool arrival)
+{
+    if (cstate->draining_flags) {
+        return;
+    }
+
+    if (!hash_constructed(&cstate->flagchanges)) {
+        construct_hash_table(&cstate->flagchanges, 64, 0);
+    }
+
+    const char *key = message_guid_encode(guid);
+    struct conv_flagchange *change = hash_lookup(key, &cstate->flagchanges);
+    if (!change) {
+        change = xzmalloc(sizeof(*change));
+        message_guid_copy(&change->guid, guid);
+        hash_insert(key, change, &cstate->flagchanges);
+    }
+
+    for (int i = 0; i < strarray_size(added); i++) {
+        const char *flag = strarray_nth(added, i);
+        strarray_remove_all_case(&change->removed, flag);
+        strarray_add_case(&change->added, flag);
+    }
+    for (int i = 0; i < strarray_size(removed); i++) {
+        const char *flag = strarray_nth(removed, i);
+        strarray_remove_all_case(&change->added, flag);
+        strarray_add_case(&change->removed, flag);
+    }
+
+    if (arrival) {
+        change->arrival = true;
+    }
+
+    for (size_t i = 0; i < arrayu64_size(&change->origin_uids); i++) {
+        if (arrayu64_nth(&change->origin_uids, i) == uid
+            && !strcmp(strarray_nth(&change->origin_mboxnames, i), mboxname))
+        {
+            return;
+        }
+    }
+    strarray_append(&change->origin_mboxnames, mboxname);
+    arrayu64_append(&change->origin_uids, uid);
 }
 
 EXPORTED int conversations_update_record(struct conversations_state *cstate,

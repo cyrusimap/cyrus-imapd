@@ -1881,11 +1881,19 @@ EXPORTED void index_unlock(struct index_state *state)
     /* grab the latest modseq */
     state->highestmodseq = state->mailbox->i.highestmodseq;
 
+    /* drain before filling the status.  Copies the drain changes here aren't
+     * in the map: the old highestmodseq makes the next lock read them, and
+     * numunseen is stale. */
+    mailbox_drain_flags(state->mailbox);
+    bool drained = state->highestmodseq != state->mailbox->i.highestmodseq;
+
     if (state->mailbox->i.dirty) {
         struct statusdata sdata = STATUSDATA_INIT;
         status_fill_mailbox(state->mailbox, &sdata);
         // we zero out recent data for everyone else
-        status_fill_seen(state->userid, &sdata, /*recent*/0, state->numunseen);
+        if (!drained)
+            status_fill_seen(state->userid, &sdata, /*recent*/0,
+                             state->numunseen);
         mailbox_unlock_index(state->mailbox, &sdata);
     }
     else {
@@ -2557,6 +2565,11 @@ EXPORTED int index_copy(struct index_state *state,
 done:
     free(copyargs.records);
     mailbox_close(&destmailbox);
+    /* a copy into the selected mailbox locks it through the reopen; unlock it
+     * while the caller still holds the user namespace lock.  Not index_unlock:
+     * the session hasn't seen the new messages yet. */
+    if (srcmailbox && mailbox_index_islocked(srcmailbox, 0))
+        mailbox_unlock_index(srcmailbox, NULL);
     if (msgrecs) {
         for (i = 0; i < msgrecs->count; i++) {
             msgrecord_t *mr = ptrarray_nth(msgrecs, i);
