@@ -1,0 +1,26 @@
+Description:
+
+The vnd.fastmail.jmapStates event parameter now reports the states as
+committed.  Message and flags events used to report the states from before
+the change was committed, so they disagreed with the MailboxModseq event
+that followed them.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.

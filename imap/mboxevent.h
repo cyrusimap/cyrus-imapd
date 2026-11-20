@@ -188,6 +188,13 @@ struct mboxevent {
     strarray_t midset;
     seqset_t *olduidset;
 
+    /** Mailbox whose user's counters fill vnd.fastmail.jmapStates.  They are
+     *  read when the notification is flushed, after the changes it reports
+     *  have been committed, rather than when the event is built. */
+    char *jmapstates_mboxname;
+    /** Whether that user's state strings carry the compact-ids prefix */
+    bool jmapstates_compact;
+
     struct mboxevent *prev;
     struct mboxevent *next;
 };

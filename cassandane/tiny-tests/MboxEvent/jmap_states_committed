@@ -1,0 +1,48 @@
+#!perl
+use Cassandane::Tiny;
+
+# A message or flags event is notified before its mailbox is committed, and
+# the commit then sends a MailboxModseq event.  Both must report the states
+# as committed, or a consumer sees two state changes for one action.
+
+sub _committed_states ($self, $event_type) {
+    my @events = map { decode_json($_->{MESSAGE}) }
+                 $self->{instance}->getnotify->@*;
+
+    my ($event)  = grep { $_->{event} eq $event_type } @events;
+    my ($modseq) = grep { $_->{event} eq 'MailboxModseq' } @events;
+    $self->assert_not_null($event, "got a $event_type event");
+    $self->assert_not_null($modseq, "got a MailboxModseq event");
+
+    my $states = $event->{'vnd.fastmail.jmapStates'};
+    $self->assert_cmp_deeply(
+        $modseq->{'vnd.fastmail.jmapStates'},
+        $states,
+        "$event_type and MailboxModseq report the same states",
+    );
+
+    my $talk = $self->{store}->get_client();
+    my $status = $talk->status('INBOX', [ 'highestmodseq' ]);
+    $self->assert_str_equals(
+        $status->{highestmodseq},
+        $states->{Email} =~ s/^J//r,
+        "$event_type reports the committed Email state",
+    );
+}
+
+sub test_jmap_states_committed ($self) {
+    $self->{instance}->getnotify();
+
+    my $msg = $self->{gen}->generate(subject => "committed", uid => 1);
+    my $ret = $self->{instance}->deliver($msg, user => "cassandane");
+    $self->assert_num_equals(0, $ret);
+
+    $self->_committed_states('MessageNew');
+
+    my $talk = $self->{store}->get_client();
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->_committed_states('MessageRead');
+}
