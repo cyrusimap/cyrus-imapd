@@ -1,0 +1,29 @@
+#!/bin/bash
+# twom-bench-build [path-to-cyrus-source]
+# Builds twom-bench against twom.c from the cyrus tree, as a shared library so
+# the twom-capture / twom-hitmiss uprobes can attach to it the same way they
+# attach to libcyrus.
+set -eu
+# contrib/twom-trace/ -> the cyrus tree two levels up
+SRC=${1:-$(cd "$(dirname "$(readlink -f "$0")")/../.." && pwd)}
+HERE=$(dirname "$(readlink -f "$0")")
+LIBDIR=$HERE/build
+[ -f "$SRC/lib/twom.c" ] || { echo "no twom.c under $SRC/lib" >&2; exit 1; }
+
+mkdir -p "$LIBDIR"
+# cyrus's own assert.h calls assertionfailed(); twom.c is otherwise standalone
+cat > "$LIBDIR/stub.c" <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+void assertionfailed(const char *file, int line, const char *expr)
+{ fprintf(stderr, "assert %s:%d: %s\n", file, line, expr); abort(); }
+EOF
+
+gcc -O2 -g -fPIC -shared -I"$SRC/lib" \
+    -o "$LIBDIR/libtwom.so" "$SRC/lib/twom.c" "$LIBDIR/stub.c" -luuid
+gcc -O2 -g -I"$SRC/lib" -o "$HERE/twom-bench" "$HERE/twom-bench.c" \
+    -L"$LIBDIR" -ltwom -Wl,-rpath,"$LIBDIR"
+
+echo "built $HERE/twom-bench"
+echo "  twom source: $(cd "$SRC" && git describe --always --dirty 2>/dev/null || echo "$SRC")"
+echo "  trace it with: LIB=$LIBDIR/libtwom.so $HERE/twom-capture 30"
