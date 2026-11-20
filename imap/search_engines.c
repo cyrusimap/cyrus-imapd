@@ -53,6 +53,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
 };
 
 EXPORTED const struct search_engine *search_engine(void)
@@ -192,6 +193,19 @@ EXPORTED modseq_t search_session_get_highest_createdmodseq(search_session_t *ses
     const struct search_engine *se = search_engine();
     return se->session_get_highest_createdmodseq ?
             se->session_get_highest_createdmodseq(session, index_generation) : 0;
+}
+
+EXPORTED modseq_t search_get_index_snapshot(const char *mboxname,
+                                            const char *partition,
+                                            uint64_t *index_generation)
+{
+    if (index_generation) {
+        *index_generation = 0;
+    }
+    const struct search_engine *se = search_engine();
+    return se->get_index_snapshot
+               ? se->get_index_snapshot(mboxname, partition, index_generation)
+               : 0;
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
