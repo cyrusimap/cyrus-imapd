@@ -445,6 +445,11 @@ magic(CalDAVNoDefaultCalendar => sub {
         caldav_create_default => 'no',
     );
 });
+magic(CardDAVNoDefaultAddressBook => sub {
+    shift->config_set(
+        carddav_create_default => 'no',
+    );
+});
 magic(AltPTSDBPath => sub {
     shift->config_set(
         'ptscache_db_path' => '@basedir@/conf/non-default-ptscache.db'

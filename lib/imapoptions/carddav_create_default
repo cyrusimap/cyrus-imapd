@@ -4,3 +4,7 @@ Default-Value: 1
 Last-Modified: UNRELEASED
 
 Create the 'Default' address book if it doesn't already exist.
+
+When disabled, no address book is created automatically, but the first one
+created through JMAP in an empty address book home is still given the DAV
+collection name 'Default', for CardDAV clients that expect it there.
