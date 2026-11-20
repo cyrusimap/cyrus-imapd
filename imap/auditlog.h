@@ -69,6 +69,19 @@ extern void auditlog_message_uid(const char *action,
 /** @brief Log mailbox modseq state */
 extern void auditlog_modseq(const struct mailbox *mailbox);
 
+/**
+ * Log one line for a change that gave many messages a new modseq and
+ * nothing else, in place of an auditlog_message() "touched" line each.
+ *
+ * @param mailbox  the mailbox, with its highestmodseq after the change
+ * @param uids     the uids of the messages changed
+ * @param count    how many messages were changed; they got the modseqs up
+ *                 to the mailbox's highestmodseq, one each
+ */
+extern void auditlog_touched_bulk(const struct mailbox *mailbox,
+                                  const seqset_t *uids,
+                                  uint32_t count);
+
 /** @brief Log a proxy connection to a backend server */
 extern void auditlog_proxy(const char *userid, const char *status);
 
