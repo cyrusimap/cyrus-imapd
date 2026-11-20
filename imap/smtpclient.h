@@ -55,6 +55,19 @@ extern int smtp_is_valid_esmtp_keyword(const char *val);
  * as defined in RFC 5321, section 4.1.2. */
 extern int smtp_is_valid_esmtp_value(const char *val);
 
+/**
+ * Check that addr can be sent as the Mailbox of an RFC 5321 Path.
+ *
+ * This doesn't check that addr is a well-formed Mailbox, only that it can't
+ * end the "<...>" or the command line it's written in.  It rejects control
+ * bytes anywhere, and space, angle brackets, DQUOTE and backslash outside a
+ * quoted-string local-part.  Bytes >= 0x80 are allowed, for SMTPUTF8.
+ *
+ * @param addr  the address, without angle brackets; "" is allowed
+ * @return true if addr is safe to send
+ */
+extern bool smtp_is_safe_mailbox(const char *addr);
+
 /* Encode val as an esmtp-value
  * as defined in RFC 5321, section 4.1.2. */
 extern void smtp_encode_esmtp_value(const char *val, struct buf *xtext);

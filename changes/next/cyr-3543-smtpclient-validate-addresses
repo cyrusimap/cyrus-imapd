@@ -1,0 +1,30 @@
+Description:
+
+Cyrus now refuses to send mail whose envelope sender or recipient could end
+the SMTP command it's written in: control characters anywhere, or a space,
+angle bracket, quote or backslash outside a quoted local-part.  Previously a
+CalDAV or JMAP calendar attendee address with a percent-encoded CRLF was
+written into RCPT TO verbatim, letting any calendar user inject SMTP
+commands, including a whole second message with an envelope of their
+choosing.  iMIP also no longer sends to, or lists in invitations, attendees
+with such addresses.
+
+
+Documentation:
+
+None
+
+
+Config changes:
+
+None
+
+
+Upgrade instructions:
+
+None
+
+
+GitHub issue:
+
+None
