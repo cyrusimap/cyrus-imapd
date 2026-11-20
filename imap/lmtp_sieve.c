@@ -358,18 +358,20 @@ static int getenvironment(void *sc __attribute__((unused)),
     return (*res ? SIEVE_OK : SIEVE_FAIL);
 }
 
+/* parse the message body if we haven't already */
+static int parse_body(deliver_data_t *mydata)
+{
+    if (mydata->content->body) return 0;
+
+    return message_parse_file_buf(mydata->m->f, &mydata->content->map,
+                                  &mydata->content->body, NULL);
+}
+
 static int getbody(void *mc, const char **content_types,
                    sieve_bodypart_t ***parts)
 {
     deliver_data_t *mydata = (deliver_data_t *) mc;
-    message_data_t *m = mydata->m;
-    int r = 0;
-
-    if (!mydata->content->body) {
-        /* parse the message body if we haven't already */
-        r = message_parse_file_buf(m->f, &mydata->content->map,
-                                   &mydata->content->body, NULL);
-    }
+    int r = parse_body(mydata);
 
     /* XXX currently struct bodypart as defined in message.h is the same as
        sieve_bodypart_t as defined in sieve_interface.h, so we can typecast */
@@ -378,6 +380,41 @@ static int getbody(void *mc, const char **content_types,
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
+
+static int getmimeparts(void *mc, arrayu64_t *depths)
+{
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+
+    if (parse_body(mydata)) return SIEVE_FAIL;
+
+    message_mimepart_depths(mydata->content->body, depths);
+
+    return SIEVE_OK;
+}
+
+static int getmimeheader(void *mc, unsigned part, const char *name,
+                         strarray_t *values)
+{
+    deliver_data_t *mydata = (deliver_data_t *) mc;
+
+    if (!part) {
+        /* the message header, as edited by editheader */
+        const char **vals;
+
+        if (getheader(mc, name, &vals) != SIEVE_OK) return SIEVE_FAIL;
+        for (; *vals; vals++) strarray_append(values, *vals);
+
+        return SIEVE_OK;
+    }
+
+    if (parse_body(mydata)) return SIEVE_FAIL;
+
+    return message_mimepart_header(mydata->content, part, name, values) ?
+        SIEVE_OK : SIEVE_FAIL;
+}
+
+static const sieve_mime_t mime = { &getmimeparts, &getmimeheader,
+                                   &message_parse_mimeheader };
 
 static int sieve_find_script(const char *user, const char *domain,
                              const char *script, char *fname, size_t size);
@@ -2713,6 +2750,7 @@ sieve_interp_t *setup_sieve(struct sieve_interp_ctx *ctx)
     sieve_register_envelope(interp, &getenvelope);
     sieve_register_environment(interp, &getenvironment);
     sieve_register_body(interp, &getbody);
+    sieve_register_mime(interp, &mime);
     sieve_register_include(interp, &getinclude);
 
     sieve_register_logger(interp, &sieve_log); 

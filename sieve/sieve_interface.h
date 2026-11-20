@@ -70,6 +70,47 @@ typedef struct sieve_bodypart {
 typedef int sieve_get_body(void *message_context, const char **content_types,
                            sieve_bodypart_t ***parts);
 
+/**
+ * Append the nesting depth of every MIME part of the message to @p depths,
+ * in depth-first order.  Part 0 is the message itself, at depth 0, and the
+ * parts that follow a part with a greater depth are its descendants.
+ *
+ * Used by the "foreverypart" and "mime" extensions (RFC 5703).
+ *
+ * @return SIEVE_OK, or SIEVE_FAIL if the message can't be parsed
+ */
+typedef int sieve_get_mimeparts(void *message_context, arrayu64_t *depths);
+
+/**
+ * Append the raw value of every @p header field of MIME part @p part (as
+ * numbered by sieve_get_mimeparts) to @p values.  For part 0 these must be
+ * the same values that sieve_get_header returns.
+ *
+ * @return SIEVE_OK if the field exists, SIEVE_FAIL otherwise
+ */
+typedef int sieve_get_mimeheader(void *message_context, unsigned part,
+                                 const char *header, strarray_t *values);
+
+/**
+ * Parse @p value as a structured MIME header field of the form
+ * "token[/token] *(; param)", as Content-Type and Content-Disposition are.
+ *
+ * Sets @p type and @p subtype (newly allocated, lowercased, NULL where
+ * absent) and appends each parameter's lowercased name and its value,
+ * decoded to UTF-8, to @p params as consecutive entries.
+ *
+ * @return SIEVE_OK if the leading token parsed, SIEVE_FAIL otherwise
+ */
+typedef int sieve_parse_mimeheader(const char *header, const char *value,
+                                   char **type, char **subtype,
+                                   strarray_t *params);
+
+typedef struct sieve_mime {
+    sieve_get_mimeparts *getparts;
+    sieve_get_mimeheader *getheader;
+    sieve_parse_mimeheader *parseheader;
+} sieve_mime_t;
+
 typedef struct sieve_vacation {
     int min_response;           /* 0 -> defaults to 3 days */
     int max_response;           /* 0 -> defaults to 90 days */
@@ -219,6 +260,12 @@ void sieve_register_fname(sieve_interp_t *interp, sieve_get_fname *f);
 void sieve_register_envelope(sieve_interp_t *interp, sieve_get_envelope *f);
 void sieve_register_environment(sieve_interp_t *interp, sieve_get_environment *f);
 void sieve_register_body(sieve_interp_t *interp, sieve_get_body *f);
+
+/**
+ * Register the MIME part callbacks, all of which are required.  Enables the
+ * "foreverypart" and "mime" extensions (RFC 5703).
+ */
+int sieve_register_mime(sieve_interp_t *interp, const sieve_mime_t *m);
 
 void sieve_register_extlists(sieve_interp_t *interp,
                              sieve_list_validator *v, sieve_list_comparator *c);

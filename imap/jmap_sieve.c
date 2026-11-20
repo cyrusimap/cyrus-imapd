@@ -1419,6 +1419,40 @@ static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***par
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
+static int getmimeparts(void *mc, arrayu64_t *depths)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    if (!m->content.body && parse_body(m)) return SIEVE_FAIL;
+
+    message_mimepart_depths(m->content.body, depths);
+
+    return SIEVE_OK;
+}
+
+static int getmimeheader(void *mc, unsigned part, const char *name,
+                         strarray_t *values)
+{
+    message_data_t *m = (message_data_t *) mc;
+
+    if (!part) {
+        const char **vals;
+
+        if (getheader(mc, name, &vals) != SIEVE_OK) return SIEVE_FAIL;
+        for (; *vals; vals++) strarray_append(values, *vals);
+
+        return SIEVE_OK;
+    }
+
+    if (!m->content.body && parse_body(m)) return SIEVE_FAIL;
+
+    return message_mimepart_header(&m->content, part, name, values) ?
+        SIEVE_OK : SIEVE_FAIL;
+}
+
+static const sieve_mime_t mime = { &getmimeparts, &getmimeheader,
+                                   &message_parse_mimeheader };
+
 static int getmailboxexists(void *sc, const char *extname)
 {
     script_data_t *sd = (script_data_t *) sc;
@@ -2253,6 +2287,7 @@ static int jmap_sieve_test(struct jmap_req *req)
     sieve_register_environment(interp, getenvironment);
     sieve_register_size(interp, getsize);
     sieve_register_body(interp, getbody);
+    sieve_register_mime(interp, &mime);
     sieve_register_mailboxexists(interp, &getmailboxexists);
     sieve_register_mailboxidexists(interp, &getmailboxidexists);
     sieve_register_specialuseexists(interp, &getspecialuseexists);

@@ -281,6 +281,32 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
                     bc_simple_generate(jumploc+2, retval, BT_JUMP, -1);
                 }
             }
+            else if (c->type == B_FOREVERYPART) {
+                /* FOREVERYPART
+                   (int: end of loop)
+                   (string: name)
+                   (loop body)
+                   NEXTPART
+                */
+                int jumploc = codep;
+
+                /* Allocate jump table offset */
+                if (!atleast(retval, jumploc+1)) return -1;
+
+                codep = bc_simple_generate(jumploc+1, retval,
+                                           BT_STR, c->u.fep.name);
+                if (codep == -1) return -1;
+
+                codep = bc_action_generate(codep, retval, c->u.fep.block);
+                if (codep == -1) return -1;
+
+                codep = bc_simple_generate(codep, retval,
+                                           BT_OPCODE, B_NEXTPART);
+                if (codep == -1) return -1;
+
+                /* update jump table with end of loop */
+                bc_simple_generate(jumploc, retval, BT_JUMP, codep);
+            }
             else {
                 codep = bc_args_generate(codep, retval, c->nargs, c->args);
                 if (codep == -1) return -1;

@@ -21,6 +21,9 @@ struct sieve_interp {
     sieve_get_envelope *getenvelope;
     sieve_get_environment *getenvironment;
     sieve_get_body *getbody;
+    sieve_get_mimeparts *getmimeparts;
+    sieve_get_mimeheader *getmimeheader;
+    sieve_parse_mimeheader *parsemimeheader;
     sieve_get_include *getinclude;
     sieve_get_fname *getfname;
     sieve_get_mailboxexists *getmailboxexists;
@@ -53,6 +56,12 @@ struct sieve_interp {
 
     /* have we added/deleted any headers? */
     unsigned edited_headers : 1;
+
+    /* MIME part state while a script runs */
+    struct {
+        arrayu64_t *depths; /* nesting depth of each part, NULL until fetched */
+        unsigned part;      /* part targeted by the innermost foreverypart */
+    } mime;
 
     struct {
         const char *folder;
@@ -134,8 +143,8 @@ enum sieve_capa_flag {
     /* MIME Part Handling - RFC 5703 */
     SIEVE_CAPA_ENCLOSE      = 0LL<<29, /* currently unsupported */
     SIEVE_CAPA_EXTRACT      = 0LL<<30, /* currently unsupported */
-    SIEVE_CAPA_FOREVERYPART = 0LL<<31, /* currently unsupported */
-    SIEVE_CAPA_MIME         = 0LL<<32, /* currently unsupported */
+    SIEVE_CAPA_FOREVERYPART = 1LL<<31,
+    SIEVE_CAPA_MIME         = 1LL<<32,
     SIEVE_CAPA_REPLACE      = 0LL<<33, /* currently unsupported */
 
     /* DSN & Deliver-By - RFC 6009 */

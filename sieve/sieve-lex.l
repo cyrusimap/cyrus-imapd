@@ -292,6 +292,19 @@ ws              [ \t]+
 <INITIAL>servermetadata       return yylval->nval = SERVERMETADATA;
 <INITIAL>servermetadataexists return SERVERMETADATAEXISTS;
 
+    /* foreverypart - RFC 5703 */
+<INITIAL>foreverypart          return FOREVERYPART;
+<INITIAL>break                 return BREAK;
+<INITIAL>:name                 return NAME;
+
+    /* mime - RFC 5703 */
+    /*   :mime                 defined in 'vacation' */
+<INITIAL>:anychild             return ANYCHILD;
+<INITIAL>:type                 return yylval->nval = TYPE;
+<INITIAL>:subtype              return yylval->nval = SUBTYPE;
+<INITIAL>:contenttype          return yylval->nval = CONTENTTYPE;
+<INITIAL>:param                return PARAM;
+
     /* redirect-deliverby - RFC 6009 */
 <INITIAL>:bytimerelative      return BYTIMEREL;
 <INITIAL>:bytimeabsolute      return BYTIMEABS;

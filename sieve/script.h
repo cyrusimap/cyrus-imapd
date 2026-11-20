@@ -10,6 +10,7 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "tree.h"
+#include "strarray.h"
 #include "util.h"
 
 struct sieve_script {
@@ -22,6 +23,7 @@ struct sieve_script {
 
     int err;
     int ignore_err;
+    strarray_t loops;  /* names of the enclosing foreverypart loops */
     char addrerr[500]; /* buffer for address parser error messages */
     struct buf sieveerr;
 };

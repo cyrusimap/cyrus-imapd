@@ -9,6 +9,7 @@
 
 #include "prot.h"
 #include "mailbox.h"
+#include "arrayu64.h"
 #include "strarray.h"
 #include "util.h"
 #include "charset.h"
@@ -147,6 +148,42 @@ extern void message_pruneheader(char *buf, const strarray_t *headers,
 extern void message_fetch_part(struct message_content *msg,
                                const char **content_types,
                                struct bodypart ***parts);
+/**
+ * Append the nesting depth of every MIME part of @p body to @p depths, in
+ * depth-first order: @p body itself at depth 0, then each multipart child
+ * and each encapsulated message/rfc822 message, followed by its own parts.
+ */
+extern void message_mimepart_depths(const struct body *body,
+                                    arrayu64_t *depths);
+
+/**
+ * Append the raw value of each @p name header field of MIME part @p part
+ * of @p msg, numbered as message_mimepart_depths() lists them, to
+ * @p values.
+ *
+ * @return the number of values appended
+ */
+extern int message_mimepart_header(const struct message_content *msg,
+                                   unsigned part, const char *name,
+                                   strarray_t *values);
+
+/**
+ * Parse @p value as a structured MIME header field: Content-Type as
+ * "type/subtype *(; param)", any other @p name as "token *(; param)".
+ *
+ * Sets @p type and @p subtype (newly allocated, lowercased, NULL where
+ * absent) and appends each parameter's lowercased name and its value to
+ * @p params as consecutive entries.  Values are decoded to UTF-8 from
+ * RFC 2231 extended values and RFC 2047 encoded words.
+ *
+ * Matches the sieve_parse_mimeheader callback.
+ *
+ * @return 0 if the leading token parsed, -1 otherwise
+ */
+extern int message_parse_mimeheader(const char *name, const char *value,
+                                    char **type, char **subtype,
+                                    strarray_t *params);
+
 extern void message_write_nstring(struct buf *buf, const char *s);
 extern void message_write_nstring_map(struct buf *buf, const char *s, unsigned int len);
 extern void message_write_body(struct buf *buf, const struct body *body,
