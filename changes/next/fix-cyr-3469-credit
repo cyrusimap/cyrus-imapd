@@ -1,0 +1,30 @@
+Description:
+
+Correction: Cyrus IMAP 3.12.5 and 3.13.8 stopped honoring the CalDAV
+Schedule-Sender-Address and Schedule-Sender-Name request headers, which a
+sharee could use to forge who was shown as making a change to a shared
+calendar and to plant a lasting SENT-BY on the event's ORGANIZER.  The commit
+making that change credited David Diaz of RELAUNCH DEPT as its reporter.
+That was a mistake: it was reported by "interpolwantme".
+
+Reported by: interpolwantme.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
