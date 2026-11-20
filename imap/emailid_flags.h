@@ -47,8 +47,14 @@ void emailid_flags_set_actor(const char *userid,
  *
  * Copies that are \\Deleted or expunged, copies in folders that aren't mail
  * folders, and the copies a change came from are left alone.  Each mailbox
- * is opened once.  The caller holds the user's namespace lock, and calls this
- * before committing the conversations db.
+ * is opened once.
+ *
+ * Where \\Seen isn't the record's flag for the acting user (see
+ * mailbox_internal_seen()), it is changed in their seen.db instead, and the
+ * record's own \\Seen is left alone.
+ *
+ * The caller holds the user's namespace lock, and calls this before
+ * committing the conversations db.
  *
  * @return 0, or an IMAP error, which must abort the commit.
  */

@@ -21,6 +21,8 @@
 #include "mboxname.h"
 #include "msgrecord.h"
 #include "ptrarray.h"
+#include "seen.h"
+#include "seqset.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -56,6 +58,16 @@ struct collect_rock
 struct apply_rock
 {
     int r;
+};
+
+/* The actor's seen.db state for one mailbox, where \Seen isn't the record's */
+struct seen_change
+{
+    struct seen *db; /* NULL if it couldn't be locked: leave \Seen alone */
+    struct seendata sd;
+    seqset_t *old;
+    arrayu64_t add;
+    arrayu64_t del;
 };
 
 static void emailid_flags_mbox_free(void *data)
@@ -191,6 +203,7 @@ static bool may_set(const struct emailid_flags_mbox *group, const char *flag)
 
 static int apply_change(struct mailbox *mailbox,
                         const struct emailid_flags_mbox *group,
+                        struct seen_change *seen,
                         uint32_t uid,
                         const struct conv_flagchange *change)
 {
@@ -229,6 +242,13 @@ static int apply_change(struct mailbox *mailbox,
         if (!may_set(group, flag)) {
             continue;
         }
+        if (seen && !strcasecmp(flag, "\\Seen")) {
+            if (seen->db && !seqset_ismember(seen->old, uid)) {
+                arrayu64_append(&seen->add, uid);
+                changed = true;
+            }
+            continue;
+        }
         if (flag[0] == '\\') {
             uint32_t bit = system_flag(flag);
             if (bit && !(system_flags & bit)) {
@@ -258,6 +278,13 @@ static int apply_change(struct mailbox *mailbox,
     strarray_foreach(&change->removed, i, flag)
     {
         if (!may_set(group, flag)) {
+            continue;
+        }
+        if (seen && !strcasecmp(flag, "\\Seen")) {
+            if (seen->db && seqset_ismember(seen->old, uid)) {
+                arrayu64_append(&seen->del, uid);
+                changed = true;
+            }
             continue;
         }
         if (flag[0] == '\\') {
@@ -301,6 +328,92 @@ done:
     return r;
 }
 
+static bool group_has_seen(const struct emailid_flags_mbox *group)
+{
+    for (int i = 0; i < ptrarray_size(&group->changes); i++) {
+        const struct conv_flagchange *change = ptrarray_nth(&group->changes, i);
+        if (strarray_find_case(&change->added, "\\Seen", 0) >= 0
+            || strarray_find_case(&change->removed, "\\Seen", 0) >= 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Lock the actor's seen.db record for @mailbox, as index_writeseen does */
+static void seen_begin(struct mailbox *mailbox, struct seen_change *seen)
+{
+    int r = seen_open(actor.userid, SEEN_CREATE, &seen->db);
+    if (!r) {
+        r = seen_lockread(seen->db, mailbox_uniqueid(mailbox), &seen->sd);
+    }
+    if (r) {
+        xsyslog_ev(LOG_ERR, "emailid.flags.seen.failed",
+                   lf_s("u.username", actor.userid),
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
+        seen_close(&seen->db);
+        return;
+    }
+
+    seen->old = seqset_parse(seen->sd.seenuids, NULL, mailbox->i.last_uid);
+}
+
+static void seen_end(struct mailbox *mailbox, struct seen_change *seen)
+{
+    int r = 0;
+
+    if (arrayu64_size(&seen->add) || arrayu64_size(&seen->del)) {
+        seqset_t *new = seqset_init(0, SEQ_SPARSE);
+        unsigned uid;
+
+        /* both ascending, so walk them together */
+        arrayu64_sort(&seen->del, NULL);
+        size_t d = 0;
+        seqset_reset(seen->old);
+        while ((uid = seqset_getnext(seen->old))) {
+            while (d < arrayu64_size(&seen->del)
+                   && arrayu64_nth(&seen->del, d) < uid)
+            {
+                d++;
+            }
+            if (d == arrayu64_size(&seen->del)
+                || arrayu64_nth(&seen->del, d) != uid)
+            {
+                seqset_add(new, uid, 1);
+            }
+        }
+        arrayu64_sort(&seen->add, NULL);
+        for (size_t i = 0; i < arrayu64_size(&seen->add); i++) {
+            seqset_add(new, arrayu64_nth(&seen->add, i), 1);
+        }
+
+        free(seen->sd.seenuids);
+        seen->sd.seenuids = seqset_cstring(new);
+        if (!seen->sd.seenuids) {
+            seen->sd.seenuids = xstrdup("");
+        }
+        seen->sd.lastread = time(NULL);
+        seen->sd.lastchange = mailbox->i.last_appenddate.tv_sec;
+        r = seen_write(seen->db, mailbox_uniqueid(mailbox), &seen->sd);
+        seqset_free(&new);
+    }
+
+    seen_close(&seen->db);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "emailid.flags.seen.failed",
+                   lf_s("u.username", actor.userid),
+                   lf_mailbox(mailbox),
+                   lf_err("error", r));
+    }
+
+    seen_freedata(&seen->sd);
+    seqset_free(&seen->old);
+    arrayu64_fini(&seen->add);
+    arrayu64_fini(&seen->del);
+}
+
 static void apply_mbox(const char *mboxname, void *data, void *vrock)
 {
     struct emailid_flags_mbox *group = data;
@@ -324,14 +437,29 @@ static void apply_mbox(const char *mboxname, void *data, void *vrock)
         return;
     }
 
+    /* a non-owner's \Seen lives in their seen.db, not the record */
+    struct seen_change seenchange = { .sd = SEENDATA_INITIALIZER };
+    struct seen_change *seen = NULL;
+    if (!mailbox_internal_seen(mailbox, actor.userid)) {
+        seen = &seenchange;
+        if (group->mayseen && group_has_seen(group)) {
+            seen_begin(mailbox, seen);
+        }
+    }
+
     for (size_t i = 0; i < arrayu64_size(&group->uids); i++) {
         r = apply_change(mailbox,
                          group,
+                         seen,
                          arrayu64_nth(&group->uids, i),
                          ptrarray_nth(&group->changes, i));
         if (r) {
             break;
         }
+    }
+
+    if (seen) {
+        seen_end(mailbox, seen);
     }
 
     mailbox_close(&mailbox);

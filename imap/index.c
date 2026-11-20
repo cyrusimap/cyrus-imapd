@@ -26,6 +26,7 @@
 #include "append.h"
 #include "assert.h"
 #include "backend.h"
+#include "bsearch.h"
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
@@ -1082,9 +1083,86 @@ seqset_t *index_vanished(struct index_state *state,
     return outlist;
 }
 
-static int _fetch_setseen(struct index_state *state,
-                          struct mboxevent *mboxevent,
-                          uint32_t msgno)
+struct folder_siblings_rock
+{
+    int foldernum;
+    arrayu64_t *uids;
+};
+
+static int folder_siblings_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct folder_siblings_rock *rock = vrock;
+
+    if (!rec->part && rec->foldernum == rock->foldernum) {
+        arrayu64_append(rock->uids, rec->uid);
+    }
+    return 0;
+}
+
+/* Add to @uids the uids of every copy, in the selected mailbox, of the email
+ * @guidrep, including the copy at hand */
+static int index_folder_siblings(struct index_state *state,
+                                 const char *guidrep,
+                                 arrayu64_t *uids)
+{
+    struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
+    if (!cstate) {
+        return 0;
+    }
+
+    struct folder_siblings_rock rock = {
+        conversation_folder_number(cstate,
+                                   CONV_FOLDER_KEY_MBOX(cstate, state->mailbox),
+                                   0),
+        uids
+    };
+    if (rock.foldernum < 0) {
+        return 0;
+    }
+
+    return conversations_guid_foreach(cstate,
+                                      guidrep,
+                                      folder_siblings_cb,
+                                      &rock);
+}
+
+/*
+ * Queue a \Seen change that lives outside the record, which the
+ * conversations update can't see, for the email's other copies.
+ */
+static void index_queue_seenchange(struct index_state *state,
+                                   const struct message_guid *guid,
+                                   uint32_t uid,
+                                   uint32_t system_flags,
+                                   bool isseen)
+{
+    struct mailbox *mailbox = state->mailbox;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+
+    if (!cstate || (system_flags & FLAG_DELETED)
+        || mboxname_isnondeliverymailbox(mailbox_name(mailbox),
+                                         mailbox_mbtype(mailbox)))
+    {
+        return;
+    }
+
+    strarray_t flags = STRARRAY_INITIALIZER;
+    strarray_append(&flags, "\\Seen");
+    conversations_queue_flagchange(cstate,
+                                   guid,
+                                   mailbox_name(mailbox),
+                                   uid,
+                                   isseen ? &flags : NULL,
+                                   isseen ? NULL : &flags,
+                                   /*arrival*/ false);
+    strarray_fini(&flags);
+}
+
+/* Sets *guid when the record was rewritten */
+static int _fetch_setseen_one(struct index_state *state,
+                              struct mboxevent *mboxevent,
+                              uint32_t msgno,
+                              struct message_guid *guid)
 {
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
@@ -1128,6 +1206,11 @@ static int _fetch_setseen(struct index_state *state,
     r = index_rewrite_record(state, msgno, &record, /*silent*/0);
     if (r) return r;
 
+    if (!state->internalseen)
+        index_queue_seenchange(state, &record.guid, record.uid,
+                               record.system_flags, /*isseen*/true);
+    *guid = record.guid;
+
     mboxevent_extract_record(mboxevent, state->mailbox, &record);
 
     /* RFC 2060 says:
@@ -1138,6 +1221,39 @@ static int _fetch_setseen(struct index_state *state,
      */
 
     return 0;
+}
+
+/*
+ * Implicitly set \Seen on a message and, as every copy of an email has the
+ * same flags, on its other copies in this mailbox.
+ */
+static int _fetch_setseen(struct index_state *state,
+                          struct mboxevent *mboxevent,
+                          uint32_t msgno)
+{
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+
+    int r = _fetch_setseen_one(state, mboxevent, msgno, &guid);
+    if (r || message_guid_isnull(&guid)) {
+        return r;
+    }
+
+    arrayu64_t uids = ARRAYU64_INITIALIZER;
+    r = index_folder_siblings(state, message_guid_encode(&guid), &uids);
+    for (size_t i = 0; i < arrayu64_size(&uids) && !r; i++) {
+        uint32_t sibno = index_finduid(state, arrayu64_nth(&uids, i), FIND_EQ);
+        if (!sibno || sibno == msgno
+            || (state->map[sibno - 1].system_flags & FLAG_DELETED))
+        {
+            continue;
+        }
+
+        struct message_guid sibguid = MESSAGE_GUID_INITIALIZER;
+        r = _fetch_setseen_one(state, mboxevent, sibno, &sibguid);
+    }
+    arrayu64_fini(&uids);
+
+    return r;
 }
 
 /* non-locking, non-updating - just do a fetch on the state
@@ -1433,22 +1549,6 @@ done:
     return r;
 }
 
-struct store_siblings_rock
-{
-    int foldernum;
-    arrayu64_t uids;
-};
-
-static int store_siblings_cb(const conv_guidrec_t *rec, void *vrock)
-{
-    struct store_siblings_rock *rock = vrock;
-
-    if (!rec->part && rec->foldernum == rock->foldernum) {
-        arrayu64_add(&rock->uids, rec->uid);
-    }
-    return 0;
-}
-
 /*
  * Every flag but \Deleted and \Recent is the same on all copies of an
  * email.  Apply the store to the other copies, in this mailbox, of the
@@ -1470,35 +1570,22 @@ static int index_store_siblings(struct index_state *state,
         return 0;
     }
 
-    struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
-    if (!cstate) {
-        return 0;
-    }
-
-    struct store_siblings_rock rock = {
-        conversation_folder_number(cstate,
-                                   CONV_FOLDER_KEY_MBOX(cstate, state->mailbox),
-                                   0),
-        ARRAYU64_INITIALIZER
-    };
-    if (rock.foldernum < 0) {
-        return 0;
-    }
-
+    arrayu64_t uids = ARRAYU64_INITIALIZER;
     int r = 0;
+    /* @guids is sorted, maybe with repeats */
     for (int i = 0; i < strarray_size(guids) && !r; i++) {
-        r = conversations_guid_foreach(cstate,
-                                       strarray_nth(guids, i),
-                                       store_siblings_cb,
-                                       &rock);
+        if (i && !strcmp(strarray_nth(guids, i - 1), strarray_nth(guids, i))) {
+            continue;
+        }
+        r = index_folder_siblings(state, strarray_nth(guids, i), &uids);
     }
 
     struct storeargs sibargs = *storeargs;
     sibargs.silent = 0;
     sibargs.system_flags &= ~FLAG_DELETED;
 
-    for (size_t i = 0; i < arrayu64_size(&rock.uids) && !r; i++) {
-        uint32_t uid = arrayu64_nth(&rock.uids, i);
+    for (size_t i = 0; i < arrayu64_size(&uids) && !r; i++) {
+        uint32_t uid = arrayu64_nth(&uids, i);
         uint32_t msgno = index_finduid(state, uid, FIND_EQ);
         if (!msgno) {
             continue;
@@ -1530,7 +1617,7 @@ static int index_store_siblings(struct index_state *state,
         }
     }
 
-    arrayu64_fini(&rock.uids);
+    arrayu64_fini(&uids);
     return r;
 }
 
@@ -1666,10 +1753,13 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
                                &flagsset, &flagsclear, &changed, &guid);
         if (r) goto out;
         bv_set(&stored, msgno);
-        if (changed && storeargs->operation != STORE_ANNOTATION)
-            strarray_add(&changed_guids, message_guid_encode(&guid));
+        /* a \Deleted copy passes on no change */
+        if (changed && storeargs->operation != STORE_ANNOTATION
+            && !(state->map[msgno-1].system_flags & FLAG_DELETED))
+            strarray_append(&changed_guids, message_guid_encode(&guid));
     }
 
+    strarray_sort(&changed_guids, cmpstringp_raw);
     r = index_store_siblings(state, &stored, storeargs, &changed_guids,
                              &mboxevents, &flagsset, &flagsclear);
     if (r) goto out;
@@ -4801,6 +4891,11 @@ static int index_storeflag(struct index_state *state,
         else {
             modified_flags->removed_system_flags |= FLAG_SEEN;
             modified_flags->removed_flags++;
+        }
+        struct message_guid guid;
+        if (!msgrecord_get_guid(msgrec, &guid)) {
+            index_queue_seenchange(state, &guid, im->uid, system_flags,
+                                   im->isseen);
         }
     }
 
