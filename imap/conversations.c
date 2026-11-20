@@ -2658,6 +2658,25 @@ EXPORTED void conversations_clear_flagchanges(
     }
 }
 
+static bool flagchanges_disabled;
+
+EXPORTED void emailid_flags_disable(void)
+{
+    flagchanges_disabled = true;
+}
+
+EXPORTED bool emailid_flags_suspend(void)
+{
+    bool was = flagchanges_disabled;
+    flagchanges_disabled = true;
+    return was;
+}
+
+EXPORTED void emailid_flags_resume(bool was)
+{
+    flagchanges_disabled = was;
+}
+
 EXPORTED void conversations_queue_flagchange(struct conversations_state *cstate,
                                              const struct message_guid *guid,
                                              const char *mboxname,
@@ -2666,7 +2685,7 @@ EXPORTED void conversations_queue_flagchange(struct conversations_state *cstate,
                                              const strarray_t *removed,
                                              enum conv_arrival arrival)
 {
-    if (cstate->draining_flags) {
+    if (flagchanges_disabled || cstate->draining_flags) {
         return;
     }
 

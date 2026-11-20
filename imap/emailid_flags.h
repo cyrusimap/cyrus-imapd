@@ -32,6 +32,10 @@ struct conversations_state;
  * \\Seen where they lack the seen right.  An admin, or a NULL @p authstate
  * (the default), may change every copy.
  *
+ * Processes that never set an actor, such as lmtpd and the command-line
+ * tools, act with every right, as the owner or an admin would: they change
+ * every copy, and change \\Seen on the record rather than in a seen.db.
+ *
  * @param userid    the acting user, for logging; copied
  * @param authstate the acting user's auth state; the caller keeps it valid
  *                  until the next call
@@ -40,6 +44,28 @@ struct conversations_state;
 void emailid_flags_set_actor(const char *userid,
                              const struct auth_state *authstate,
                              bool isadmin);
+
+/**
+ * Stop queuing flag changes for the rest of the process.
+ *
+ * Replication applies carry the master's sibling writes, so a process that
+ * only applies replication calls this at startup.
+ */
+void emailid_flags_disable(void);
+
+/**
+ * Stop queuing flag changes until emailid_flags_resume().
+ *
+ * For a process that also serves other clients, around a replication apply.
+ *
+ * @return the previous state, to pass to emailid_flags_resume()
+ */
+bool emailid_flags_suspend(void);
+
+/**
+ * Restore the state returned by emailid_flags_suspend().
+ */
+void emailid_flags_resume(bool was);
 
 /**
  * Apply the queued flag changes to every other copy of each email, then empty

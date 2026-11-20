@@ -65,6 +65,7 @@
 
 #include "master/service.h"
 
+#include "emailid_flags.h"
 #include "message_guid.h"
 #include "sync_support.h"
 /*#include "cdb.h"*/
@@ -225,6 +226,8 @@ int service_init(int argc __attribute__((unused)),
     }
 
     mboxevent_setnamespace(sync_namespacep);
+
+    emailid_flags_disable();
 
     return 0;
 }
