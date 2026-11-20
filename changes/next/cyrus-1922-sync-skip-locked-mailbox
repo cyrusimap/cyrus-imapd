@@ -1,0 +1,29 @@
+Description:
+
+Rolling replication, and sync_client ``-N``, no longer wait for a locked
+user or mailbox.  The work is written back to the sync log and retried on
+the next pass, so one long-running lock (such as a reconstruct) no longer
+holds up replication of every other user.  This now also works for the
+default sync log channel, not just a channel named with ``-n``.  With
+``-N``, the ``-u`` and ``-m`` modes now skip a locked user or mailbox, as
+``-A`` already did, instead of reporting an error.
+
+
+Documentation:
+
+sync_client(8)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+#1922
