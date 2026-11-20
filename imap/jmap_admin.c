@@ -13,7 +13,9 @@
 #include <errno.h>
 #include <syslog.h>
 
+#include "annotate.h"
 #include "http_jmap.h"
+#include "jmap_util.h"
 #include "user.h"
 #include "util.h"
 
@@ -54,6 +56,7 @@ HIDDEN void jmap_admin_capabilities(json_t *account_capabilities)
 }
 
 struct account_props {
+    const char *id;
     const char *email;
     bool isarchive;
     bool compactids;
@@ -71,7 +74,15 @@ static void account_readprops(jmap_req_t *req __attribute__((unused)),
 {
     memset(props, 0, sizeof(struct account_props));
 
-    json_t *jprop = json_object_get(arg, "email");
+    json_t *jprop = json_object_get(arg, "id");
+    if (json_is_string(jprop) && jmap_is_valid_id(json_string_value(jprop))) {
+        props->id = json_string_value(jprop);
+    }
+    else {
+        jmap_parser_invalid(parser, "id");
+    }
+
+    jprop = json_object_get(arg, "email");
     if (json_is_string(jprop)) {
         props->email = json_string_value(jprop);
         if (strnlen(props->email, 256) == 256) {
@@ -223,6 +234,12 @@ static void account_create(struct jmap_req *req,
         goto done;
     }
 
+    if (!mboxlist_lookup_by_accountid(props.id, NULL)) {
+        *err = json_pack("{s:s s:s}", "type", "alreadyExists",
+                         "description", "id is already in use");
+        goto done;
+    }
+
     /* Build ACL for the INBOX:
        owner:
          regular: ACL_ALL minus ACL_ADMIN
@@ -263,10 +280,31 @@ static void account_create(struct jmap_req *req,
         goto done;
     }
 
+    /* Set the accountid; its annotation's setter checks it's still unique */
+    struct entryattlist *annots = NULL;
+    annotate_state_t *astate = NULL;
+    struct buf val = BUF_INITIALIZER;
+
+    buf_setcstr(&val, props.id);
+    setentryatt(&annots, IMAP_ANNOT_NS "accountid", "value.shared", &val);
+    r = mailbox_get_annotate_state(mailbox, 0, &astate);
+    if (!r) {
+        annotate_state_set_auth(astate, 1/*isadmin*/,
+                                req->userid, req->authstate);
+        r = annotate_state_store(astate, annots);
+    }
+    freeentryatts(annots);
+    buf_free(&val);
+    if (r) {
+        xsyslog_ev(LOG_ERR, "jmap.account.accountid.failed",
+                   lf_jmapreq(req), lf_intname("mbox.name", mbentry->name),
+                   lf_err("error", r));
+    }
+
     mboxlist_entry_free(&mbentry);
     mbentry = mboxlist_entry_copy(mailbox_mbentry(mailbox));
 
-    if (props.compactids) {
+    if (!r && props.compactids) {
         struct conversations_state *cstate = mailbox_get_cstate(mailbox);
         r = conversations_enable_compactids(cstate, 1);
         if (r) {
@@ -401,14 +439,19 @@ static void account_create(struct jmap_req *req,
                               "uniqueId", "name", "role", "isSubscribed"),
                     NULL);
 
-    jmap_add_id(req, creation_id, props.email);
+    jmap_add_id(req, creation_id, props.id);
 
-    *resp = json_pack("{s:s}", "id", props.email);
+    *resp = json_pack("{s:s}", "id", props.id);
 
  done:
     if (r && *err == NULL) {
-        if (r == IMAP_MAILBOX_EXISTS)
-            *err = json_pack("{s:s}", "type", "alreadyExists");
+        if (r == IMAP_MAILBOX_EXISTS || r == IMAP_ANNOTATION_BADVALUE) {
+            *err = json_pack("{s:s s:s}", "type", "alreadyExists",
+                             "description",
+                             (r == IMAP_MAILBOX_EXISTS) ?
+                             "email address is already in use" :
+                             "id is already in use");
+        }
         else
             *err = jmap_server_error(r);
     }

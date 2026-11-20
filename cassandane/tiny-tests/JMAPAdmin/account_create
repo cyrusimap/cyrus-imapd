@@ -34,7 +34,7 @@ sub test_account_create
             notCreated => {
                 1 => superhashof({
                     type => 'invalidProperties',
-                    properties => superbagof( 'email', 'foo' )
+                    properties => superbagof( 'id', 'email', 'foo' )
                 })
             }
         }),
@@ -45,6 +45,7 @@ sub test_account_create
         'Account/create', {
             accountId => \undef,
             2 => {
+                id => 'u1a48e8e3',
                 email => $email,
                 kind => 'super',
                 compactIds => 'yes',
@@ -78,6 +79,7 @@ sub test_account_create
         'Account/create', {
             accountId => \undef,
             3 => {
+                id => 'u1a48e8e3',
                 email => $email,
                 addToGroups => [ 'group:', 'foo', 7, 'group:ok' ],
                 mailboxes => [
@@ -115,6 +117,7 @@ sub test_account_create
         'Account/create', {
             accountId => \undef,
             4 => {
+                id => 'u1a48e8e3',
                 email => $email,
                 compactIds => JSON::true,
                 addToGroups => [ 'group:signup', 'group:beta' ],
@@ -137,7 +140,7 @@ sub test_account_create
         superhashof({
             created => {
                 4 => {
-                    id => $email
+                    id => 'u1a48e8e3'
                 }
             },
             notCreated => JSON::null,
@@ -295,6 +298,7 @@ sub test_account_create
         'Account/create', {
             accountId => \undef,
             5 => {
+                id => 'u5c6d7e8f',
                 email => $email,
             }
         }
@@ -306,6 +310,7 @@ sub test_account_create
             notCreated => {
                 5 => {
                     type => 'alreadyExists',
+                    description => 'email address is already in use',
                 }
             },
             accountId => 'admin'
@@ -320,6 +325,7 @@ sub test_account_create
         'Account/create', {
             accountId => \undef,
             6 => {
+                id => 'u2b59f9f4',
                 email => $email2,
                 kind => 'archive',
                 mailboxes => JSON::null,
@@ -332,7 +338,7 @@ sub test_account_create
         superhashof({
             created => {
                 6 => {
-                    id => $email2
+                    id => 'u2b59f9f4'
                 }
             },
             notCreated => JSON::null,

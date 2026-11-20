@@ -26,7 +26,7 @@
 jmap_property_t;
 
 %%
-"id",                            NULL,               JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
+"id",                            NULL,               JMAP_PROP_MANDATORY | JMAP_PROP_IMMUTABLE | JMAP_PROP_ALWAYS_GET
 "email",                         NULL,               JMAP_PROP_MANDATORY
 "kind",                          NULL,               0
 "compactIds",                    NULL,               JMAP_PROP_IMMUTABLE
