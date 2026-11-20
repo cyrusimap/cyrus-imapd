@@ -3665,7 +3665,7 @@ static int caldav_import(struct transaction_t *txn, void *obj,
     txn->req_tgt.resource = txn->req_tgt.path + irock.baselen;
 
     /* Create hash table of components */
-    construct_hash_table(&comp_table, 100, 1);
+    construct_hash_table(&comp_table, 0, 0);
 
     /* Group components by UID (recurrence sets) */
     for (comp = icalcomponent_get_first_component(ical, ICAL_ANY_COMPONENT);
@@ -3968,8 +3968,8 @@ static int caldav_put(struct transaction_t *txn, void *obj,
         goto done;
     }
 
-    construct_hashu64_table(&rdates, 256, 0);
-    construct_hashu64_table(&overrides, 256, 0);
+    construct_hashu64_table(&rdates, 0, 0);
+    construct_hashu64_table(&overrides, 0, 0);
 
     comp = icalcomponent_get_first_real_component(ical);
 

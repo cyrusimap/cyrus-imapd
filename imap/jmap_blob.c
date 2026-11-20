@@ -712,7 +712,7 @@ static int jmap_blob_lookup(jmap_req_t *req)
 
     /* Sort blob lookups by mailbox */
     hash_table getblobs_by_uniqueid = HASH_TABLE_INITIALIZER;
-    construct_hash_table(&getblobs_by_uniqueid, 128, 0);
+    construct_hash_table(&getblobs_by_uniqueid, json_array_size(get.ids), 0);
     json_array_foreach(get.ids, i, jval) {
         const char *blob_id = json_string_value(jval);
         if (*blob_id == 'G') {

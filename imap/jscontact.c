@@ -1919,8 +1919,8 @@ static void jsprop_from_vcard(vcardproperty *prop, json_t *obj,
 
 static void free_props_by_altid(void *val)
 {
-    free_hash_table((hash_table *) val, (void (*)(void *)) &ptrarray_free);
-    free(val);
+    hash_table *table = (hash_table *) val;
+    release_hash_table(&table, (void (*)(void *)) &ptrarray_free);
 }
 
 static void props_by_altid_cb(const char *altid, void *val, void *rock)
@@ -2133,8 +2133,7 @@ static json_t *jscard_from_vcard(jscontact_ctx_t *ctx, vcardcomponent *vcard)
 
         props_by_altid = hash_lookup(prop_name, &props_by_name);
         if (!props_by_altid) {
-            props_by_altid = xzmalloc(sizeof(hash_table));
-            construct_hash_table(props_by_altid, nprops + 1, 0);
+            props_by_altid = malloc_hash_table(nprops + 1);
             hash_insert(prop_name, props_by_altid, &props_by_name);
         }
 
@@ -4422,8 +4421,7 @@ static void _invalid_l10n_patches_by_key(const char *key, void *val, void *rock)
     hash_table *patches_by_id = val;
 
     hash_enumerate(patches_by_id, &_invalid_l10n_patches_by_id, &brock);
-    free_hash_table(patches_by_id, NULL);
-    free(patches_by_id);
+    release_hash_table(&patches_by_id, NULL);
 }
 
 static const char *jprop_value_to_string(json_t *jval,
@@ -4793,8 +4791,7 @@ static void jscard_to_vcard(jscontact_ctx_t *ctx,
                 prop_key = buf_cstring(&buf);
                 patches_by_id = hash_lookup(prop_key, &l10n_by_key);
                 if (!patches_by_id) {
-                    patches_by_id = xzmalloc(sizeof(hash_table));
-                    construct_hash_table(patches_by_id, ngroups + 1, 0);
+                    patches_by_id = malloc_hash_table(ngroups + 1);
                     hash_insert(prop_key, patches_by_id, &l10n_by_key);
                 }
 

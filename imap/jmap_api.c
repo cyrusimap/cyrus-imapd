@@ -1618,8 +1618,7 @@ HIDDEN hash_table *jmap_get_validate_props(jmap_req_t *req,
                                            const char *key,
                                            json_t *jprops)
 {
-    hash_table *props = xzmalloc(sizeof(hash_table));
-    construct_hash_table(props, json_array_size(jprops) + 1, 0);
+    hash_table *props = malloc_hash_table(json_array_size(jprops) + 1);
 
     json_t *val;
     size_t i;
@@ -1755,8 +1754,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
         /* Initialize default properties */
         unsigned nvalid = valid_props->map->num_props;
 
-        get->props = xzmalloc(sizeof(hash_table));
-        construct_hash_table(get->props, nvalid + 1, 0);
+        get->props = malloc_hash_table(nvalid + 1);
         for (unsigned i = valid_props->map->min_hash;
              i <= valid_props->map->max_hash;
              i++) {
@@ -1785,8 +1783,7 @@ HIDDEN void jmap_get_parse(jmap_req_t *req,
 
 HIDDEN void jmap_get_fini(struct jmap_get *get)
 {
-    free_hash_table(get->props, NULL);
-    free(get->props);
+    release_hash_table(&get->props, NULL);
     free(get->state);
     json_decref(get->ids);
     json_decref(get->list);
@@ -2148,11 +2145,11 @@ static char *readonly_pname(const char *path)
 
 HIDDEN hash_table *jmap_set_readonly_props(json_t *readonly)
 {
-    hash_table *props = xzmalloc(sizeof(hash_table));
+    hash_table *props;
     const char *path;
     json_t *jval;
 
-    construct_hash_table(props, json_object_size(readonly) + 1, 0);
+    props = malloc_hash_table(json_object_size(readonly) + 1);
     json_object_foreach (readonly, path, jval) {
         char *pname = readonly_pname(path);
         hash_insert(pname, (void *) 1, props);
@@ -3741,8 +3738,7 @@ static const mbentry_t *_mbentry_by_uniqueid(jmap_req_t *req,
     mbentry_t *mbentry = NULL;
 
     if (!req->mbentry_byid) {
-        req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(req->mbentry_byid, 1024, 0);
+        req->mbentry_byid = malloc_hash_table(0);
     }
     else mbentry = hash_lookup(id, req->mbentry_byid);
 
@@ -3790,8 +3786,7 @@ EXPORTED const mbentry_t *jmap_mbentry_by_mboxid(jmap_req_t *req,
     mbentry_t *mbentry = NULL;
 
     if (!req->mbentry_byid) {
-        req->mbentry_byid = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(req->mbentry_byid, 1024, 0);
+        req->mbentry_byid = malloc_hash_table(0);
     }
     else mbentry = hash_lookup(key, req->mbentry_byid);
 
@@ -3833,9 +3828,7 @@ static void _free_mbentry(void *rock)
 EXPORTED void jmap_mbentry_cache_free(jmap_req_t *req)
 {
     if (req->mbentry_byid) {
-        free_hash_table(req->mbentry_byid, _free_mbentry);
-        free(req->mbentry_byid);
-        req->mbentry_byid = NULL;
+        release_hash_table(&req->mbentry_byid, _free_mbentry);
     }
 }
 
@@ -3925,8 +3918,7 @@ static int _mbox_find_specialuse(jmap_req_t *req, const char *use,
     int r;
 
     if (!req->mboxid_byrole) {
-        req->mboxid_byrole = xzmalloc(sizeof(struct hash_table));
-        construct_hash_table(req->mboxid_byrole, 1024, 0);
+        req->mboxid_byrole = malloc_hash_table(0);
     }
     else {
         mboxid = freeme = xstrdupnull(hash_lookup(use, req->mboxid_byrole));

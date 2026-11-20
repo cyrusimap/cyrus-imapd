@@ -272,7 +272,7 @@ static void do_collate_service_report(struct buf *buf)
     int64_t report_time;
 
     buf_reset(buf);
-    construct_hash_table(&all_stats, 128, 0);
+    construct_hash_table(&all_stats, 0, 0);
 
     /* hold a lock on .doneprocs.lock while reading stats files - this ensures
      * process cleanups won't lead to double counts while we're collating */
