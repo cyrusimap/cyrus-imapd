@@ -20,9 +20,23 @@
 #define INCLUDED_EMAILID_FLAGS_H
 
 #include <stdbool.h>
+#include <stdint.h>
 
 struct auth_state;
 struct conversations_state;
+
+/** A system flag kept in step across copies */
+struct emailid_flags_sysflag
+{
+    uint32_t bit;     /**< its MsgFlags bit */
+    const char *name; /**< its name, e.g. "\\Flagged" */
+};
+
+/**
+ * \\Answered, \\Flagged, \\Draft and \\Seen, ending with an entry whose
+ * bit is 0
+ */
+extern const struct emailid_flags_sysflag emailid_flags_sysflags[];
 
 /**
  * Set the user whose changes later drains apply.
@@ -92,5 +106,23 @@ void emailid_flags_resume(bool was);
  * @return 0, or an IMAP error
  */
 int emailid_flags_drain(struct conversations_state *cstate);
+
+/**
+ * Make the flags of every copy of each of a user's emails agree.
+ *
+ * Each email with more than one copy gets the union of its copies' flags
+ * other than \\Seen on every copy, and \\Seen on every copy if any copy has
+ * it.  Copies are counted as for emailid_flags_drain().  Only record flags
+ * change; non-owners' seen.db is left alone.  The writes are ordinary record
+ * rewrites, so they replicate, and they queue no further flag changes.
+ *
+ * Works in batches of emails, each under its own hold of the user's
+ * namespace lock and committing their conversations db, so the caller holds
+ * neither.  Resets the actor to one with every right.
+ *
+ * @param userid    the user whose emails to converge
+ * @return 0, or an IMAP error
+ */
+int emailid_flags_converge_user(const char *userid);
 
 #endif /* INCLUDED_EMAILID_FLAGS_H */

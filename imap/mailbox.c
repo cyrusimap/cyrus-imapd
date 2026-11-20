@@ -4305,16 +4305,6 @@ static void queue_flagchange(struct conversations_state *cstate,
                              const struct index_record *old,
                              const struct index_record *new)
 {
-    static const struct
-    {
-        uint32_t bit;
-        const char *name;
-    } sysflags[] = {
-        { FLAG_ANSWERED, "\\Answered" },
-        { FLAG_FLAGGED,  "\\Flagged"  },
-        { FLAG_DRAFT,    "\\Draft"    },
-        { FLAG_SEEN,     "\\Seen"     },
-    };
     strarray_t added = STRARRAY_INITIALIZER;
     strarray_t removed = STRARRAY_INITIALIZER;
 
@@ -4335,14 +4325,17 @@ static void queue_flagchange(struct conversations_state *cstate,
     }
 
     if (old) {
-        for (size_t i = 0; i < sizeof(sysflags) / sizeof(sysflags[0]); i++) {
-            bool was = old->system_flags & sysflags[i].bit;
-            bool is = new->system_flags & sysflags[i].bit;
+        for (const struct emailid_flags_sysflag *f = emailid_flags_sysflags;
+             f->bit;
+             f++)
+        {
+            bool was = old->system_flags & f->bit;
+            bool is = new->system_flags & f->bit;
             if (is && !was) {
-                strarray_append(&added, sysflags[i].name);
+                strarray_append(&added, f->name);
             }
             if (was && !is) {
-                strarray_append(&removed, sysflags[i].name);
+                strarray_append(&removed, f->name);
             }
         }
 

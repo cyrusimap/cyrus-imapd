@@ -20,6 +20,7 @@
 #include "global.h"
 #include "index.h"
 #include "conversations.h"
+#include "emailid_flags.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "message.h"
@@ -34,7 +35,7 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS };
+enum { UNKNOWN, DUMP, UNDUMP, ZERO, BUILD, RECALC, AUDIT, CHECKFOLDERS, ZEROMODSEQ, ENABLE_COMPACTIDS, CONVERGE_FLAGS };
 
 static int recalc_repair  = 0;
 static int recalc_upgrade = 0;
@@ -1054,6 +1055,11 @@ static int do_user(const char *userid, void *rock)
             r = EX_NOINPUT;
         break;
 
+    case CONVERGE_FLAGS:
+        if (emailid_flags_converge_user(userid))
+            r = EX_NOINPUT;
+        break;
+
     case UNKNOWN:
         fatal("UNKNOWN MODE", EX_SOFTWARE);
     }
@@ -1086,11 +1092,12 @@ int main(int argc, char **argv)
     int r = 0;
 
     /* keep in alphabetical order */
-    static const char short_options[] = "AC:FMRST:bdruUvzZ:I:";
+    static const char short_options[] = "AC:EFMRST:bdruUvzZ:I:";
 
     static const struct option long_options[] = {
         { "audit", no_argument, NULL, 'A' },
         /* n.b. no long option for -C */
+        { "converge-flags", no_argument, NULL, 'E' },
         { "check-folders", no_argument, NULL, 'F' },
         { "clearmodseq", no_argument, NULL, 'M' },
         { "update-counts", no_argument, NULL, 'R' },
@@ -1177,6 +1184,12 @@ int main(int argc, char **argv)
             if (mode != UNKNOWN)
                 usage(argv[0]);
             mode = AUDIT;
+            break;
+
+        case 'E':
+            if (mode != UNKNOWN)
+                usage(argv[0]);
+            mode = CONVERGE_FLAGS;
             break;
 
         case 'F':
@@ -1280,6 +1293,7 @@ static int usage(const char *name)
     fprintf(stderr, "    -R             recalculate all counts\n");
     fprintf(stderr, "    -U             upgrade to latest version of conversations.db\n");
     fprintf(stderr, "    -A             audit conversations DB counts\n");
+    fprintf(stderr, "    -E             make flags agree across all copies of each email\n");
     fprintf(stderr, "    -F             check folder names\n");
     fprintf(stderr, "    -I switch      enable/disable compact emailids.  1/on/yes or 0/off/no\n");
     fprintf(stderr, "    -T dir         store temporary data for audit in dir\n");

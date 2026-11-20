@@ -49,14 +49,15 @@ struct emailid_flags_mbox
     ptrarray_t changes; /* struct conv_flagchange *, pairs with uids */
 };
 
-/* A new copy's merge with the other copies of its email */
+/* The merge of the copies of one email */
 struct merge
 {
     /* first, so a pointer to it is a pointer to the merge: added is the
-     * union of every flag but \Seen, and removed is \Seen unless every
-     * copy is seen */
+     * union of every flag but \Seen, then \Seen goes to added or removed
+     * by the seen rule */
     struct conv_flagchange change;
     bool allseen;
+    bool anyseen;
     bool keepseen;     /* leave \Seen as each copy has it */
     ptrarray_t groups; /* struct emailid_flags_mbox *, pairs with uids */
     arrayu64_t uids;
@@ -219,19 +220,15 @@ struct arrival_rock
     ptrarray_t *merges;
 };
 
-static void collect_arrival(const char *guidrep, void *data, void *rock)
+/* Queue a merge of the copies of @guidrep the actor can read */
+static void collect_merge(struct collect_rock *crock,
+                          const char *guidrep,
+                          ptrarray_t *merges,
+                          bool keepseen)
 {
-    const struct conv_flagchange *change = data;
-    struct arrival_rock *arock = rock;
-    struct collect_rock *crock = arock->crock;
-
-    if (!change->arrival) {
-        return;
-    }
-
     struct merge *merge = xzmalloc(sizeof(*merge));
     merge->allseen = true;
-    merge->keepseen = !change->seen_merge;
+    merge->keepseen = keepseen;
     crock->change = &merge->change;
     crock->merge = merge;
     conversations_guid_foreach(crock->cstate, guidrep, collect_cb, crock);
@@ -248,23 +245,39 @@ static void collect_arrival(const char *guidrep, void *data, void *rock)
         arrayu64_append(&mbox->uids, arrayu64_nth(&merge->uids, i));
         ptrarray_append(&mbox->changes, &merge->change);
     }
-    ptrarray_append(arock->merges, merge);
+    ptrarray_append(merges, merge);
 }
+
+static void collect_arrival(const char *guidrep, void *data, void *rock)
+{
+    const struct conv_flagchange *change = data;
+    struct arrival_rock *arock = rock;
+
+    if (change->arrival) {
+        collect_merge(arock->crock,
+                      guidrep,
+                      arock->merges,
+                      !change->seen_merge);
+    }
+}
+
+const struct emailid_flags_sysflag emailid_flags_sysflags[] = {
+    { FLAG_ANSWERED, "\\Answered" },
+    { FLAG_FLAGGED,  "\\Flagged"  },
+    { FLAG_DRAFT,    "\\Draft"    },
+    { FLAG_SEEN,     "\\Seen"     },
+    { 0,             NULL         },
+};
 
 /* The MsgFlags bit for a system flag name, or 0 for \Deleted and unknowns */
 static uint32_t system_flag(const char *name)
 {
-    if (!strcasecmp(name, "\\Answered")) {
-        return FLAG_ANSWERED;
-    }
-    if (!strcasecmp(name, "\\Flagged")) {
-        return FLAG_FLAGGED;
-    }
-    if (!strcasecmp(name, "\\Draft")) {
-        return FLAG_DRAFT;
-    }
-    if (!strcasecmp(name, "\\Seen")) {
-        return FLAG_SEEN;
+    for (const struct emailid_flags_sysflag *f = emailid_flags_sysflags; f->bit;
+         f++)
+    {
+        if (!strcasecmp(name, f->name)) {
+            return f->bit;
+        }
     }
     return 0;
 }
@@ -530,22 +543,12 @@ enum merge_seen {
 };
 
 /* Add one copy's flags to its merge */
-
 static void read_copy(struct mailbox *mailbox,
                       uint32_t uid,
                       struct merge *merge,
                       enum merge_seen seen,
                       const seqset_t *seenuids)
 {
-    static const struct
-    {
-        uint32_t bit;
-        const char *name;
-    } sysflags[] = {
-        { FLAG_ANSWERED, "\\Answered" },
-        { FLAG_FLAGGED,  "\\Flagged"  },
-        { FLAG_DRAFT,    "\\Draft"    },
-    };
     struct index_record record;
 
     if (mailbox_find_index_record(mailbox, uid, &record)
@@ -555,9 +558,12 @@ static void read_copy(struct mailbox *mailbox,
         return;
     }
 
-    for (size_t i = 0; i < sizeof(sysflags) / sizeof(sysflags[0]); i++) {
-        if (record.system_flags & sysflags[i].bit) {
-            strarray_add_case(&merge->change.added, sysflags[i].name);
+    /* \Seen follows the seen rule below */
+    for (const struct emailid_flags_sysflag *f = emailid_flags_sysflags; f->bit;
+         f++)
+    {
+        if (f->bit != FLAG_SEEN && (record.system_flags & f->bit)) {
+            strarray_add_case(&merge->change.added, f->name);
         }
     }
     for (int i = 0; i < MAX_USER_FLAGS; i++) {
@@ -568,9 +574,16 @@ static void read_copy(struct mailbox *mailbox,
         }
     }
 
-    if ((seen == MERGE_SEEN_RECORD && !(record.system_flags & FLAG_SEEN))
-        || (seen == MERGE_SEEN_DB && !seqset_ismember(seenuids, uid)))
-    {
+    if (seen == MERGE_SEEN_UNKNOWN) {
+        return;
+    }
+    bool isseen = seen == MERGE_SEEN_RECORD
+                      ? !!(record.system_flags & FLAG_SEEN)
+                      : seqset_ismember(seenuids, uid);
+    if (isseen) {
+        merge->anyseen = true;
+    }
+    else {
         merge->allseen = false;
     }
 }
@@ -670,6 +683,36 @@ static void apply_mbox(const char *mboxname, void *data, void *vrock)
     rock->r = r;
 }
 
+/* Read and apply the merges collected into @mboxes, then free them.
+ * \Seen goes on every copy if @anyseen and one copy is seen, otherwise
+ * comes off every copy unless all are seen. */
+static int run_merges(hash_table *mboxes, ptrarray_t *merges, bool anyseen)
+{
+    struct apply_rock arock = { 0 };
+
+    if (ptrarray_size(merges)) {
+        hash_enumerate_sorted(mboxes, read_mbox, NULL, cmpstringp_raw);
+        for (int i = 0; i < ptrarray_size(merges); i++) {
+            struct merge *merge = ptrarray_nth(merges, i);
+            if (merge->keepseen) {
+                continue;
+            }
+            if (anyseen ? merge->anyseen : !merge->allseen) {
+                strarray_append(anyseen ? &merge->change.added
+                                        : &merge->change.removed,
+                                "\\Seen");
+            }
+        }
+        hash_enumerate_sorted(mboxes, apply_mbox, &arock, cmpstringp_raw);
+    }
+
+    for (int i = 0; i < ptrarray_size(merges); i++) {
+        merge_free(ptrarray_nth(merges, i));
+    }
+    ptrarray_truncate(merges, 0);
+    return arock.r;
+}
+
 EXPORTED int emailid_flags_drain(struct conversations_state *cstate)
 {
     if (cstate->draining_flags) {
@@ -706,25 +749,128 @@ EXPORTED int emailid_flags_drain(struct conversations_state *cstate)
         struct arrival_rock rrock = { &crock, &merges };
         hash_enumerate(&cstate->flagchanges, collect_arrival, &rrock);
 
-        if (ptrarray_size(&merges)) {
-            hash_enumerate_sorted(&mboxes, read_mbox, NULL, cmpstringp_raw);
-            for (int i = 0; i < ptrarray_size(&merges); i++) {
-                struct merge *merge = ptrarray_nth(&merges, i);
-                if (!merge->keepseen && !merge->allseen) {
-                    strarray_append(&merge->change.removed, "\\Seen");
-                }
-            }
-            hash_enumerate_sorted(&mboxes, apply_mbox, &arock, cmpstringp_raw);
-        }
+        arock.r = run_merges(&mboxes, &merges, /*anyseen*/ false);
 
         free_hash_table(&mboxes, emailid_flags_mbox_free);
-        for (int i = 0; i < ptrarray_size(&merges); i++) {
-            merge_free(ptrarray_nth(&merges, i));
-        }
         ptrarray_fini(&merges);
     }
     conversations_clear_flagchanges(cstate);
     cstate->draining_flags = false;
 
     return arock.r;
+}
+
+/* Collect the GUIDs with more than one counted copy */
+struct converge_rock
+{
+    char guidrep[MESSAGE_GUIDREP_SIZE + 1];
+    int copies;
+    strarray_t *guids;
+};
+
+static int converge_count_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct converge_rock *rock = vrock;
+
+    if (strncmp(rec->guidrep, rock->guidrep, MESSAGE_GUIDREP_SIZE)) {
+        memcpy(rock->guidrep, rec->guidrep, MESSAGE_GUIDREP_SIZE);
+        rock->copies = 0;
+    }
+
+    if (rec->part
+        || (rec->version >= 1
+            && ((rec->system_flags & FLAG_DELETED)
+                || (rec->internal_flags & FLAG_INTERNAL_EXPUNGED))))
+    {
+        return 0;
+    }
+
+    /* collect_merge drops those whose copies aren't in mail folders */
+    if (++rock->copies == 2) {
+        strarray_append(rock->guids, rock->guidrep);
+    }
+    return 0;
+}
+
+/* GUIDs merged per pass: bounds memory and how long the user stays locked,
+ * and each pass opens a mailbox at most twice */
+#define CONVERGE_BATCH 16384
+
+/* Merge guids[start..start+CONVERGE_BATCH) under the user's namespace lock */
+static int converge_batch(const char *userid,
+                          const strarray_t *guids,
+                          int start)
+{
+    struct conversations_state *cstate = NULL;
+    hash_table mboxes = HASH_TABLE_INITIALIZER;
+    ptrarray_t merges = PTRARRAY_INITIALIZER;
+
+    user_nslock_t *nslock = user_nslock_lock_w(userid);
+
+    int r = conversations_open_user(userid, /*shared*/ 0, &cstate);
+    if (r) {
+        goto done;
+    }
+
+    /* the writes below are the convergence; they queue nothing further */
+    cstate->draining_flags = true;
+
+    struct collect_rock crock = { cstate, NULL, &mboxes, NULL };
+    construct_hash_table(&mboxes, 16, 0);
+    for (int i = start; i < strarray_size(guids) && i < start + CONVERGE_BATCH;
+         i++)
+    {
+        collect_merge(&crock,
+                      strarray_nth(guids, i),
+                      &merges,
+                      /*keepseen*/ false);
+    }
+
+    r = run_merges(&mboxes, &merges, /*anyseen*/ true);
+
+    free_hash_table(&mboxes, emailid_flags_mbox_free);
+    ptrarray_fini(&merges);
+    cstate->draining_flags = false;
+
+    /* mailboxes already rewritten committed their index; their
+     * conversations updates must commit too */
+    int r2 = conversations_commit(&cstate);
+    if (!r) {
+        r = r2;
+    }
+
+done:
+    user_nslock_release(&nslock);
+    return r;
+}
+
+EXPORTED int emailid_flags_converge_user(const char *userid)
+{
+    struct conversations_state *cstate = NULL;
+    strarray_t guids = STRARRAY_INITIALIZER;
+    struct converge_rock count = { .guids = &guids };
+
+    emailid_flags_set_actor(NULL, NULL, false);
+
+    user_nslock_t *nslock = user_nslock_lock_w(userid);
+    int r = conversations_open_user(userid, /*shared*/ 0, &cstate);
+    if (!r) {
+        r = conversations_guid_foreach(cstate, "", converge_count_cb, &count);
+        conversations_abort(&cstate);
+    }
+    user_nslock_release(&nslock);
+
+    /* each batch takes the lock afresh; merging is idempotent, so GUIDs
+     * whose copies changed in between merge as they are then */
+    for (int i = 0; !r && i < strarray_size(&guids); i += CONVERGE_BATCH) {
+        r = converge_batch(userid, &guids, i);
+    }
+
+    if (r) {
+        xsyslog_ev(LOG_ERR, "emailid.flags.converge.failed",
+                   lf_s("u.username", userid),
+                   lf_err("error", r));
+    }
+    strarray_fini(&guids);
+    return r;
 }

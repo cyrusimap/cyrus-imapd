@@ -20,6 +20,8 @@ Synopsis
     **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** ] *userid*
     **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] [ **-z** | **-b** | **-R** ] **-r**
     **ctl_conversationsdb** [ -C *config-file* ] [ **-v** ] **-I** *switch* *userid*
+    **ctl_conversationsdb** [ -C *config-file* ] **-E** *userid*
+    **ctl_conversationsdb** [ -C *config-file* ] **-E** **-r**
 
 Description
 ===========
@@ -144,6 +146,17 @@ Options
     get there.
 
     Disabling fails if :imapdconf:`compact_ids` is set to ``always``.
+
+.. option:: -E, --converge-flags
+
+    Make flags agree across all copies of each email of user *userid*.
+    Every copy that isn't ``\Deleted`` or expunged, in a mail folder, gets
+    the union of those copies' flags, and ``\Seen`` is set on all of them if
+    any copy is seen.  Only flags stored on the messages change; other
+    users' private ``\Seen`` state is left alone.
+
+    Run it on the replication master: the changes replicate as ordinary
+    flag changes.
 
 Examples
 ========

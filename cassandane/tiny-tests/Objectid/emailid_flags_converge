@@ -1,0 +1,76 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# ctl_conversationsdb -E gives every copy of an email the union of their
+# flags, and \Seen if any copy is seen.
+#
+sub test_emailid_flags_converge
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub flags_by_folder (@folders) {
+        my %got;
+        for my $folder (@folders) {
+            $talk->select($folder);
+            my $res = $talk->fetch('1', '(flags)');
+            $got{$folder} = [ grep { $_ ne q{\Recent} } $res->{1}{flags}->@* ];
+        }
+        return \%got;
+    }
+
+    $self->{instance}->create_user('other');
+
+    for my $folder (qw(shared private)) {
+        $talk->create("INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    $talk->setacl('INBOX.shared', other => 'lrsw');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setmetadata('INBOX.shared',
+        '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'true');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->{store}->set_folder('INBOX.shared');
+    $self->make_message("Test message");
+
+    $talk->select('INBOX.shared');
+    $talk->copy('1', 'INBOX.private');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->store('1', '+flags', '(\Seen)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->select('user.cassandane.shared');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $othertalk->store('1', '+flags', '($A)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $othertalk->store('1', '-flags', '(\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    $talk->select('INBOX.private');
+    $talk->store('1', '+flags', '($B)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog $self, "the sharee's changes didn't reach the copy it can't see";
+    $self->assert_cmp_deeply(
+        {
+            'INBOX.shared'  => bag('$A', '$B'),
+            'INBOX.private' => bag('$B', '\Seen'),
+        },
+        flags_by_folder(qw(INBOX.shared INBOX.private)));
+
+    $self->{instance}->run_command({ cyrus => 1 },
+        'ctl_conversationsdb', '-E', 'cassandane');
+
+    $self->assert_cmp_deeply(
+        {
+            'INBOX.shared'  => bag('$A', '$B', '\Seen'),
+            'INBOX.private' => bag('$A', '$B', '\Seen'),
+        },
+        flags_by_folder(qw(INBOX.shared INBOX.private)));
+}
