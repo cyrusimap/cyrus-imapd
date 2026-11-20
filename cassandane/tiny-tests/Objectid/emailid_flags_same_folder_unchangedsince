@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A copy that fails UNCHANGEDSINCE still takes the change made to another
+# copy of the email, and is reported both as MODIFIED and in a FETCH.
+#
+sub test_emailid_flags_same_folder_unchangedsince
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: same folder\r\n"
+                . "Message-ID: <same-folder\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+    for (1 .. 2) {
+        $talk->append('INBOX', $literal);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    $talk->select('INBOX');
+
+    # \Deleted isn't shared, so this moves only copy 2's modseq on
+    $talk->store('2', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->store('2', '-flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $res = $talk->fetch('1:2', '(modseq)');
+    my $modseq1 = $res->{1}{modseq}[0];
+    $self->assert($res->{2}{modseq}[0] > $modseq1);
+
+    my %fetched;
+    my $modified;
+    my %handlers = (
+        fetch => sub ($response, $rr, $id) {
+            $fetched{$id} = nonrecent($rr->{flags});
+        },
+        modified => sub ($response, $rr) {
+            $modified = $rr;
+        },
+    );
+    $talk->_imap_cmd('store', 0, \%handlers,
+                     '1:2', [ 'unchangedsince', $modseq1 ],
+                     '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([2], $modified);
+    $self->assert_cmp_deeply({ 1 => ['\\Seen'], 2 => ['\\Seen'] }, \%fetched);
+
+    $res = $talk->fetch('1:2', '(flags)');
+    $self->assert_cmp_deeply({ 1 => ['\\Seen'], 2 => ['\\Seen'] },
+                             { map { $_ => nonrecent($res->{$_}{flags}) }
+                               keys %$res });
+}

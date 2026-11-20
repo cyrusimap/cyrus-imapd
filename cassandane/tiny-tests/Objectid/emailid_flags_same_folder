@@ -1,0 +1,73 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A STORE to one copy changes, and reports, every copy of the email in the
+# selected mailbox, and reports each copy once.
+#
+sub test_emailid_flags_same_folder
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: same folder\r\n"
+                . "Message-ID: <same-folder\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+    for (1 .. 2) {
+        $talk->append('INBOX', $literal);
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    $talk->select('INBOX');
+
+    my @fetched;
+    my %handlers = (
+        fetch => sub ($response, $rr, $id) {
+            push @fetched, [ $id, nonrecent($rr->{flags}) ];
+        },
+    );
+
+    $talk->_imap_cmd('store', 0, \%handlers, '1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply(bag([ 1, ['\\Seen'] ], [ 2, ['\\Seen'] ]),
+                             \@fetched);
+
+    # the copies were already in step when the conversations drain ran
+    @fetched = ();
+    $talk->_imap_cmd('noop', 0, \%handlers);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([], \@fetched);
+
+    @fetched = ();
+    $talk->_imap_cmd('store', 0, \%handlers, '1:2', '+flags', '($Foo)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply(bag([ 1, bag('\\Seen', '$Foo') ],
+                                 [ 2, bag('\\Seen', '$Foo') ]),
+                             \@fetched);
+
+    # \Deleted stays on the copy it was stored on
+    @fetched = ();
+    $talk->_imap_cmd('store', 0, \%handlers, '1', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([ [ 1, bag('\\Seen', '$Foo', '\\Deleted') ] ],
+                             \@fetched);
+    my $res = $talk->fetch('2', '(flags)');
+    $self->assert_cmp_deeply(bag('\\Seen', '$Foo'),
+                             nonrecent($res->{2}{flags}));
+
+    # a STORE to a \Deleted copy changes no other copy
+    @fetched = ();
+    $talk->_imap_cmd('store', 0, \%handlers, '1', '+flags', '($Bar)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply(
+        [ [ 1, bag('\\Seen', '$Foo', '\\Deleted', '$Bar') ] ],
+        \@fetched);
+    $res = $talk->fetch('2', '(flags)');
+    $self->assert_cmp_deeply(bag('\\Seen', '$Foo'),
+                             nonrecent($res->{2}{flags}));
+}
