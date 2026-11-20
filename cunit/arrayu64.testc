@@ -745,4 +745,25 @@ static void test_add(void)
 #undef VAL2
 }
 
+static void test_bsearch(void)
+{
+    arrayu64_t a = ARRAYU64_INITIALIZER;
+
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 10), -1);
+
+    arrayu64_append(&a, 10);
+    arrayu64_append(&a, 20);
+    arrayu64_append(&a, 30);
+
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 10), 0);
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 20), 1);
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 30), 2);
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 0), -1);
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 5), -1);
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 15), -1);
+    CU_ASSERT_EQUAL(arrayu64_bsearch(&a, 35), -1);
+
+    arrayu64_fini(&a);
+}
+
 /* vim: set ft=c: */

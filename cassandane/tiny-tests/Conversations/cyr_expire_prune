@@ -65,3 +65,32 @@ sub test_cyr_expire_prune_chunked
     $self->{instance}->{config}->set('conversations_db' => 'twom');
     $self->_check_cyr_expire_prune();
 }
+
+# with conversations_keep_existing, prune drops the msgid records of
+# conversations that are gone, and keeps the rest whatever their age
+sub test_cyr_expire_prune_keep_existing
+    :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set('conversations_keep_existing' => 'yes');
+    $self->{instance}->{config}->set('conversations_expire_after' => '0d');
+    $self->_start_instances();
+
+    my $talk = $self->{store}->get_client();
+
+    xlog $self, "generating some messages, each its own conversation";
+    my @msgs = map { $self->make_message("Message $_") } (1..5);
+    $self->assert_num_equals(5, scalar @{$self->_convdb_msgids()});
+
+    xlog $self, "expunging the second and fourth";
+    $talk->select('INBOX');
+    $talk->store('2,4', '+flags', '(\\Deleted)');
+    $talk->expunge();
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-X', '0');
+
+    $self->{instance}->run_command({ cyrus => 1 }, 'cyr_expire', '-E', '1');
+
+    my @kept = sort map { (split /\t/)[0] } @{$self->_convdb_msgids()};
+    my @want = sort map { $msgs[$_]->get_header('message-id') } (0, 2, 4);
+    $self->assert_cmp_deeply(\@want, \@kept);
+}
