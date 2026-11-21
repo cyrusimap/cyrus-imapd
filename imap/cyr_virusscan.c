@@ -220,6 +220,10 @@ static struct scan_engine engine = { "<None Configured>", NULL, NULL, NULL, NULL
 /* forward declarations */
 void usage(char *name) __attribute__((noreturn));
 int scan_me(struct findall_data *, void *);
+
+/* --since: skip messages saved before this time (0: scan everything) */
+static time_t since_cutoff = 0;
+static unsigned long since_skipped = 0;
 unsigned virus_check(struct mailbox *mailbox,
                      const struct index_record *record,
                      void *rock);
@@ -250,13 +254,14 @@ int main (int argc, char *argv[])
     int r;
 
     /* keep this in alphabetical order */
-    static const char short_options[] = "C:nrs:v";
+    static const char short_options[] = "C:nrS:s:v";
 
     static const struct option long_options[] = {
         /* n.b. no long option for -C */
         { "notify", no_argument, NULL, 'n' },
         { "remove-infected", no_argument, NULL, 'r' },
         { "search", required_argument, NULL, 's' },
+        { "since", required_argument, NULL, 'S' },
         { "verbose", no_argument, NULL, 'v' },
         { 0, 0, 0, 0 },
     };
@@ -272,6 +277,14 @@ int main (int argc, char *argv[])
         case 's': /* IMAP SEARCH string */
             search_str = optarg;
             break;
+
+        case 'S': { /* only messages saved within this duration */
+            int32_t duration = 0;
+            if (config_parseduration(optarg, 's', &duration) || duration <= 0)
+                usage(argv[0]);
+            since_cutoff = time(NULL) - duration;
+            break;
+        }
 
         case 'r':
             disinfect = 1;
@@ -358,6 +371,9 @@ int main (int argc, char *argv[])
            srock.mailboxes_scanned,
            srock.total_infected,
            disinfect ? "removed" : "found");
+    if (since_cutoff)
+        printf("%lu messages saved before the --since cutoff were skipped\n",
+               since_skipped);
 
     if (srock.searchargs) freesearchargs(srock.searchargs);
     else if (engine.destroy) engine.destroy(engine.state);
@@ -369,12 +385,14 @@ int main (int argc, char *argv[])
 
 void usage(char *name)
 {
-    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [ -r [-n] ] [-v]\n"
+    printf("usage: %s [-C <alt_config>] [-s <imap-search-string>] [-S <duration>] [ -r [-n] ] [-v]\n"
            "\t[mboxpattern1 ... [mboxpatternN]]\n", name);
     printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
     printf("\t -s imap-search-string  Rather than scanning for viruses,\n"
            "\t    messages matching the search criteria will be treated as infected.\n"
            "\t    Useful for removing messages without a distinct signature, such as Phish.\n");
+    printf("\t -S duration  only consider messages saved within this duration\n"
+           "\t    (e.g. 36h, 2d), so that a periodic run skips what it has already seen.\n");
     printf("\t -r remove infected messages\n");
     printf("\t -n notify mailbox owner of deleted messages via email\n");
     printf("\t -v verbose output\n");
@@ -510,6 +528,13 @@ unsigned virus_check(struct mailbox *mailbox,
     const char *virname =
         "Cyrus Administrator Targeted Removal (Phish, etc.)";
     int r = 0;
+
+    if (since_cutoff && record->savedate.tv_sec < since_cutoff) {
+        /* saved before the --since window: already seen by an earlier run */
+        if (srock->searchargs) srock->msgno++;
+        since_skipped++;
+        return 0;
+    }
 
     if (srock->searchargs) {
         /* run the search program against this message */

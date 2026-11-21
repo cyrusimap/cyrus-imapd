@@ -1,0 +1,27 @@
+Description:
+
+cyr_virusscan has a new -S/--since option, to only scan messages saved to
+their mailbox within the given duration (for example 36h or 2d).  A periodic
+job no longer has to rescan every message on every run, holding each mailbox
+locked while it does.
+
+
+Documentation:
+
+docsrc/reference/manpages/systemcommands/cyr_virusscan.rst
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.  To make an existing periodic cyr_virusscan job incremental, pass
+-S with a duration slightly longer than the job's interval.
+
+
+GitHub issue:
+
+None.
