@@ -17,7 +17,7 @@ Synopsis
 
 .. parsed-literal::
 
-    **cyr_virusscan** [ **-C** *config-file* ] [ **-s** *imap-search-string* ] [ **-r** [ **-n**] ] [**-v**] [ *mboxpattern1* ... ]
+    **cyr_virusscan** [ **-C** *config-file* ] [ **-s** *imap-search-string* ] [ **-S** *duration* ] [ **-r** [ **-n**] ] [**-v**] [ *mboxpattern1* ... ]
 
 Description
 ===========
@@ -75,6 +75,16 @@ Options
 
     Rather than scanning for viruses, messages matching the search
     criteria will be treated as infected.
+
+.. option:: -S duration, --since=duration
+
+    Only consider messages saved to their mailbox within *duration*
+    (for example ``36h`` or ``2d``; a plain number is in seconds).  Older
+    messages are skipped.  Without this flag, every message is scanned on
+    every run, and each mailbox stays locked while it is scanned; a periodic
+    job can instead pass a duration slightly longer than its interval, so
+    that each run only scans what arrived since the previous one.  The
+    number of skipped messages is reported.
 
 .. option:: -v, --verbose
 

@@ -1,0 +1,47 @@
+#!perl
+use Cassandane::Tiny;
+
+# This test uses the AV engine, which can be very slow to initialise.
+sub test_since_skips_older
+    :NoAltNamespace
+    ($self)
+{
+    $self->{store}->set_fetch_attributes(qw(uid flags));
+
+    my $talk = $self->{store}->get_client();
+    $talk->select("INBOX");
+    $talk->uid(1);
+
+    # an infected message saved a while ago, then a clean one and an
+    # infected one saved just now
+    $self->{store}->set_folder("INBOX");
+    my %exp;
+    $exp{1} = $self->make_message("eicar attached, older", uid => 1, $self->eicar_attached);
+    sleep 6;
+    $exp{2} = $self->make_message("clean", uid => 2);
+    $exp{3} = $self->make_message("eicar attached, newer", uid => 3, $self->eicar_attached);
+    $self->check_messages(\%exp, ( keyed_on => 'uid' ));
+
+    # only consider what was saved within the last 3 seconds
+    my $out = "$self->{instance}->{basedir}/$self->{_name}-cyr_virusscan.stdout";
+    $self->{instance}->run_command(
+        { cyrus => 1,
+          redirects => { 'stdout' => $out },
+        }, 'cyr_virusscan', '-r', '-S', '3s');
+
+    $out = slurp_file($out);
+    xlog $self, $out;
+
+    # the newer infected message was found, the older one was skipped
+    $self->assert_matches(
+        qr/user\.cassandane\s+3\s+UNREAD\s+Eicar(?:-Test){0,1}-Signature/,
+        $out);
+    $self->assert_does_not_match(qr/user\.cassandane\s+1\s+/, $out);
+    $self->assert_matches(qr/1 infected messages removed/, $out);
+    $self->assert_matches(
+        qr/1 messages saved before the --since cutoff were skipped/, $out);
+
+    # only the newer infected message was expunged
+    delete $exp{3};
+    $self->check_messages(\%exp, ( keyed_on => 'uid' ));
+}
