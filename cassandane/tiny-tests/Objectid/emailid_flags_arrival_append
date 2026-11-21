@@ -1,0 +1,62 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# An appended copy takes the union of its copies' flags other than \Seen, and
+# every copy is seen only if they all are.
+#
+sub test_emailid_flags_arrival_append
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub flags_by_folder (@folders) {
+        my %got;
+        for my $folder (@folders) {
+            $talk->select($folder);
+            my $res = $talk->fetch('1:*', '(flags)');
+            $got{$folder} = [
+                map { [ grep { $_ ne q{\Recent} } $res->{$_}{flags}->@* ] }
+                sort { $a <=> $b } keys %$res
+            ];
+        }
+        return \%got;
+    }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: arrival append\r\n"
+                . "Message-ID: <arrival-append\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $talk->create('a');
+    $talk->create('b');
+
+    $talk->append('INBOX', '($Old)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->append('a', '(\\Seen $New)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->assert_cmp_deeply({
+        INBOX => [ bag('$Old', '$New') ],
+        a     => [ bag('$Old', '$New') ],
+    }, flags_by_folder(qw(INBOX a)));
+
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        INBOX => [ bag('$Old', '$New', '\\Seen') ],
+        a     => [ bag('$Old', '$New', '\\Seen') ],
+    }, flags_by_folder(qw(INBOX a)));
+
+    $talk->append('b', '()', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        INBOX => [ bag('$Old', '$New') ],
+        a     => [ bag('$Old', '$New') ],
+        b     => [ bag('$Old', '$New') ],
+    }, flags_by_folder(qw(INBOX a b)));
+}

@@ -45,6 +45,7 @@
 #include "bufarray.h"
 #include "charset.h"
 #include "dlist.h"
+#include "emailid_flags.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
@@ -957,6 +958,8 @@ static void imapd_reset(void)
     uint64_t bytes_in = 0;
     uint64_t bytes_out = 0;
 
+    emailid_flags_resume(false);
+
     /* run delayed commands first before closing anything */
     libcyrus_run_delayed();
 
@@ -1042,6 +1045,7 @@ static void imapd_reset(void)
         free(imapd_magicplus);
         imapd_magicplus = NULL;
     }
+    emailid_flags_set_actor(NULL, NULL, false);
     if (imapd_authstate) {
         auth_freestate(imapd_authstate);
         imapd_authstate = NULL;
@@ -3159,6 +3163,7 @@ static void authentication_success(const char *tag, int ssf, const char *reply)
 
     /* authstate already created by mysasl_proxy_policy() */
     imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
+    emailid_flags_set_actor(imapd_userid, imapd_authstate, imapd_userisadmin);
 
     prot_printf(imapd_out, "%s OK", tag);
     if (!ssf) {
@@ -3579,6 +3584,7 @@ static void cmd_unauthenticate(char *tag)
         free(imapd_magicplus);
         imapd_magicplus = NULL;
     }
+    emailid_flags_set_actor(NULL, NULL, false);
     if (imapd_authstate) {
         auth_freestate(imapd_authstate);
         imapd_authstate = NULL;
@@ -14995,6 +15001,8 @@ static void cmd_xmeid(const char *tag, const char *id)
 
 static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserve_list *reserve_list)
 {
+    bool flags_were_off = emailid_flags_suspend();
+
     struct sync_state sync_state = {
         imapd_userid,
         imapd_userisadmin || imapd_userisproxyadmin,
@@ -15012,6 +15020,7 @@ static void cmd_syncapply(const char *tag, struct dlist *kin, struct sync_reserv
     }
 
     const char *resp = sync_apply(kin, reserve_list, &sync_state);
+    emailid_flags_resume(flags_were_off);
 
     if (sync_state.flags & SYNC_FLAG_SIEVE_MAILBOX) {
         sync_sieve_mailbox_enabled = 1;
@@ -15140,6 +15149,8 @@ static void cmd_syncrestart(const char *tag, struct sync_reserve_list **reserve_
 static void cmd_syncrestore(const char *tag, struct dlist *kin,
                             struct sync_reserve_list *reserve_list)
 {
+    bool flags_were_off = emailid_flags_suspend();
+
     struct sync_state sync_state = {
         imapd_userid,
         imapd_userisadmin || imapd_userisproxyadmin,
@@ -15157,6 +15168,7 @@ static void cmd_syncrestore(const char *tag, struct dlist *kin,
     }
 
     const char *resp = sync_restore(kin, reserve_list, &sync_state);
+    emailid_flags_resume(flags_were_off);
     index_release(imapd_index);
     sync_checkpoint(imapd_in);
     prot_printf(imapd_out, "%s %s\r\n", tag, resp);

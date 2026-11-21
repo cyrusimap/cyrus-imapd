@@ -1,0 +1,74 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A COPY or MOVE within the account keeps the flags it has, and leaves the
+# email's other copies alone.
+#
+sub test_emailid_flags_arrival_copy_move
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub flags_by_folder (@folders) {
+        my %got;
+        for my $folder (@folders) {
+            $talk->select($folder);
+            my $res = $talk->fetch('1:*', '(flags)');
+            $got{$folder} = [
+                map { [ grep { $_ ne q{\Recent} } $res->{$_}{flags}->@* ] }
+                sort { $a <=> $b } keys %$res
+            ];
+        }
+        return \%got;
+    }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: arrival copy move\r\n"
+                . "Message-ID: <arrival-copy-move\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $talk->create($_) for qw(a b c);
+
+    # the second append merges, so make the copies disagree with a gap in
+    # the owner's rights
+    $talk->append('INBOX', '($A \\Seen)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setacl('INBOX', cassandane => '-w');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->append('a', '($B \\Seen)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setacl('INBOX', cassandane => '+w');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        INBOX => [ bag('$A', '\\Seen') ],
+        a     => [ bag('$A', '$B', '\\Seen') ],
+    }, flags_by_folder(qw(INBOX a)));
+
+    $talk->select('INBOX');
+    $talk->copy('1', 'b');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        INBOX => [ bag('$A', '\\Seen') ],
+        a     => [ bag('$A', '$B', '\\Seen') ],
+        b     => [ bag('$A', '\\Seen') ],
+    }, flags_by_folder(qw(INBOX a b)));
+
+    $talk->select('b');
+    $talk->store('1', '+flags', '($Gone)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->store('1', '-flags', '($Gone)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->move('1', 'c');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply({
+        INBOX => [ bag('$A', '\\Seen') ],
+        a     => [ bag('$A', '$B', '\\Seen') ],
+        b     => [],
+        c     => [ bag('$A', '\\Seen') ],
+    }, flags_by_folder(qw(INBOX a b c)));
+}

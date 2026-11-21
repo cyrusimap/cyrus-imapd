@@ -1,0 +1,89 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A copy appended to the selected mailbox merges with the copies already
+# there, and the session is told of the ones that changed, with a sharee's
+# own \Seen.
+#
+sub test_emailid_flags_arrival_selected
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    my sub flags_by_msgno ($imap) {
+        my $res = $imap->fetch('1:*', '(flags)');
+        return { map { $_ => nonrecent($res->{$_}{flags}) } keys %$res };
+    }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: arrival selected\r\n"
+                . "Message-ID: <arrival-selected\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $self->{instance}->create_user('other');
+    $talk->create('INBOX.s');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setacl('INBOX.s', other => 'lrswi');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->append('INBOX.s', '($Old)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my %fetched;
+    my %handlers = (
+        fetch => sub ($response, $rr, $id) {
+            $fetched{$id} = nonrecent($rr->{flags}) if $rr->{flags};
+        },
+    );
+    my sub append_and_noop ($imap, $flags) {
+        %fetched = ();
+        $imap->_imap_cmd('append', 0, \%handlers,
+                         'user.cassandane.s', $flags, { Literal => $literal });
+        $self->assert_str_equals('ok', $imap->get_last_completion_response());
+        $imap->_imap_cmd('noop', 0, \%handlers);
+        $self->assert_str_equals('ok', $imap->get_last_completion_response());
+        return { %fetched };
+    }
+
+    xlog $self, "the owner appends a seen copy with a new flag";
+    $talk->select('INBOX.s');
+    $self->assert_cmp_deeply(
+        { 1 => bag('$Old', '$New') },
+        append_and_noop($talk, [ '\\Seen', '$New' ]));
+    $self->assert_cmp_deeply({
+        1 => bag('$Old', '$New'),
+        2 => bag('$Old', '$New'),
+    }, flags_by_msgno($talk));
+
+    xlog $self, "the sharee appends an unseen copy to their seen copies";
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->select('user.cassandane.s');
+    $othertalk->store('1:*', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    $self->assert_cmp_deeply({
+        1 => bag('$Old', '$New'),
+        2 => bag('$Old', '$New'),
+    }, append_and_noop($othertalk, []));
+
+    my $want = {
+        1 => bag('$Old', '$New'),
+        2 => bag('$Old', '$New'),
+        3 => bag('$Old', '$New'),
+    };
+    $self->assert_cmp_deeply($want, flags_by_msgno($othertalk));
+    $othertalk->unselect();
+    $othertalk->select('user.cassandane.s');
+    $self->assert_cmp_deeply($want, flags_by_msgno($othertalk));
+
+    # the owner's \Seen is the record's, which the sharee doesn't change
+    $self->assert_cmp_deeply($want, flags_by_msgno($talk));
+}

@@ -8,6 +8,7 @@
 
 #include "acl.h"
 #include "append.h"
+#include "emailid_flags.h"
 #include "httpd.h"
 #include "http_jmap.h"
 #include "http_proxy.h"
@@ -1572,8 +1573,12 @@ static int jmap_ws(struct transaction_t *txn, enum wslay_opcode opcode,
         }
 
         if (!strcmpsafe(type, "Request")) {
-            /* Process the API request */
+            /* Process the API request; process_request() has long since
+             * cleared the actor for the upgrade request */
+            emailid_flags_set_actor(txn->userid, txn->authstate,
+                                    httpd_userisadmin);
             ret = jmap_api(txn, req, &res, &my_jmap_settings);
+            emailid_flags_set_actor(NULL, NULL, false);
         }
         else if (jmap_push_poll && !strcmpsafe(type, "WebSocketPushEnable")) {
             /* Log request */

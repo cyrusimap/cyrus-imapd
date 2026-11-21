@@ -95,9 +95,11 @@ sub test_email_query_seen_multimbox
     $self->assert_cmp_deeply([$emailId], $res->[4][1]{ids});
     $self->assert_cmp_deeply([$emailId], $res->[5][1]{ids});
 
-    xlog 'Set \Seen on message in mailbox A';
+    xlog 'Set \Seen on message in mailbox A only';
+    $imap->setacl('B', cassandane => '-s');
     $imap->select('A');
     $imap->store('1', '+flags', '(\Seen)');
+    $imap->setacl('B', cassandane => '+s');
 
     xlog "Assert email still is unseen";
     $res = $jmap->CallMethods([

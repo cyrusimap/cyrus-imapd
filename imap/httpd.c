@@ -39,6 +39,7 @@
 #include "user.h"
 #include "util.h"
 #include "iptostring.h"
+#include "emailid_flags.h"
 #include "global.h"
 #include "slowio.h"
 #include "tls.h"
@@ -2036,6 +2037,8 @@ EXPORTED int process_request(struct transaction_t *txn)
     /* scheduling looks up whose each address is, often many times over */
     sched_address_cache_begin();
 
+    emailid_flags_set_actor(txn->userid, txn->authstate, httpd_userisadmin);
+
     if (txn->req_tgt.namespace->premethod) {
         ret = txn->req_tgt.namespace->premethod(txn);
     }
@@ -2055,6 +2058,8 @@ EXPORTED int process_request(struct transaction_t *txn)
     }
 
     sched_address_cache_end();
+
+    emailid_flags_set_actor(NULL, NULL, false);
 
     if (ret == HTTP_UNAUTHORIZED) {
         /* User must authenticate */

@@ -1,0 +1,69 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# The status cache holds the flags a merge gave copies in the selected
+# mailbox.
+#
+sub test_emailid_flags_arrival_selected_statuscache
+    :NoAltNamespace :NoStartInstances
+    ($self)
+{
+    $self->{instance}->{config}->set(statuscache => 'on');
+    $self->_start_instances();
+
+    my $talk = $self->{store}->get_client();
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: arrival selected statuscache\r\n"
+                . "Message-ID: <arrival-selected-statuscache\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $self->{instance}->create_user('other');
+    $talk->create('INBOX.s');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->setacl('INBOX.s', other => 'lrswi');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->append('INBOX.s', '($Old)', $literal);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $svc = $self->{instance}->get_service('imap');
+    my $othertalk = $svc->create_store(username => 'other')
+                        ->get_client(username => 'other');
+    $othertalk->select('user.cassandane.s');
+    $othertalk->store('1', '+flags', '(\\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    xlog $self, "the sharee appends an unseen copy to the selected mailbox";
+    $othertalk->append('user.cassandane.s', '()', $literal);
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    my $status_of = sub ($imap) {
+        my $status = $imap->status('user.cassandane.s',
+                                   '(messages unseen highestmodseq)');
+        $self->assert_str_equals('ok', $imap->get_last_completion_response());
+        $imap->examine('user.cassandane.s');
+        my $highestmodseq = $imap->get_response_code('highestmodseq');
+        my $res = $imap->fetch('1:*', '(flags)');
+        my $unseen = grep { !grep { $_ eq '\\Seen' } $res->{$_}{flags}->@* }
+                     keys %$res;
+        return ($status, {
+            messages      => scalar keys %$res,
+            unseen        => $unseen,
+            highestmodseq => $highestmodseq,
+        });
+    };
+
+    my ($cached, $real) = $status_of->(
+        $svc->create_store(username => 'other')->get_client(username => 'other'));
+    $self->assert_cmp_deeply($real, $cached);
+    $self->assert_num_equals(2, $real->{unseen});
+
+    ($cached, $real) = $status_of->(
+        $svc->create_store(username => 'cassandane')->get_client());
+    $self->assert_cmp_deeply($real, $cached);
+    $self->assert_syslog_matches($self->{instance},
+                                 qr{event=statuscache\.lookup});
+}
