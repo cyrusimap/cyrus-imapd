@@ -107,10 +107,15 @@ static int meth_get_applepush(struct transaction_t *txn,
         goto done;
     }
 
-    /* mailbox must be calendar or addressbook */
+    /* mailbox must be calendar or addressbook, with its DAV module enabled */
     mbtype = mbtype_isa(mbentry->mbtype);
-    if (mbtype != MBTYPE_CALENDAR && mbtype != MBTYPE_ADDRESSBOOK)
-        goto done;
+    if (mbtype == MBTYPE_CALENDAR) {
+        if (!namespace_calendar.enabled) goto done;
+    }
+    else if (mbtype == MBTYPE_ADDRESSBOOK) {
+        if (!namespace_addressbook.enabled) goto done;
+    }
+    else goto done;
 
     /* check if auth user has access to mailbox */
     int myrights = httpd_myrights(httpd_authstate, mbentry);

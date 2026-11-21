@@ -38,6 +38,17 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
                       struct index_record *record, void *data, void **obj,
                       struct mime_type_t *mime);
 
+static int notify_lookup_resource(struct webdav_db *webdavdb,
+                                  const mbentry_t *mbentry,
+                                  const char *resource,
+                                  struct webdav_data **result,
+                                  int tombstones);
+static int notify_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry,
+                          webdav_cb_t *cb, void *rock);
+static int notify_get_updates(struct webdav_db *webdavdb, modseq_t oldmodseq,
+                              const mbentry_t *mbentry, int kind, int limit,
+                              webdav_cb_t *cb, void *rock);
+
 static int propfind_restype(const xmlChar *name, xmlNsPtr ns,
                             struct propfind_ctx *fctx,
                             xmlNodePtr prop, xmlNodePtr resp,
@@ -214,10 +225,10 @@ static struct meth_params notify_params = {
       (db_proc_t) &webdav_begin,
       (db_proc_t) &webdav_commit,
       (db_proc_t) &webdav_abort,
-      (db_lookup_proc_t) &webdav_lookup_resource,
+      (db_lookup_proc_t) &notify_lookup_resource,
       (db_imapuid_proc_t) &webdav_lookup_imapuid,
-      (db_foreach_proc_t) &webdav_foreach,
-      (db_updates_proc_t) &webdav_get_updates,
+      (db_foreach_proc_t) &notify_foreach,
+      (db_updates_proc_t) &notify_get_updates,
       (db_write_proc_t) &webdav_write,
       (db_delete_proc_t) &webdav_delete },
     NULL,                                       /* No ACL extensions */
@@ -670,6 +681,145 @@ static int notify_get(struct transaction_t *txn, struct mailbox *mailbox,
     return ret;
 }
 
+/* Is the DAV module serving this shared collection in httpmodules? */
+static bool shared_collection_enabled(const char *mboxname)
+{
+    if (!mboxname) return false;
+    if (mboxname_iscalendarmailbox(mboxname, 0))
+        return namespace_calendar.enabled;
+    if (mboxname_isaddressbookmailbox(mboxname, 0))
+        return namespace_addressbook.enabled;
+    if (mboxname_isdavdrivemailbox(mboxname, 0))
+        return namespace_drive.enabled;
+    return false;
+}
+
+/* Hide a notification about a collection whose DAV module is disabled */
+static bool notify_visible(const struct webdav_data *wdata)
+{
+    struct dlist *dl = NULL, *data = NULL;
+    const char *mboxname = NULL;
+    bool visible = true;
+
+    if (!wdata->filename) return true;
+
+    dlist_parsemap(&dl, 1, wdata->filename, strlen(wdata->filename));
+    if (dlist_getlist(dl, "D", &data) && dlist_getatom(data, "M", &mboxname))
+        visible = shared_collection_enabled(mboxname);
+    dlist_free(&dl);
+
+    return visible;
+}
+
+static int notify_lookup_resource(struct webdav_db *webdavdb,
+                                  const mbentry_t *mbentry,
+                                  const char *resource,
+                                  struct webdav_data **result,
+                                  int tombstones)
+{
+    int r = webdav_lookup_resource(webdavdb, mbentry, resource,
+                                   result, tombstones);
+
+    if (!r && !notify_visible(*result)) {
+        struct webdav_data *wdata = *result;
+        struct dav_data dav = wdata->dav;
+
+        memset(wdata, 0, sizeof(struct webdav_data));
+        wdata->dav.mailbox_byname = dav.mailbox_byname;
+        wdata->dav.mailbox = dav.mailbox;
+        wdata->dav.resource = dav.resource;
+        r = CYRUSDB_NOTFOUND;
+    }
+
+    return r;
+}
+
+struct notify_filter_rock {
+    webdav_cb_t *cb;
+    void *rock;
+};
+
+static int notify_filter_cb(void *rock, struct webdav_data *wdata)
+{
+    struct notify_filter_rock *frock = rock;
+
+    if (!notify_visible(wdata)) return 0;
+
+    return frock->cb(frock->rock, wdata);
+}
+
+static int notify_foreach(struct webdav_db *webdavdb, const mbentry_t *mbentry,
+                          webdav_cb_t *cb, void *rock)
+{
+    struct notify_filter_rock frock = { cb, rock };
+
+    return webdav_foreach(webdavdb, mbentry, &notify_filter_cb, &frock);
+}
+
+static int notify_get_updates(struct webdav_db *webdavdb, modseq_t oldmodseq,
+                              const mbentry_t *mbentry, int kind,
+                              int limit __attribute__((unused)),
+                              webdav_cb_t *cb, void *rock)
+{
+    struct notify_filter_rock frock = { cb, rock };
+
+    /* The callback enforces the client's limit.  A row limit here
+       would end the page early when hidden rows are dropped. */
+    return webdav_get_updates(webdavdb, oldmodseq, mbentry, kind, 0,
+                              &notify_filter_cb, &frock);
+}
+
+/* Add the mailbox name of the shared collection at href to a
+   notification's data as "M" */
+static void notify_add_mboxname(struct dlist *al, xmlNodePtr href)
+{
+    struct request_target_t tgt;
+    struct meth_params *pparams = NULL;
+    const char *errstr;
+    xmlChar *value;
+    char *path;
+    int i;
+
+    value = xmlNodeGetContent(href);
+    path = xmlURIUnescapeString((const char *) value, xmlStrlen(value), NULL);
+    xmlFree(value);
+
+    memset(&tgt, 0, sizeof(struct request_target_t));
+
+    /* Find the DAV namespace of the shared collection.
+     * The URI is server-generated and JMAP sharing uses it even
+     * when the namespace is disabled in httpmodules. */
+    for (i = 0; http_namespaces[i]; i++) {
+        struct meth_params *params =
+            http_namespaces[i]->methods[METH_PUT].params;
+        size_t len;
+
+        /* Skip non-DAV namespaces, including the default */
+        if (!params || !params->parse_path) continue;
+
+        /* See if the prefix matches - terminated with NUL or '/' */
+        len = strlen(http_namespaces[i]->prefix);
+        if (len && !strncmp(path, http_namespaces[i]->prefix, len) &&
+                (!path[len] || (path[len] == '/'))) {
+            tgt.namespace = http_namespaces[i];
+            pparams = params;
+            break;
+        }
+    }
+
+    if (pparams) {
+        tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
+        pparams->parse_path(path, &tgt, &errstr);
+    }
+    free(tgt.userid);
+    free(path);
+
+    if (tgt.mbentry) {
+        dlist_setatom(al, "M", tgt.mbentry->name);
+        mboxlist_entry_free(&tgt.mbentry);
+    }
+}
+
 static struct dlist *notify_extract_dl(xmlDocPtr doc)
 {
     xmlNodePtr root, dtstamp, type = NULL;
@@ -713,45 +863,18 @@ static struct dlist *notify_extract_dl(xmlDocPtr doc)
         for (node = xmlFirstElementChild(type); node;
                 node = xmlNextElementSibling(node)) {
             if (!xmlStrcmp(node->name, BAD_CAST "sharer-resource-uri")) {
-                struct request_target_t tgt;
-                struct meth_params *pparams;
-                const char *errstr;
-                char *path;
-                int i;
-
-                value = xmlNodeGetContent(xmlFirstElementChild(node));
-                path = xmlURIUnescapeString((const char *) value,
-                                            xmlStrlen(value), NULL);
-                xmlFree(value);
-
-                /* Find the namespace of the requested resource */
-                for (i = 0; http_namespaces[i]; i++) {
-                    size_t len;
-
-                    /* Skip disabled namespaces */
-                    if (!http_namespaces[i]->enabled) continue;
-
-                    /* See if the prefix matches - terminated with NUL or '/' */
-                    len = strlen(http_namespaces[i]->prefix);
-                    if (!strncmp(path, http_namespaces[i]->prefix, len) &&
-                            (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
-                        break;
-                    }
-                }
-
-                memset(&tgt, 0, sizeof(struct request_target_t));
-                tgt.namespace = http_namespaces[i];
-                pparams =
-                    (struct meth_params *) tgt.namespace->methods[METH_PUT].params;
-                tgt.flags = TGT_DAV_SHARED;  // prevent old-style sharing redirect
-                pparams->parse_path(path, &tgt, &errstr);
-                free(tgt.userid);
-                free(path);
-
-                if (tgt.mbentry) {
-                    dlist_setatom(al, "M", tgt.mbentry->name);
-                    mboxlist_entry_free(&tgt.mbentry);
-                }
+                notify_add_mboxname(al, xmlFirstElementChild(node));
+                break;
+            }
+        }
+    }
+    else if (!xmlStrcmp(type->name, BAD_CAST SHARE_REPLY_NOTIFICATION)) {
+        xmlNodePtr node;
+        for (node = xmlFirstElementChild(type); node;
+                node = xmlNextElementSibling(node)) {
+            /* shared-url */
+            if (!xmlStrcmp(node->name, BAD_CAST "href")) {
+                notify_add_mboxname(al, node);
                 break;
             }
         }
@@ -958,7 +1081,7 @@ HIDDEN int notify_post(struct transaction_t *txn)
     user_nslock_t *user_nslock = NULL;
     struct webdav_data *wdata;
     struct dlist *dl = NULL, *data;
-    const char *type_str, *mboxname, *url_prefix;
+    const char *type_str, *mboxname = NULL, *url_prefix;
     char dtstamp[RFC3339_DATETIME_MAX], *resource = NULL;
     xmlNodePtr notify = NULL, type, sharee;
     xmlNsPtr ns[NUM_NAMESPACE];
@@ -1081,6 +1204,10 @@ HIDDEN int notify_post(struct transaction_t *txn)
 
     dlist_getlist(dl, "D", &data);
     dlist_getatom(data, "M", &mboxname);
+    if (!shared_collection_enabled(mboxname)) {
+        ret = HTTP_NOT_FOUND;
+        goto done;
+    }
 
     /* [Un]subscribe */
     r = mboxlist_changesub(mboxname, txn->req_tgt.userid,
