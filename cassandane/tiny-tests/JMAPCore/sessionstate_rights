@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+# A sharee that keeps read access but gains or loses write access sees
+# isReadOnly change in its session, so the session state must change too,
+# whether the rights are granted to the sharee or to a group it is in.
+sub assert_sessionstate_rights ($self, $grantee)
+{
+    my $jmap = $self->{jmap};
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user("other");
+
+    my sub state_after_setacl ($rights) {
+        $admintalk->setacl("user.other", $grantee, $rights) or die;
+        my $res = $jmap->request({
+            using => ['urn:ietf:params:jmap:core'],
+            methodCalls => [['Core/echo', { }, 'R1']],
+        });
+        return $res->wrapper_properties->{sessionState};
+    }
+
+    my $state = state_after_setacl('lr');
+    $self->assert_not_null($state);
+
+    for my $case (
+        [ lrswitedn => 1, 'widen to read-write' ],
+        [ lr        => 1, 'narrow to read-only' ],
+        [ lr        => 0, 'set the same rights' ],
+    ) {
+        my ($rights, $changes, $desc) = @$case;
+        my $newstate = state_after_setacl($rights);
+        if ($changes) {
+            $self->assert_str_not_equals($state, $newstate, $desc);
+        }
+        else {
+            $self->assert_str_equals($state, $newstate, $desc);
+        }
+        $state = $newstate;
+    }
+}
+
+sub test_sessionstate_rights
+    :ReverseACLs
+    ($self)
+{
+    $self->assert_sessionstate_rights('cassandane');
+}
+
+sub test_sessionstate_rights_group
+    :Mboxgroups :ReverseACLs
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->_imap_cmd('SETUSERGROUP', 0, '', 'cassandane', 'group:team');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->assert_sessionstate_rights('group:team');
+}
