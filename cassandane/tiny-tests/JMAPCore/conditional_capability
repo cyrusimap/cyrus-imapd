@@ -1,0 +1,12 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_conditional_capability
+    ($self)
+{
+    my $session = $self->{jmap}->get_client_session->client_session;
+    $self->assert_cmp_deeply(
+        {},
+        $session->{capabilities}{'urn:ietf:params:jmap:conditional'},
+    );
+}
