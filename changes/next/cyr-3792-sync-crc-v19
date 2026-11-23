@@ -1,0 +1,28 @@
+Description:
+
+Replication and XFER from a Cyrus 3.12 or earlier server to this version work
+again.  The thrid in the sync CRC is hashed as 3.12 hashes it, and a mailbox
+created from a sender that doesn't send its mailbox version is created as
+version 19 instead of the current version.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Mailboxes that a 3.12 or earlier server replicates or transfers to this version
+are created as version 19.  Upgrade them with `reconstruct -V max` once the
+whole cluster runs this version.
+
+
+GitHub issue:
+
+None.
