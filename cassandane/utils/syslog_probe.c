@@ -1,6 +1,6 @@
 /* syslog_probe.c
  *
- * A tiny little tool that just syslogs the magic word with the
+ * A tiny little tool that just syslogs a probe event with the
  * given string as ident prefix
  */
 
@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 
     snprintf(ident, sizeof(ident), "%s/syslog_probe", argv[1]);
 
-    /* Fork, and log the magic word from the child, in case LD_PRELOAD
+    /* Fork, and log the probe event from the child, in case LD_PRELOAD
      * is discarded during fork.
      * XXX This doesn't necessarily tell us much. To do this properly,
      * XXX we probably need to mimick certain details of Cyrus master's
@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     if (pid == 0) {
         /* child */
         openlog(ident, LOG_PID, SYSLOG_FACILITY);
-        syslog(LOG_NOTICE, "the magic word");
+        syslog(LOG_NOTICE, "event=cassandane.syslog.probe");
         closelog();
 
         return 0;

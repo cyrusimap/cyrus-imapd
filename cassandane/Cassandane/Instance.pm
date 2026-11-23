@@ -1896,30 +1896,15 @@ my $error_severity = qr{^<(?:emerg|alert|crit|err)>};
 
 # Decide whether a captured syslog line represents an unexpected error.
 #
-# logfmt events (which always begin "event=") carry their severity, so we
-# can recognise a problem without knowing anything about the message text.
-# That's the whole point of recording the severity: as logfmt conversion
-# proceeds, messages can be reworded freely without silently switching off
-# this check.
-#
-# Everything else is still matched by text.  We can't simply promote the
-# old messages to severity matching, because plenty of them are logged at
-# LOG_ERR without being the kind of error a test should fail on.  This
-# clause shrinks as logfmt conversion proceeds, and goes away with the last
-# unconverted call site.
+# logfmt events carry their severity, so we can recognize a problem without
+# knowing anything about the message text, and messages can be reworded freely
+# without silently switching off this check.  A line that isn't a logfmt event
+# is for _check_syslog_logfmt to complain about.
 sub _syslog_line_is_error
 {
     my ($line) = @_;
 
-    return scalar $line =~ $error_severity
-        if $line =~ m/\]: event=/;
-
-    # "NO_ERROR" is nghttp2's name for a clean HTTP/2 stream/connection close;
-    # httpd logs it on every close, so don't let its ERROR substring trip the
-    # text match.
-    (my $text = $line) =~ s/\bNO_ERROR\b//g;
-
-    return scalar $text =~ m/ERROR|TRACELOG|Unknown code ____/;
+    return scalar($line =~ m/\]: event=/ && $line =~ $error_severity);
 }
 
 sub _check_syslog
@@ -1940,7 +1925,7 @@ sub _check_syslog
     # skiplist complains of an unreadable skipstamp when ctl_cyrusdb -r has
     # never run, which is how Cassandane starts every instance
     @errors = grep {
-        not m/DBERROR.*skipstamp|\bevent=db\.skiplist\.skipstamp\.unreadable\b/
+        not m/\bevent=db\.skiplist\.skipstamp\.unreadable\b/
     } @errors;
 
     # Cassandane::Config points smtp_host at bogus:0, so that nothing sends
@@ -1954,6 +1939,32 @@ sub _check_syslog
     $self->xlog("syslog error: $_") for @errors;
 
     return "Errors found in syslog" if @errors;
+
+    return;
+}
+
+# Every line Cyrus logs should be a logfmt event.  Anything else is a call
+# site that escaped conversion, or text from a library that bypasses our
+# logging.
+#
+# This reads its own handle on the log, so it sees the lines a test has
+# already consumed with getsyslog, and leaves the rest for the test to
+# consume later.  It applies even to :NoCheckSyslog tests: they expect
+# *errors*, but *no* test expects a line that isn't logfmt.
+sub _check_syslog_logfmt
+{
+    my ($self) = @_;
+
+    return if not $self->{have_syslog_replacement};
+    return if not $self->{_logfmt_syslogfh};
+
+    my @lines = grep {
+        not m/\]: event=/
+    } $self->_read_syslog($self->{_logfmt_syslogfh});
+
+    $self->xlog("syslog line not in logfmt: $_") for @lines;
+
+    return "Non-logfmt lines found in syslog" if @lines;
 
     return;
 }
@@ -2068,6 +2079,7 @@ sub stop
     push @errors, $self->_check_sanitizer_logs("ubsan");
     push @errors, $self->_check_cores();
     push @errors, $self->_check_syslog() unless $params{no_check_syslog};
+    push @errors, $self->_check_syslog_logfmt();
     push @errors, "master ready file still exists" if -e "$self->{basedir}/master.ready";
 
     # filter out empty errors (shouldn't be any, but just in case)
@@ -2911,17 +2923,21 @@ sub setup_syslog_replacement
     $self->run_command($syslog_probe, $self->{name});
 
     $self->{_syslogfh} = IO::File->new($self->{syslog_fname}, 'r');
+    $self->{_logfmt_syslogfh} = IO::File->new($self->{syslog_fname}, 'r');
 
-    if ($self->{_syslogfh}) {
-        $self->{_syslogfh}->seek($syslog_start, 0);
-        $self->{_syslogfh}->blocking(0);
+    if ($self->{_syslogfh} && $self->{_logfmt_syslogfh}) {
+        for my $fh ($self->{_syslogfh}, $self->{_logfmt_syslogfh}) {
+            $fh->seek($syslog_start, 0);
+            $fh->blocking(0);
+        }
 
-        if (not scalar $self->getsyslog(qr/\bthe magic word\b/)) {
-            xlog "didn't find the magic word when probing syslog";
+        if (not $self->getsyslog(qr/\bevent=cassandane\.syslog\.probe\b/)) {
+            xlog "didn't find the probe event when probing syslog";
             xlog "tests will not examine syslog output";
 
             $self->{have_syslog_replacement} = 0;
             undef $self->{_syslogfh};
+            undef $self->{_logfmt_syslogfh};
         }
     }
     else {
@@ -2961,29 +2977,39 @@ sub getsyslog
         die "getsyslog: pattern is not a regular expression"
             if lc ref($pattern) ne 'regexp';
     }
-    my $logname = $self->{name};
     my @lines;
 
     if ($self->{have_syslog_replacement} && $self->{_syslogfh}) {
-        # https://github.com/Perl/perl5/issues/21240
-        # eof status is no longer cleared automatically in newer perls
-        if ($self->{_syslogfh}->eof()) {
-            $self->{_syslogfh}->clearerr();
-        }
-        if ($self->{_syslogfh}->error()) {
-            die "error reading $self->{syslog_fname}";
-        }
-
-        # hopefully unobtrusively, let busy log finish writing
-        usleep(100_000); # 100ms (0.1s) as us
-        @lines = grep { m/$logname/ } $self->{_syslogfh}->getlines();
+        @lines = $self->_read_syslog($self->{_syslogfh});
 
         if (defined $pattern) {
             @lines = grep { m/$pattern/ } @lines;
         }
-
-        chomp for @lines;
     }
+
+    return @lines;
+}
+
+# Return this instance's lines that have arrived on $fh since it was last
+# read.
+sub _read_syslog
+{
+    my ($self, $fh) = @_;
+
+    # https://github.com/Perl/perl5/issues/21240
+    # eof status is no longer cleared automatically in newer perls
+    if ($fh->eof()) {
+        $fh->clearerr();
+    }
+    if ($fh->error()) {
+        die "error reading $self->{syslog_fname}";
+    }
+
+    # hopefully unobtrusively, let busy log finish writing
+    usleep(100_000); # 100ms (0.1s) as us
+    my $logname = $self->{name};
+    my @lines = grep { m/$logname/ } $fh->getlines();
+    chomp for @lines;
 
     return @lines;
 }
