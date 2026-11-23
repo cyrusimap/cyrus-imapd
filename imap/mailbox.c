@@ -3249,7 +3249,8 @@ static uint32_t crc_virtannot(struct mailbox *mailbox,
     case 14:
     case 13:
         if (record->cid) {
-            buf_printf(&buf, CONV_FMT, record->cid);
+            /* no leading zeros, as Cyrus 3.12 and earlier hash it */
+            buf_printf(&buf, "%" PRIx64, record->cid);
             crc ^= crc_annot(record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
             buf_reset(&buf);
         }
@@ -5298,7 +5299,7 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
             /* extract CID */
             buf_reset(&buf);
             mailbox_annotation_lookup(mailbox, record->uid, IMAP_ANNOT_NS "thrid", "", &buf);
-            if (buf.len == 16) {
+            if (buf.len && buf.len <= 16) {
                 const char *p = buf_cstring(&buf);
                 parsehex(p, &p, 16, &copyrecord.cid);
             }
@@ -5309,7 +5310,8 @@ static int _mailbox_index_repack(struct mailbox *mailbox,
         if (mailbox->i.minor_version >= 13 && repack->newmailbox.i.minor_version < 13) {
             if (record->cid) {
                 buf_reset(&buf);
-                buf_printf(&buf, CONV_FMT, record->cid);
+                /* as crc_virtannot() hashes it, so the CRC doesn't change */
+                buf_printf(&buf, "%" PRIx64, record->cid);
                 r = annotate_state_writesilent(astate, IMAP_ANNOT_NS "thrid", "", &buf);
                 if (r) goto done;
             }
