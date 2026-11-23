@@ -22,6 +22,7 @@ use Cassandane::Tiny;
 # status, so reading the response status would be fragile anyway.)
 sub test_data_frame_maxmessagesize
     :SetMaxMessageSize(8k)
+    :needs_dependency_nghttp2
     ($self)
 {
     my $caldav = $self->{caldav};
