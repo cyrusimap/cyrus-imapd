@@ -52,7 +52,8 @@
 
 #define APPLEPUSHSERVICE_EVENTS (EVENT_APPLEPUSHSERVICE|EVENT_APPLEPUSHSERVICE_DAV)
 
-#define JMAP_EVENTS    (EVENT_MESSAGES_UNSCHEDULED|EVENT_PUSHSUB_CREATED)
+#define JMAP_EVENTS    (EVENT_MESSAGES_UNSCHEDULED|EVENT_PUSHSUB_CREATED|\
+                        EVENT_EMAILPUSH)
 
 #define METADATA_EVENTS (EVENT_MAILBOX_METADATA_CHANGE|\
                          EVENT_SERVER_METADATA_CHANGE|EVENT_ANNOTATION_CHANGE)
@@ -166,9 +167,9 @@ static struct mboxevent event_template =
 
     /* changed metadata or annotation entries */
     { EVENT_METADATA_ENTRIES, "metadataEntries", EVENT_PARAM_JSON, { 0 }, 0 },
-    /* pushsub created send params for notifyd */
-    { EVENT_PUSHSUB_CREATED_USERID,  "userId",  EVENT_PARAM_STRING, { 0 }, 0 },
-    { EVENT_PUSHSUB_CREATED_CONTENT, "content", EVENT_PARAM_JSON,   { 0 }, 0 },
+    /* PushSubscription params for notifyd */
+    { EVENT_PUSHSUB_USERID,  "userId",  EVENT_PARAM_STRING, { 0 }, 0 },
+    { EVENT_PUSHSUB_CONTENT, "content", EVENT_PARAM_JSON,   { 0 }, 0 },
 
     /* always at end to let the parser to easily truncate this part */
     { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
@@ -537,10 +538,10 @@ static int mboxevent_expected_schedsend_failed_param(enum event_param param) {
     }
 }
 
-static int mboxevent_expected_pushsub_failed_param(enum event_param param) {
+static int mboxevent_expected_pushsub_param(enum event_param param) {
     switch (param) {
-    case EVENT_PUSHSUB_CREATED_USERID:
-    case EVENT_PUSHSUB_CREATED_CONTENT:
+    case EVENT_PUSHSUB_USERID:
+    case EVENT_PUSHSUB_CONTENT:
         return 1;
     default:
         return 0;
@@ -560,8 +561,8 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     if (type == EVENT_MESSAGES_UNSCHEDULED)
         return mboxevent_expected_schedsend_failed_param(param);
 
-    if (type == EVENT_PUSHSUB_CREATED)
-        return mboxevent_expected_pushsub_failed_param(param);
+    if (type == EVENT_PUSHSUB_CREATED || type == EVENT_EMAILPUSH)
+        return mboxevent_expected_pushsub_param(param);
 
     switch (param) {
     case EVENT_BODYSTRUCTURE:
@@ -2109,6 +2110,7 @@ static const struct event_t event_list[] = {
     { "ServerMetadataChange",  EVENT_SERVER_METADATA_CHANGE  },
     { "AnnotationChange",      EVENT_ANNOTATION_CHANGE       },
     { "PushSubscriptionCreated", EVENT_PUSHSUB_CREATED  },
+    { "EmailPush",             EVENT_EMAILPUSH            },
     { NULL,                  0                          }
 };
 

@@ -440,8 +440,8 @@ static const char *set_create(const char *creation_id,
     struct mboxevent *event = mboxevent_new(EVENT_PUSHSUB_CREATED);
     char *userid = mboxname_to_userid(mailbox_name(mailbox));
 
-    FILL_STRING_PARAM(event, EVENT_PUSHSUB_CREATED_USERID, userid);
-    FILL_JSON_PARAM(event, EVENT_PUSHSUB_CREATED_CONTENT, json_copy(jpushsub));
+    FILL_STRING_PARAM(event, EVENT_PUSHSUB_USERID, userid);
+    FILL_JSON_PARAM(event, EVENT_PUSHSUB_CONTENT, json_copy(jpushsub));
 
     mboxevent_notify(&event);
     mboxevent_free(&event);
