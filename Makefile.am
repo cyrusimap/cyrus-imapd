@@ -1192,7 +1192,8 @@ imap_lmtpd_SOURCES += imap/jmap_util.c imap/caldav_util.c imap/itip_support.c
 if JMAP
 imap_lmtpd_SOURCES += \
     imap/jmap_mail_query.c imap/jmap_mail_query_parse.c \
-    imap/jmap_notif.c imap/jcal.c imap/jscalendar.c
+    imap/jmap_notif.c imap/jcal.c imap/jscalendar.c \
+    imap/lmtp_emailpush.c imap/lmtp_emailpush.h
 endif # JMAP
 
 endif # SIEVE

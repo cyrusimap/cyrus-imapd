@@ -71,6 +71,9 @@
 #include "master/service.h"
 
 #include "lmtpd.h"
+#if defined(USE_SIEVE) && defined(WITH_JMAP)
+#include "lmtp_emailpush.h"
+#endif
 #include "lmtpengine.h"
 #ifdef USE_SIEVE
 #include "lmtp_sieve.h"
@@ -627,6 +630,9 @@ int deliver_mailbox(FILE *f,
                            lf_mailbox(mailbox));
                 if (dupelim && id)
                     duplicate_mark(&dkey, time(NULL), as.baseuid);
+#if defined(USE_SIEVE) && defined(WITH_JMAP)
+                emailpush_add(mailbox, as.baseuid);
+#endif
             }
         }
     }
@@ -901,6 +907,9 @@ int deliver(message_data_t *msgdata, char *authuser,
 
             /* local mailbox */
             mydata.cur_rcpt = n;
+#if defined(USE_SIEVE) && defined(WITH_JMAP)
+            emailpush_begin(userid);
+#endif
 #ifdef USE_SIEVE
             struct sieve_interp_ctx ctx = { mbname_userid(mbname), state, NULL };
             sieve_interp_t *interp = setup_sieve(&ctx);
@@ -941,6 +950,10 @@ int deliver(message_data_t *msgdata, char *authuser,
                 strarray_fini(&fbflags);
                 conversations_commit(&state);
             }
+
+#ifdef WITH_JMAP
+            emailpush_end(&content, msgdata->f, ns);
+#endif
 #endif
 
            unregister:
