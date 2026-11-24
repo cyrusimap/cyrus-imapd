@@ -9,21 +9,20 @@ sub test_pushsubs
     my $jmap = $self->{jmap};
     my $CardDAV = $self->{carddav};
 
-    xlog "create subscription";
-    my $res = $jmap->CallMethods([
+    xlog $self, "create subscription";
+    my $res = $jmap->request([
         ['PushSubscription/set', {
             accountId => \undef,
             create => {
-                "1" => {
-                    deviceClientId => "a889-ffea-910",
-                    url => "https://example.com/push/?device=X8980fc&client=12c6d086",
-                    types => [ "Mailbox", "Email" ]
+                1 => {
+                    deviceClientId => 'a889-ffea-910',
+                    url => 'https://example.com/push/?device=X8980fc&client=12c6d086',
+                    types => [ 'Mailbox', 'Email' ],
                 },
             },
-         }, "R1"]
+        }, 'R1'],
     ]);
-    my $id = $res->[0][1]{created}{"1"}{id};
-    $self->assert_not_null($id);
+    my $id = "" . $res->single_sentence->arguments->{created}{1}{id};
 
     $res = $CardDAV->Request('GET', '/dblookup/pushsubs', '',
         User => 'cassandane'
@@ -37,19 +36,14 @@ sub test_pushsubs
     $self->assert_not_null($json->[0]{url});
     $self->assert_not_null($code);
 
-    xlog "verify subscription";
-    $res = $jmap->CallMethods([
+    xlog $self, "verify subscription";
+    $res = $jmap->request([
         ['PushSubscription/set', {
             accountId => \undef,
-            update => {
-                $id => {
-                    verificationCode => $code
-                },
-            },
-         }, "R1"]
+            update => { $id => { verificationCode => $code } },
+        }, 'R1'],
     ]);
-
-    $self->assert(exists $res->[0][1]{updated}{$id});
+    $self->assert(exists $res->single_sentence->arguments->{updated}{$id});
 
     $res = $CardDAV->Request('GET', '/dblookup/pushsubs', '',
         User => 'cassandane'

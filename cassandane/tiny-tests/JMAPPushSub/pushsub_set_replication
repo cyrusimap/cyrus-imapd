@@ -8,80 +8,57 @@ sub test_pushsub_set_replication
 
     my $jmap = $self->{jmap};
 
-    xlog "create subscription";
-    my $res = $jmap->CallMethods([
+    xlog $self, "create subscription";
+    my $res = $jmap->request([
         ['PushSubscription/set', {
             accountId => \undef,
             create => {
-                "1" => {
-                    deviceClientId => "a889-ffea-910",
-                    url => "https://example.com/push/?device=X8980fc&client=12c6d086",
-                    types => [ "Mailbox", "Email" ]
+                1 => {
+                    deviceClientId => 'a889-ffea-910',
+                    url => 'https://example.com/push/?device=X8980fc&client=12c6d086',
+                    types => [ 'Mailbox', 'Email' ],
                 },
             },
-         }, "R1"],
-        ['PushSubscription/get', {
-            accountId => \undef,
-            'ids' => [ '#1' ]
-         }, "R2"]
+        }, 'R1'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{created}{"1"}{id});
-    $self->assert_not_null($res->[0][1]{created}{"1"}{expires});
-    my $id = $res->[0][1]{created}{"1"}{id};
+    my $id = "" . $res->single_sentence->arguments->{created}{1}{id};
 
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
-    $self->assert_str_equals($id, $res->[1][1]{list}[0]{id});
-    $self->assert_null($res->[1][1]{list}[0]{url});
-    $self->assert_null($res->[1][1]{list}[0]{keys});
-    $self->assert_null($res->[1][1]{list}[0]{verificationCode});
-
-    my $data = $self->{instance}->getnotify();
-    my $code;
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "PushSubscriptionCreated") {
-                $code = $e->{content}->{verificationCode};
-            }
-        }
-    }
+    my ($code) =
+        map  { $_->{content}{verificationCode} }
+        grep { $_->{event} eq 'PushSubscriptionCreated' }
+        map  { decode_json($_->{MESSAGE}) }
+        grep { $_->{CLASS} eq 'EVENT' } $self->{instance}->getnotify()->@*;
+    $self->assert_not_null($code);
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
-    xlog "update subscription";
-    $res = $jmap->CallMethods([
+    xlog $self, "verify and update subscription";
+    $res = $jmap->request([
         ['PushSubscription/set', {
             accountId => \undef,
             update => {
                 $id => {
                     verificationCode => $code,
-                    expires => "2038-01-19T03:14:07Z",
-                    types => [ "Email", "EmailSubmission" ]
+                    expires => '2038-01-19T03:14:07Z',
+                    types => [ 'Email', 'EmailSubmission' ],
                 },
             },
-         }, "R1"],
-        ['PushSubscription/get', { accountId => \undef }, "R2"]
+        }, 'R1'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{updated}{$id}{expires});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    $self->assert_not_null(
+        $res->single_sentence->arguments->{updated}{$id}{expires});
 
     $self->run_replication();
     $self->check_replication('cassandane');
 
-    xlog "destroy subscription";
-    $res = $jmap->CallMethods([
-        ['PushSubscription/set', {
-            accountId => \undef,
-            destroy => [ $id ]
-         }, "R1"],
-        ['PushSubscription/get', { accountId => \undef }, "R2"]
+    xlog $self, "destroy subscription";
+    $res = $jmap->request([
+        ['PushSubscription/set', { accountId => \undef, destroy => [ $id ] }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef }, 'R2'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
+    $self->assert_cmp_deeply([ $id ], $res->sentence(0)->arguments->{destroyed});
+    $self->assert_cmp_deeply([], $res->sentence(1)->arguments->{list});
 
     $self->run_replication();
     $self->check_replication('cassandane');

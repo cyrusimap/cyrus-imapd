@@ -8,97 +8,122 @@ sub test_pushsub_set
 
     my $jmap = $self->{jmap};
 
-    xlog "create subscription";
-    my $res = $jmap->CallMethods([
-        ['PushSubscription/get', { accountId => \undef }, "R0"],
+    xlog $self, "create subscription";
+    my $res = $jmap->request([
+        ['PushSubscription/get', { accountId => \undef }, 'R0'],
         ['PushSubscription/set', {
             accountId => \undef,
             create => {
-                "1" => {
-                    deviceClientId => "a889-ffea-910",
-                    url => "https://example.com/push/?device=X8980fc&client=12c6d086",
-                    types => [ "Mailbox", "Email" ]
+                1 => {
+                    deviceClientId => 'a889-ffea-910',
+                    url => 'https://example.com/push/?device=X8980fc&client=12c6d086',
+                    types => [ 'Mailbox', 'Email' ],
                 },
             },
-         }, "R1"],
-        ['PushSubscription/get', {
-            accountId => \undef,
-            'ids' => [ '#1' ]
-         }, "R2"]
+        }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef, ids => [ '#1' ] }, 'R2'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert_num_equals(0, scalar @{$res->[0][1]{list}});
+    $self->assert_cmp_deeply([], $res->sentence(0)->arguments->{list});
 
-    $self->assert_not_null($res->[1][1]{created}{"1"}{id});
-    $self->assert_not_null($res->[1][1]{created}{"1"}{expires});
-    my $id = $res->[1][1]{created}{"1"}{id};
+    my $created = $res->sentence(1)->arguments->{created}{1};
+    $self->assert_not_null($created->{expires});
+    my $id = "" . $created->{id};
 
-    $self->assert_num_equals(1, scalar @{$res->[2][1]{list}});
-    $self->assert_str_equals($id, $res->[2][1]{list}[0]{id});
-    $self->assert_null($res->[2][1]{list}[0]{url});
-    $self->assert_null($res->[2][1]{list}[0]{keys});
-    $self->assert_null($res->[2][1]{list}[0]{verificationCode});
-    $self->assert_not_null($res->[2][1]{list}[0]{expires});
-    $self->assert_num_equals(2, scalar @{$res->[2][1]{list}[0]{types}});
-    $self->assert_equals("Mailbox", $res->[2][1]{list}[0]{types}[0]);
+    xlog $self, "get omits url and keys, and the unverified code";
+    $self->assert_cmp_deeply([{
+        id => $id,
+        deviceClientId => 'a889-ffea-910',
+        verificationCode => undef,
+        expires => $created->{expires},
+        types => [ 'Mailbox', 'Email' ],
+    }], $res->sentence(2)->arguments->{list});
 
-    my $data = $self->{instance}->getnotify();
-    my $code;
-    foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
-            if ($e->{event} eq "PushSubscriptionCreated") {
-                $code = $e->{content}->{verificationCode};
-            }
-        }
-    }
+    my ($code) =
+        map  { $_->{content}{verificationCode} }
+        grep { $_->{event} eq 'PushSubscriptionCreated' }
+        map  { decode_json($_->{MESSAGE}) }
+        grep { $_->{CLASS} eq 'EVENT' } $self->{instance}->getnotify()->@*;
+    $self->assert_not_null($code);
 
-    xlog "verify subscription";
-    $res = $jmap->CallMethods([
+    xlog $self, "reject the wrong verification code";
+    $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            update => { $id => { verificationCode => 'wrong' } },
+        }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply(['verificationCode'],
+        $res->single_sentence->arguments->{notUpdated}{$id}{properties});
+
+    xlog $self, "verify subscription";
+    $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            update => { $id => { verificationCode => $code } },
+        }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply({ $id => undef },
+        $res->sentence(0)->arguments->{updated});
+    $self->assert_str_equals($code,
+        $res->sentence(1)->arguments->{list}[0]{verificationCode});
+
+    xlog $self, "update subscription, with expires past the limit";
+    $res = $jmap->request([
         ['PushSubscription/set', {
             accountId => \undef,
             update => {
                 $id => {
-                    verificationCode => $code
+                    expires => '2038-01-19T03:14:07Z',
+                    types => [ 'EmailSubmission', 'Mailbox', 'Email' ],
                 },
             },
-         }, "R1"],
-        ['PushSubscription/get', { accountId => \undef }, "R2"]
+        }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef }, 'R2'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert(exists $res->[0][1]{updated}{$id});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
+    my $expires = $res->sentence(0)->arguments->{updated}{$id}{expires};
+    $self->assert_not_null($expires);
+    $self->assert($expires lt '2038-01-19T03:14:07Z');
+    $self->assert_cmp_deeply([{
+        id => $id,
+        deviceClientId => 'a889-ffea-910',
+        verificationCode => $code,
+        expires => $expires,
+        types => [ 'EmailSubmission', 'Mailbox', 'Email' ],
+    }], $res->sentence(1)->arguments->{list});
 
-    xlog "update subscription";
-    $res = $jmap->CallMethods([
+    xlog $self, "null expires and types reset them to the defaults";
+    $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            update => { $id => { expires => undef, types => undef } },
+        }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef }, 'R2'],
+    ]);
+    $self->assert_not_null(
+        $res->sentence(0)->arguments->{updated}{$id}{expires});
+    $self->assert_null($res->sentence(1)->arguments->{list}[0]{types});
+
+    xlog $self, "url and keys are immutable";
+    $res = $jmap->request([
         ['PushSubscription/set', {
             accountId => \undef,
             update => {
                 $id => {
-                    verificationCode => $code,
-                    expires => "2038-01-19T03:14:07Z",
-                    types => [ "EmailSubmission", "Mailbox", "Email" ]
+                    url => 'https://example.com/other',
+                    keys => { p256dh => 'x', auth => 'y' },
                 },
             },
-         }, "R1"],
-        ['PushSubscription/get', { accountId => \undef }, "R2"]
+        }, 'R1'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert_not_null($res->[0][1]{updated}{$id}{expires});
-    $self->assert_num_equals(1, scalar @{$res->[1][1]{list}});
-    $self->assert_not_null($res->[1][1]{list}[0]{expires});
-    $self->assert_num_equals(3, scalar @{$res->[1][1]{list}[0]{types}});
-    $self->assert_equals("EmailSubmission", $res->[1][1]{list}[0]{types}[0]);
+    $self->assert_cmp_deeply(bag('url', 'keys'),
+        $res->single_sentence->arguments->{notUpdated}{$id}{properties});
 
-    xlog "destroy subscription";
-    $res = $jmap->CallMethods([
-        ['PushSubscription/set', {
-            accountId => \undef,
-            destroy => [ $id ]
-         }, "R1"],
-        ['PushSubscription/get', { accountId => \undef }, "R2"]
+    xlog $self, "destroy subscription";
+    $res = $jmap->request([
+        ['PushSubscription/set', { accountId => \undef, destroy => [ $id ] }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef }, 'R2'],
     ]);
-    $self->assert_not_null($res);
-    $self->assert_str_equals($id, $res->[0][1]{destroyed}[0]);
-    $self->assert_num_equals(0, scalar @{$res->[1][1]{list}});
+    $self->assert_cmp_deeply([ $id ], $res->sentence(0)->arguments->{destroyed});
+    $self->assert_cmp_deeply([], $res->sentence(1)->arguments->{list});
 }

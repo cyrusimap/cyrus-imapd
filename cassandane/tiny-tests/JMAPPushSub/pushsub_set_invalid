@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_pushsub_set_invalid
+    :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my %good = (
+        deviceClientId => 'a889-ffea-910',
+        url => 'https://example.com/push',
+    );
+
+    my $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            create => {
+                http  => { %good, url => 'http://example.com/push' },
+                nodev => { url => $good{url} },
+                types => { %good, types => [ 'Mailbox', 'mailbox', 'Bogus' ] },
+                keys  => { %good, keys => { p256dh => 'x' } },
+                code  => { %good, verificationCode => 'abc' },
+                id    => { %good, id => 'abc' },
+            },
+        }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef, properties => [ 'url' ] }, 'R2'],
+    ]);
+
+    my $invalid = sub {
+        return superhashof({ type => 'invalidProperties', properties => [ @_ ] });
+    };
+    $self->assert_cmp_deeply({
+        http  => $invalid->('url'),
+        nodev => $invalid->('deviceClientId'),
+        types => $invalid->('types[1]', 'types[2]'),
+        keys  => $invalid->('keys/auth'),
+        code  => $invalid->('verificationCode'),
+        id    => $invalid->('id'),
+    }, $res->sentence(0)->arguments->{notCreated});
+
+    $self->assert_str_equals('error', $res->sentence(1)->name);
+    $self->assert_str_equals('forbidden',
+        $res->sentence(1)->arguments->{type});
+}
