@@ -1,0 +1,38 @@
+Description:
+
+Flags other than \Recent and \Deleted are now kept in step across all copies of
+an email (same EMAILID) on IMAP STORE, APPEND, COPY/MOVE, LMTP/Sieve delivery
+and JMAP.  A new message merges with existing copies: flags are the union, but
+\Seen is set only if every copy is seen.  A COPY or MOVE within an account
+keeps the flags it has.  One from another account merges every flag but \Seen,
+which each copy keeps.  Copies marked \Deleted neither take nor pass on
+changes.  Copies in folders the acting user can't read, or where they lack the
+write (or \Seen) right, are skipped.  Replicas never propagate; the master's
+changes replicate as usual.  The rules for JMAP Email/set keywords are
+unchanged.
+
+
+Documentation:
+
+docsrc/rfc-support.rst, ctl_conversationsdb(8)
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+Existing copies are not changed automatically.  Run
+"ctl_conversationsdb -E <user>" (or -E -r for every user) to make them agree
+(union of flags; \Seen if any copy is seen).
+
+Run it as soon as possible after upgrading: until it has run, an APPEND or
+delivery of an email whose copies disagree can mark read copies unread, as the
+new copy merges with copies that aren't all seen.
+
+
+GitHub issue:
+
+None.

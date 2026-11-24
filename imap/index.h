@@ -69,6 +69,7 @@ struct index_map {
     uint32_t internal_flags;
     unsigned int isseen:1;
     unsigned int isrecent:1;
+    unsigned int forcetell:1; /* tell its changes even under .SILENT */
 };
 
 struct index_state {
@@ -108,6 +109,7 @@ struct index_state {
     bool want_annotations;   /* SELECT (ANNOTATE) */
     bool notify_annotations; /* NOTIFY AnnotationChange */
     unsigned num_expunged;
+    bool anyforcetell; /* some map entry has forcetell set */
     message_t *m;
     seqset_t *searchres; /* RFC 5182 SEARCH results */
     struct {             /* RFC 9394 last SEARCH PARTIAL (to inform next one) */

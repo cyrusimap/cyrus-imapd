@@ -34,9 +34,11 @@ sub test_email_get_keywords
     my $keywords = {};
     $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 
-    xlog $self, "Set \\Seen on message A";
+    xlog $self, "Set \\Seen on message A only";
+    $talk->setacl('INBOX.B', cassandane => '-s');
     $store->set_folder('INBOX.A');
     $talk->store('1', '+flags', '(\\Seen)');
+    $talk->setacl('INBOX.B', cassandane => '+s');
 
     # Seen must only be set if ALL messages are seen.
     $res = $jmap->CallMethods([

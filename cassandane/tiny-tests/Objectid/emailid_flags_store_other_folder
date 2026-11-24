@@ -1,0 +1,59 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Flags stored on one copy of an email are kept in step on its copies in
+# other folders, except \Deleted.
+#
+sub test_emailid_flags_store_other_folder
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $talk->create('a');
+    $talk->create('b');
+
+    $self->make_message("Test message");
+
+    $talk->select('INBOX');
+    $talk->copy('1', 'a');
+    $talk->copy('1', 'b');
+    my $emailid = $talk->fetch('1', '(emailid)')->{1}{emailid}[0];
+    $self->assert_not_null($emailid);
+
+    $talk->store('1', '+flags', '(\\Flagged $Foo)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    for my $folder (qw(a b)) {
+        $talk->select($folder);
+        my $res = $talk->fetch('1', '(flags emailid)');
+        $self->assert_cmp_deeply({
+            flags => bag('\\Flagged', '$Foo'),
+            emailid => [$emailid],
+        }, {
+            flags => nonrecent($res->{1}{flags}),
+            emailid => $res->{1}{emailid},
+        });
+    }
+
+    $talk->select('b');
+    $talk->store('1', '-flags', '(\\Flagged)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    for my $folder (qw(INBOX a)) {
+        $talk->select($folder);
+        my $res = $talk->fetch('1', '(flags)');
+        $self->assert_cmp_deeply(['$Foo'], nonrecent($res->{1}{flags}));
+    }
+
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->select('a');
+    my $res = $talk->fetch('1', '(flags)');
+    $self->assert_cmp_deeply(['$Foo'], nonrecent($res->{1}{flags}));
+}

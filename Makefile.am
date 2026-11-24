@@ -1023,6 +1023,8 @@ imap_libcyrus_imap_la_SOURCES = \
     imap/dlist.h \
     imap/duplicate.c \
     imap/duplicate.h \
+    imap/emailid_flags.c \
+    imap/emailid_flags.h \
     imap/global.c \
     imap/global.h \
     imap/haproxy.c \

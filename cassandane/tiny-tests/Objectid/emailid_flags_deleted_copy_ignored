@@ -1,0 +1,49 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A copy marked \Deleted but not yet expunged neither takes flag changes from
+# its other copies nor passes its own on.
+#
+sub test_emailid_flags_deleted_copy_ignored
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $talk->create('a');
+    $talk->create('b');
+
+    $self->make_message("Test message");
+
+    $talk->select('INBOX');
+    $talk->copy('1', 'a');
+    $talk->copy('1', 'b');
+
+    $talk->select('b');
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->select('INBOX');
+    $talk->store('1', '+flags', '($Baz)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->select('a');
+    my $res = $talk->fetch('1', '(flags)');
+    $self->assert_cmp_deeply(['$Baz'], nonrecent($res->{1}{flags}));
+
+    $talk->select('b');
+    $res = $talk->fetch('1', '(flags)');
+    $self->assert_cmp_deeply(['\\Deleted'], nonrecent($res->{1}{flags}));
+
+    $talk->store('1', '+flags', '($Q)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    for my $folder (qw(INBOX a)) {
+        $talk->select($folder);
+        $res = $talk->fetch('1', '(flags)');
+        $self->assert_cmp_deeply(['$Baz'], nonrecent($res->{1}{flags}));
+    }
+}

@@ -1,0 +1,128 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A sharee's \Seen, stored or implicit, reaches the sharee's other copies and
+# never the owner's, except in a sharedseen folder, where it is everyone's.
+#
+sub test_emailid_flags_sharee_seen
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    # folder => [ flags of each message, in uid order ]
+    my sub flags_by_folder ($imap, @folders) {
+        my %got;
+        for my $folder (@folders) {
+            $imap->select($folder);
+            my $res = $imap->fetch('1:*', '(flags)');
+            $got{$folder} =
+                [ map { nonrecent($res->{$_}{flags}) } sort { $a <=> $b } keys %$res ];
+        }
+        return \%got;
+    }
+
+    $self->{instance}->create_user('other');
+
+    for my $folder (qw(s1 s2 s3 private)) {
+        $talk->create("INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    for my $folder (qw(s1 s2 s3)) {
+        $talk->setacl("INBOX.$folder", other => 'lrs');
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+    $talk->setmetadata('INBOX.s3',
+        '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'true');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->make_message("Test message");
+
+    $talk->select('INBOX');
+    for my $folder (qw(s1 s2 s3 private)) {
+        $talk->copy('1', "INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->select('user.cassandane.s1');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    my $res = $othertalk->store('1', '+flags', '(\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply(['\Seen'], nonrecent($res->{1}{flags}));
+
+    $self->assert_cmp_deeply(
+        { map { $_ => [['\Seen']] } qw(user.cassandane.s2 user.cassandane.s3) },
+        flags_by_folder($othertalk, qw(user.cassandane.s2 user.cassandane.s3)));
+
+    $othertalk->store('1', '-flags', '(\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply(
+        { map { $_ => [[]] } qw(user.cassandane.s1 user.cassandane.s2) },
+        flags_by_folder($othertalk, qw(user.cassandane.s1 user.cassandane.s2)));
+
+    $othertalk->store('1', '+flags', '(\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    # the owner's \Seen moved only in the sharedseen folder
+    $self->assert_cmp_deeply(
+        {
+            'INBOX'         => [[]],
+            'INBOX.s1'      => [[]],
+            'INBOX.s2'      => [[]],
+            'INBOX.s3'      => [['\Seen']],
+            'INBOX.private' => [[]],
+        },
+        flags_by_folder($talk, qw(INBOX INBOX.s1 INBOX.s2 INBOX.s3 INBOX.private)));
+
+    xlog $self, "implicit \\Seen from FETCH BODY[], with a copy in the same folder";
+    $self->make_message("Test message 2");
+    $talk->select('INBOX');
+    for my $folder (qw(s1 s1 s2)) {
+        $talk->copy('2', "INBOX.$folder");
+        $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    }
+
+    $othertalk->select('user.cassandane.s1');
+    $res = $othertalk->fetch('2', '(body.peek[] flags)');
+    $self->assert_cmp_deeply([], nonrecent($res->{2}{flags}));
+    $res = $othertalk->fetch('2', '(body[])');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply(['\Seen'], nonrecent($res->{2}{flags}));
+    $self->assert_cmp_deeply(['\Seen'], nonrecent($res->{3}{flags}));
+
+    $self->assert_cmp_deeply(
+        {
+            'user.cassandane.s1' => [['\Seen'], ['\Seen'], ['\Seen']],
+            'user.cassandane.s2' => [['\Seen'], ['\Seen']],
+        },
+        flags_by_folder($othertalk, qw(user.cassandane.s1 user.cassandane.s2)));
+
+    $self->assert_cmp_deeply(
+        {
+            'INBOX'    => [[], []],
+            'INBOX.s1' => [[], [], []],
+            'INBOX.s2' => [[], []],
+        },
+        flags_by_folder($talk, qw(INBOX INBOX.s1 INBOX.s2)));
+
+    xlog $self, "the owner's implicit \\Seen";
+    $talk->select('INBOX');
+    $res = $talk->fetch('2', '(body[])');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply(['\Seen'], nonrecent($res->{2}{flags}));
+
+    $self->assert_cmp_deeply(
+        {
+            'INBOX'    => [[], ['\Seen']],
+            'INBOX.s1' => [[], ['\Seen'], ['\Seen']],
+            'INBOX.s2' => [[], ['\Seen']],
+        },
+        flags_by_folder($talk, qw(INBOX INBOX.s1 INBOX.s2)));
+}

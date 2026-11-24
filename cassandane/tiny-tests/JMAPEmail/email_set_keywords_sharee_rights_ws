@@ -1,0 +1,70 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A sharee's keyword change made over a JMAP WebSocket reaches only the copies
+# the sharee may read.
+#
+sub test_email_set_keywords_sharee_rights_ws
+    :needs_dependency_wslay
+    ($self)
+{
+    eval { require Cassandane::JMAPTesterWS; 1 } or do {
+        xlog $self, "Cassandane::JMAPTesterWS not available; skipping";
+        return;
+    };
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $self->{instance}->create_user('other');
+    for my $folder (qw(shared private)) {
+        $admintalk->create("user.other.$folder");
+        $self->assert_str_equals('ok',
+            $admintalk->get_last_completion_response());
+    }
+    $admintalk->setacl('user.other.shared', cassandane => 'lrsw');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    $self->{adminstore}->set_folder('user.other.shared');
+    $self->make_message("Test message", store => $self->{adminstore});
+    $admintalk->select('user.other.shared');
+    $admintalk->copy('1', 'user.other.private');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my $ws = $self->default_user->new_jmaptester_ws;
+    my $using = [ 'urn:ietf:params:jmap:core', 'urn:ietf:params:jmap:mail' ];
+
+    my $res = $ws->request({
+        using       => $using,
+        methodCalls => [[ 'Email/query', { accountId => 'other' }, 'R1' ]],
+    });
+    my $ids = [ map { q{} . $_ }
+                $res->single_sentence('Email/query')->arguments->{ids}->@* ];
+    $self->assert_num_equals(1, scalar $ids->@*);
+
+    $res = $ws->request({
+        using       => $using,
+        methodCalls => [[ 'Email/set', {
+            accountId => 'other',
+            update    => { $ids->[0] => { 'keywords/$foo' => JSON::true } },
+        }, 'R1' ]],
+    });
+    $self->assert_cmp_deeply(
+        [ $ids->[0] ],
+        [ keys $res->single_sentence('Email/set')->arguments->{updated}->%* ],
+    );
+
+    my %want = (
+        'user.other.shared'  => ['$foo'],
+        'user.other.private' => [],
+    );
+    my %got;
+    for my $folder (keys %want) {
+        $admintalk->examine($folder);
+        my $fetch = $admintalk->fetch('1', '(flags)');
+        $got{$folder} = nonrecent($fetch->{1}{flags});
+    }
+    $self->assert_cmp_deeply(\%want, \%got);
+}

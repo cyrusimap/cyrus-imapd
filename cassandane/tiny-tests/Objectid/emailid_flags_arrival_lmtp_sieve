@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# The copies a Sieve script files a delivery into merge their flags, and an
+# unseen copy makes them all unseen.
+#
+sub test_emailid_flags_arrival_lmtp_sieve
+    :want_deliver :needs_component_sieve :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub flags_by_folder (@folders) {
+        my %got;
+        for my $folder (@folders) {
+            $talk->select($folder);
+            my $res = $talk->fetch('1:*', '(flags)');
+            $got{$folder} = [
+                map { [ grep { $_ ne q{\Recent} } $res->{$_}{flags}->@* ] }
+                sort { $a <=> $b } keys %$res
+            ];
+        }
+        return \%got;
+    }
+
+    $talk->create('INBOX.old');
+    $talk->create('INBOX.a');
+
+    # the implicit keep files an unseen copy into INBOX
+    $self->{instance}->install_sieve_script(<<'EOF');
+require ["fileinto", "copy", "imap4flags"];
+fileinto :copy :flags "$Old" "INBOX.old";
+fileinto :copy :flags ["\\Seen", "$Sieve"] "INBOX.a";
+EOF
+
+    my $msg = $self->{gen}->generate(subject => "arrival lmtp sieve");
+    $self->{instance}->deliver($msg);
+
+    $self->assert_cmp_deeply({
+        'INBOX'     => [ bag('$Old', '$Sieve') ],
+        'INBOX.old' => [ bag('$Old', '$Sieve') ],
+        'INBOX.a'   => [ bag('$Old', '$Sieve') ],
+    }, flags_by_folder(qw(INBOX INBOX.old INBOX.a)));
+}

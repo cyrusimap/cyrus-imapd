@@ -1,0 +1,41 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A replica ends up with the master's flags on every copy.  Replica applies
+# write silently, so they queue no propagation even without
+# emailid_flags_disable(); this checks the replicated result, not that guard.
+#
+sub test_emailid_flags_replicated
+    :Replication :NoAltNamespace
+    ($self)
+{
+    my $mtalk = $self->{master_store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $mtalk->create('INBOX.a');
+    $mtalk->create('INBOX.b');
+
+    $self->make_message("Test message", store => $self->{master_store});
+
+    $mtalk->select('INBOX');
+    $mtalk->copy('1', 'INBOX.a');
+    $mtalk->copy('1', 'INBOX.b');
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    $mtalk = $self->{master_store}->get_client();
+    $mtalk->select('INBOX');
+    $mtalk->store('1', '+flags', '($Foo)');
+    $self->assert_str_equals('ok', $mtalk->get_last_completion_response());
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    my $rtalk = $self->{replica_store}->get_client();
+    for my $folder (qw(INBOX INBOX.a INBOX.b)) {
+        $rtalk->select($folder);
+        my $res = $rtalk->fetch('1', '(flags)');
+        $self->assert_cmp_deeply(['$Foo'], nonrecent($res->{1}{flags}));
+    }
+}

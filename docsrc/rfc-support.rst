@@ -986,6 +986,10 @@ draft-ietf-mailmaint-imap-objectid-bis
 
     IMAP Extension for Object Identifiers (OBJECTID+)
 
+    Section 4.1 (flags identical across copies with the same EMAILID) is
+    supported for every flag except ``\Recent`` and ``\Deleted``; see
+    ``ctl_conversationsdb -E`` for existing data.
+
 draft-murchison-lmtp-ignorequota
 
     LMTP Service Extension for Ignoring Recipient Quotas

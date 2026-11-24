@@ -123,7 +123,10 @@ EOF
 
     xlog $self, "Set up all the emails in all the folders";
     $imap->append('INBOX.a', "(\\Seen)", $raw{A}) || die $@;
+    # a new copy is seen only if all are; keep a:1 seen with a rights gap
+    $imap->setacl('INBOX.a', cassandane => '-s') || die $@;
     $imap->append('INBOX.a', "()", $raw{A}) || die $@;
+    $imap->setacl('INBOX.a', cassandane => '+s') || die $@;
     $imap->append('INBOX.a', "(\\Seen)", $raw{C}) || die $@;
     $imap->append('INBOX.a', "(\\Seen)", $raw{D}) || die $@;
     $imap->append('INBOX.a', "()", $raw{E}) || die $@;

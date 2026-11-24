@@ -81,10 +81,12 @@ sub test_email_set_keywords
     $jmapmsg = $res->[1][1]{list}[0];
     $self->assert_cmp_deeply($keywords, $jmapmsg->{keywords});
 
-    xlog $self, "Set \\Seen on message in mailbox B";
+    xlog $self, "Set \\Seen on message in mailbox B only";
+    $talk->setacl('INBOX.A', cassandane => '-s');
     $store->set_folder('INBOX.B');
     $store->_select();
     $talk->store('1', '+flags', '(\\Seen)');
+    $talk->setacl('INBOX.A', cassandane => '+s');
 
     xlog $self, "Patch JMAP email keywords and update mailboxIds";
     $res = $jmap->CallMethods([

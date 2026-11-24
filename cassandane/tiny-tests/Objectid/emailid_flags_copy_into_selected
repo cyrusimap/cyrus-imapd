@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# Copies made into the selected mailbox, and elsewhere, all take a later
+# flag change.
+#
+sub test_emailid_flags_copy_into_selected
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $talk->create('a');
+    $talk->create('b');
+
+    $self->make_message("Test message");
+
+    $talk->select('INBOX');
+    $talk->copy('1', 'a');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->copy('1', 'INBOX');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $talk->copy('1', 'b');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->store('1', '+flags', '($Foo)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $res = $talk->fetch('1:*', '(flags)');
+    $self->assert_cmp_deeply({
+        1 => ['$Foo'],
+        2 => ['$Foo'],
+    }, { map { $_ => nonrecent($res->{$_}{flags}) } keys %$res });
+
+    for my $folder (qw(a b)) {
+        $talk->select($folder);
+        $res = $talk->fetch('1', '(flags)');
+        $self->assert_cmp_deeply(['$Foo'], nonrecent($res->{1}{flags}));
+    }
+}

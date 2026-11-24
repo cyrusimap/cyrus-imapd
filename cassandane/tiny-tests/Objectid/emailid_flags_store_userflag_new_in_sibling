@@ -1,0 +1,39 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# User flags propagate by name, whatever bit number each folder gives them,
+# and are allocated in a folder that doesn't have them yet.
+#
+sub test_emailid_flags_store_userflag_new_in_sibling
+    :AltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    $talk->create('a');
+
+    $self->{store}->set_folder('a');
+    $self->make_message("Filler");
+    $talk->select('a');
+    $talk->store('1', '+flags', '($x1 $x2 $x3 $x4 $x5)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $self->{store}->set_folder('INBOX');
+    $self->make_message("Test message");
+
+    $talk->select('INBOX');
+    $talk->copy('1', 'a');
+
+    $talk->store('1', '+flags', '($Bar)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    $talk->select('a');
+    my $res = $talk->fetch('2', '(flags)');
+    $self->assert_cmp_deeply(['$Bar'], nonrecent($res->{2}{flags}));
+
+    $res = $talk->fetch('1', '(flags)');
+    $self->assert_cmp_deeply(bag(map { "\$x$_" } 1..5), nonrecent($res->{1}{flags}));
+}

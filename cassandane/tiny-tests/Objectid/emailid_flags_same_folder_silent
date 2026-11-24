@@ -1,0 +1,87 @@
+#!perl
+use Cassandane::Tiny;
+
+#
+# A copy changed only because it shares an EMAILID with the target is
+# reported under .SILENT, and a sharee's \Seen reaches it too.
+#
+sub test_emailid_flags_same_folder_silent
+    :NoAltNamespace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+
+    my sub nonrecent ($flags) { [ grep { $_ ne q{\Recent} } $flags->@* ] }
+
+    my $literal = "From: from\@example.com\r\n"
+                . "To: to\@example.com\r\n"
+                . "Subject: same folder\r\n"
+                . "Message-ID: <same-folder\@example.com>\r\n"
+                . "\r\n"
+                . "body\r\n";
+
+    $talk->create('INBOX.shared');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    for my $folder (qw(INBOX INBOX.shared)) {
+        for (1 .. 2) {
+            $talk->append($folder, $literal);
+            $self->assert_str_equals('ok',
+                                     $talk->get_last_completion_response());
+        }
+    }
+
+    my @fetched;
+    my %handlers = (
+        fetch => sub ($response, $rr, $id) {
+            push @fetched, [ $id, nonrecent($rr->{flags}) ];
+        },
+    );
+
+    # the new keyword is announced before the copy that carries it
+    $talk->select('INBOX');
+    my @told;
+    $talk->_imap_cmd('store', 0, {
+            fetch => sub ($response, $rr, $id) {
+                push @told, [ fetch => $id, nonrecent($rr->{flags}) ];
+            },
+            flags => sub ($response, $atoms) {
+                push @told, [ flags => $atoms->[0] ];
+            },
+        },
+        '1', '+flags.silent', '($Foo)');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_cmp_deeply([ [ flags => supersetof('$Foo') ],
+                               [ fetch => 2, ['$Foo'] ] ],
+                             \@told);
+
+    $self->{instance}->create_user('other');
+    $talk->setacl('INBOX.shared', other => 'lrsw');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $otherstore = $self->{instance}->get_service('imap')
+                          ->create_store(username => 'other');
+    my $othertalk = $otherstore->get_client(username => 'other');
+    $othertalk->select('user.cassandane.shared');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+
+    @fetched = ();
+    $othertalk->_imap_cmd('store', 0, \%handlers,
+                          '1', '+flags.silent', '(\\Seen)');
+    $self->assert_str_equals('ok', $othertalk->get_last_completion_response());
+    $self->assert_cmp_deeply([ [ 2, bag('\\Seen', '$Foo') ] ], \@fetched);
+
+    $othertalk->unselect();
+    $othertalk->select('user.cassandane.shared');
+    my $res = $othertalk->fetch('1:*', '(flags)');
+    $self->assert_cmp_deeply({ 1 => bag('\\Seen', '$Foo'),
+                               2 => bag('\\Seen', '$Foo') },
+                             { map { $_ => nonrecent($res->{$_}{flags}) }
+                               keys %$res });
+
+    # the owner's \Seen is kept apart from the sharee's
+    $talk->select('INBOX.shared');
+    $res = $talk->fetch('1:*', '(flags)');
+    $self->assert_cmp_deeply({ 1 => ['$Foo'], 2 => ['$Foo'] },
+                             { map { $_ => nonrecent($res->{$_}{flags}) }
+                               keys %$res });
+}

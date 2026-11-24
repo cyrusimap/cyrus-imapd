@@ -289,6 +289,14 @@ struct index_record {
     struct cacherecord crec;
 };
 
+/** Where the records being appended to a mailbox come from, which decides
+ *  how their flags merge with the email's other copies */
+enum mailbox_copy_from {
+    COPY_FROM_NONE = 0,     /**< a new message: merge every flag */
+    COPY_FROM_SAME_ACCOUNT, /**< a copy or move: already has its flags */
+    COPY_FROM_OTHER_ACCOUNT /**< merge every flag but \\Seen */
+};
+
 /** The sync CRCs replication compares to find mailboxes that differ */
 struct synccrcs {
     uint32_t basic;     /**< XOR of the CRCs of the unexpunged records */
@@ -436,6 +444,7 @@ struct mailbox {
 
     /* change management */
     int silentchanges;
+    enum mailbox_copy_from copy_from; /* where appended records come from */
     int modseq_dirty;
     int header_dirty;
     int quota_dirty;
@@ -758,6 +767,14 @@ extern int mailbox_open_from_mbe(const struct mboxlist_entry *mbe,
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 
+/**
+ * Find a mailbox this process already has open.
+ *
+ * @param name  internal mailbox name
+ * @return the open mailbox, or NULL.  The caller gets no reference.
+ */
+extern struct mailbox *mailbox_findopen(const char *name);
+
 /* reading details */
 extern const struct mboxlist_entry *mailbox_mbentry(const struct mailbox *mailbox);
 extern const char *mailbox_name(const struct mailbox *mailbox);
@@ -865,6 +882,18 @@ extern int mailbox_expunge(struct mailbox *mailbox, struct mailbox_iter *iter,
                            unsigned *nexpunged, int event_type, int limit);
 extern void mailbox_archive(struct mailbox *mailbox, struct mailbox_iter *iter,
                             mailbox_decideproc_t *decideproc, void *deciderock);
+/**
+ * Apply the flag changes queued in the mailbox's own conversations state to
+ * the other copies of their emails (see emailid_flags_drain()).
+ *
+ * mailbox_unlock_index() does this itself; a caller that fills status data
+ * before unlocking calls it first, so the data includes the changes.  Does
+ * nothing while another reference holds the mailbox, or when the
+ * conversations state was opened elsewhere.
+ *
+ * @param mailbox   a locked mailbox
+ */
+extern void mailbox_drain_flags(struct mailbox *mailbox);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 
 extern int mailbox_create(const char *name, uint32_t mbtype, int minor_version,

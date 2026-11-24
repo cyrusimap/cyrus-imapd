@@ -1473,6 +1473,9 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
         mboxevent = mboxevent_enqueue(as->event_type, &as->mboxevents);
     }
 
+    as->mailbox->copy_from =
+        is_same_user ? COPY_FROM_SAME_ACCOUNT : COPY_FROM_OTHER_ACCOUNT;
+
     /* Copy/link all files and cache info */
     for (msg = 0; msg < msgrecs->count; msg++) {
         msgrecord_t *src_msgrec = ptrarray_nth(msgrecs, msg);
@@ -1646,6 +1649,7 @@ EXPORTED int append_copy(struct mailbox *mailbox, struct appendstate *as,
     }
 
 out:
+    as->mailbox->copy_from = COPY_FROM_NONE;
     free(srcfname);
     free(destfname);
     msgrecord_unref(&dst_msgrec);

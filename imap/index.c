@@ -26,6 +26,7 @@
 #include "append.h"
 #include "assert.h"
 #include "backend.h"
+#include "bsearch.h"
 #include "charset.h"
 #include "conversations.h"
 #include "dlist.h"
@@ -1082,9 +1083,86 @@ seqset_t *index_vanished(struct index_state *state,
     return outlist;
 }
 
-static int _fetch_setseen(struct index_state *state,
-                          struct mboxevent *mboxevent,
-                          uint32_t msgno)
+struct folder_siblings_rock
+{
+    int foldernum;
+    arrayu64_t *uids;
+};
+
+static int folder_siblings_cb(const conv_guidrec_t *rec, void *vrock)
+{
+    struct folder_siblings_rock *rock = vrock;
+
+    if (!rec->part && rec->foldernum == rock->foldernum) {
+        arrayu64_append(rock->uids, rec->uid);
+    }
+    return 0;
+}
+
+/* Add to @uids the uids of every copy, in the selected mailbox, of the email
+ * @guidrep, including the copy at hand */
+static int index_folder_siblings(struct index_state *state,
+                                 const char *guidrep,
+                                 arrayu64_t *uids)
+{
+    struct conversations_state *cstate = mailbox_get_cstate(state->mailbox);
+    if (!cstate) {
+        return 0;
+    }
+
+    struct folder_siblings_rock rock = {
+        conversation_folder_number(cstate,
+                                   CONV_FOLDER_KEY_MBOX(cstate, state->mailbox),
+                                   0),
+        uids
+    };
+    if (rock.foldernum < 0) {
+        return 0;
+    }
+
+    return conversations_guid_foreach(cstate,
+                                      guidrep,
+                                      folder_siblings_cb,
+                                      &rock);
+}
+
+/*
+ * Queue a \Seen change that lives outside the record, which the
+ * conversations update can't see, for the email's other copies.
+ */
+static void index_queue_seenchange(struct index_state *state,
+                                   const struct message_guid *guid,
+                                   uint32_t uid,
+                                   uint32_t system_flags,
+                                   bool isseen)
+{
+    struct mailbox *mailbox = state->mailbox;
+    struct conversations_state *cstate = mailbox_get_cstate(mailbox);
+
+    if (!cstate || (system_flags & FLAG_DELETED)
+        || mboxname_isnondeliverymailbox(mailbox_name(mailbox),
+                                         mailbox_mbtype(mailbox)))
+    {
+        return;
+    }
+
+    strarray_t flags = STRARRAY_INITIALIZER;
+    strarray_append(&flags, "\\Seen");
+    conversations_queue_flagchange(cstate,
+                                   guid,
+                                   mailbox_name(mailbox),
+                                   uid,
+                                   isseen ? &flags : NULL,
+                                   isseen ? NULL : &flags,
+                                   CONV_ARRIVAL_NONE);
+    strarray_fini(&flags);
+}
+
+/* Sets *guid when the record was rewritten */
+static int _fetch_setseen_one(struct index_state *state,
+                              struct mboxevent *mboxevent,
+                              uint32_t msgno,
+                              struct message_guid *guid)
 {
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
@@ -1128,6 +1206,11 @@ static int _fetch_setseen(struct index_state *state,
     r = index_rewrite_record(state, msgno, &record, /*silent*/0);
     if (r) return r;
 
+    if (!state->internalseen)
+        index_queue_seenchange(state, &record.guid, record.uid,
+                               record.system_flags, /*isseen*/true);
+    *guid = record.guid;
+
     mboxevent_extract_record(mboxevent, state->mailbox, &record);
 
     /* RFC 2060 says:
@@ -1138,6 +1221,39 @@ static int _fetch_setseen(struct index_state *state,
      */
 
     return 0;
+}
+
+/*
+ * Implicitly set \Seen on a message and, as every copy of an email has the
+ * same flags, on its other copies in this mailbox.
+ */
+static int _fetch_setseen(struct index_state *state,
+                          struct mboxevent *mboxevent,
+                          uint32_t msgno)
+{
+    struct message_guid guid = MESSAGE_GUID_INITIALIZER;
+
+    int r = _fetch_setseen_one(state, mboxevent, msgno, &guid);
+    if (r || message_guid_isnull(&guid)) {
+        return r;
+    }
+
+    arrayu64_t uids = ARRAYU64_INITIALIZER;
+    r = index_folder_siblings(state, message_guid_encode(&guid), &uids);
+    for (size_t i = 0; i < arrayu64_size(&uids) && !r; i++) {
+        uint32_t sibno = index_finduid(state, arrayu64_nth(&uids, i), FIND_EQ);
+        if (!sibno || sibno == msgno
+            || (state->map[sibno - 1].system_flags & FLAG_DELETED))
+        {
+            continue;
+        }
+
+        struct message_guid sibguid = MESSAGE_GUID_INITIALIZER;
+        r = _fetch_setseen_one(state, mboxevent, sibno, &sibguid);
+    }
+    arrayu64_fini(&uids);
+
+    return r;
 }
 
 /* non-locking, non-updating - just do a fetch on the state
@@ -1339,6 +1455,173 @@ EXPORTED int index_fetch(struct index_state *state,
 }
 
 /*
+ * Store into one message, and bring the index map in step.  Sets *changed
+ * and *guid when the record was rewritten.
+ */
+static int index_store_record(struct index_state *state, uint32_t msgno,
+                              struct storeargs *storeargs,
+                              struct mboxevent **mboxevents,
+                              struct mboxevent **flagsset,
+                              struct mboxevent **flagsclear,
+                              bool *changed, struct message_guid *guid)
+{
+    struct index_modified_flags modified_flags;
+    struct index_record record;
+    int r;
+
+    /* TODO(rsto): we need to keep index_reload_record here until we
+     * can make sure that the index map doesn't contain uncommitted
+     * changes for this msgno. See the comments in index_reload_record
+     * on how it releases the cyrus.index lock in the middle of action */
+    r = index_reload_record(state, msgno, &record);
+    if (r) return r;
+
+    msgrecord_t *msgrec = msgrecord_from_index_record(state->mailbox, &record);
+
+    switch (storeargs->operation) {
+    case STORE_ADD_FLAGS:
+    case STORE_REMOVE_FLAGS:
+    case STORE_REPLACE_FLAGS:
+        r = index_storeflag(state, &modified_flags, msgno, msgrec, storeargs);
+        if (r) goto done;
+
+        // nothing to do?
+        if (!(modified_flags.added_flags | modified_flags.removed_flags))
+            goto done;
+
+        r = msgrecord_rewrite(msgrec);
+        if (r) goto done;
+
+        if (modified_flags.added_flags) {
+            if (*flagsset == NULL)
+                *flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, mboxevents);
+
+            mboxevent_add_flags(*flagsset, state->mailbox->h.flagname,
+                                modified_flags.added_system_flags,
+                                modified_flags.added_user_flags);
+            mboxevent_extract_msgrecord(*flagsset, msgrec);
+        }
+        if (modified_flags.removed_flags) {
+            if (*flagsclear == NULL)
+                *flagsclear = mboxevent_enqueue(EVENT_FLAGS_CLEAR, mboxevents);
+
+            mboxevent_add_flags(*flagsclear, state->mailbox->h.flagname,
+                                modified_flags.removed_system_flags,
+                                modified_flags.removed_user_flags);
+            mboxevent_extract_msgrecord(*flagsclear, msgrec);
+        }
+        break;
+
+    case STORE_ANNOTATION: {
+        int dirty = 0;
+        r = index_store_annotation(state, msgno, msgrec, storeargs, &dirty);
+        if (r) goto done;
+        if (!dirty) goto done;
+
+        // rewrite message
+        r = msgrecord_rewrite(msgrec);
+        if (r) goto done;
+
+        // XXX mboxevents?
+
+        break;
+    }
+
+    default:
+        r = IMAP_INTERNAL;
+        break;
+    }
+    if (r) goto done;
+
+    /* msgrecord_rewrite already took care of rewriting the index_record,
+     * but we want to stay up to date of the changes in the index_map.
+     * Pass the silent flag to index_rewrite_record. */
+    r = msgrecord_get_index_record(msgrec, &record);
+    if (r) goto done;
+    r = index_rewrite_record(state, msgno, &record, /*silent*/1);
+    if (r) goto done;
+
+    *changed = true;
+    *guid = record.guid;
+
+done:
+    msgrecord_unref(&msgrec);
+    return r;
+}
+
+/*
+ * Every flag but \Deleted and \Recent is the same on all copies of an
+ * email.  Apply the store to the other copies, in this mailbox, of the
+ * emails in @guids, through the index map so that a non-owner's \Seen
+ * changes too, and report them even under .SILENT.  @stored holds the
+ * msgnos already stored; a target skipped for UNCHANGEDSINCE isn't one,
+ * and changes with its siblings.  The conversations drain at unlock skips
+ * these copies, as they are already in step.
+ */
+static int index_store_siblings(struct index_state *state,
+                                const bitvector_t *stored,
+                                const struct storeargs *storeargs,
+                                const strarray_t *guids,
+                                struct mboxevent **mboxevents,
+                                struct mboxevent **flagsset,
+                                struct mboxevent **flagsclear)
+{
+    if (!strarray_size(guids)) {
+        return 0;
+    }
+
+    arrayu64_t uids = ARRAYU64_INITIALIZER;
+    int r = 0;
+    /* @guids is sorted, maybe with repeats */
+    for (int i = 0; i < strarray_size(guids) && !r; i++) {
+        if (i && !strcmp(strarray_nth(guids, i - 1), strarray_nth(guids, i))) {
+            continue;
+        }
+        r = index_folder_siblings(state, strarray_nth(guids, i), &uids);
+    }
+
+    struct storeargs sibargs = *storeargs;
+    sibargs.silent = 0;
+    sibargs.system_flags &= ~FLAG_DELETED;
+
+    for (size_t i = 0; i < arrayu64_size(&uids) && !r; i++) {
+        uint32_t uid = arrayu64_nth(&uids, i);
+        uint32_t msgno = index_finduid(state, uid, FIND_EQ);
+        if (!msgno) {
+            continue;
+        }
+        if (bv_isset(stored, msgno)) {
+            continue;
+        }
+
+        struct index_map *im = &state->map[msgno - 1];
+        if ((im->internal_flags & FLAG_INTERNAL_EXPUNGED)
+            || (im->system_flags & FLAG_DELETED))
+        {
+            continue;
+        }
+
+        bool changed = false;
+        struct message_guid guid;
+        r = index_store_record(state,
+                               msgno,
+                               &sibargs,
+                               mboxevents,
+                               flagsset,
+                               flagsclear,
+                               &changed,
+                               &guid);
+        if (changed) {
+            state->map[msgno - 1].forcetell = 1;
+            state->anyforcetell = true;
+        }
+    }
+
+    arrayu64_fini(&uids);
+    return r;
+}
+
+/*
  * Perform a STORE command on a sequence
  */
 EXPORTED int index_store(struct index_state *state, const char *sequence,
@@ -1353,8 +1636,8 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
     const strarray_t *flags = &storeargs->flags;
     struct mboxevent *mboxevents = NULL;
     struct mboxevent *flagsset = NULL, *flagsclear = NULL;
-    struct index_modified_flags modified_flags;
-    struct index_record record;
+    strarray_t changed_guids = STRARRAY_INITIALIZER;
+    bitvector_t stored = BV_INITIALIZER;
 
     r = index_lock_write(state);
     if (r) return r;
@@ -1464,82 +1747,22 @@ EXPORTED int index_store(struct index_state *state, const char *sequence,
             continue;
         }
 
-        /* TODO(rsto): we need to keep index_reload_record here until we
-         * can make sure that the index map doesn't contain uncommitted
-         * changes for this msgno. See the comments in index_reload_record
-         * on how it releases the cyrus.index lock in the middle of action */
-        r = index_reload_record(state, msgno, &record);
+        bool changed = false;
+        struct message_guid guid;
+        r = index_store_record(state, msgno, storeargs, &mboxevents,
+                               &flagsset, &flagsclear, &changed, &guid);
         if (r) goto out;
-
-        msgrecord_t *msgrec = msgrecord_from_index_record(state->mailbox, &record);
-
-        switch (storeargs->operation) {
-        case STORE_ADD_FLAGS:
-        case STORE_REMOVE_FLAGS:
-        case STORE_REPLACE_FLAGS:
-            r = index_storeflag(state, &modified_flags, msgno, msgrec, storeargs);
-            if (r) goto doneloop;
-
-            // nothing to do?
-            if (!(modified_flags.added_flags | modified_flags.removed_flags))
-                goto doneloop;
-
-            r = msgrecord_rewrite(msgrec);
-            if (r) goto doneloop;
-
-            if (modified_flags.added_flags) {
-                if (flagsset == NULL)
-                    flagsset = mboxevent_enqueue(EVENT_FLAGS_SET, &mboxevents);
-
-                mboxevent_add_flags(flagsset, mailbox->h.flagname,
-                                    modified_flags.added_system_flags,
-                                    modified_flags.added_user_flags);
-                mboxevent_extract_msgrecord(flagsset, msgrec);
-            }
-            if (modified_flags.removed_flags) {
-                if (flagsclear == NULL)
-                    flagsclear = mboxevent_enqueue(EVENT_FLAGS_CLEAR, &mboxevents);
-
-                mboxevent_add_flags(flagsclear, mailbox->h.flagname,
-                                    modified_flags.removed_system_flags,
-                                    modified_flags.removed_user_flags);
-                mboxevent_extract_msgrecord(flagsclear, msgrec);
-            }
-            break;
-
-        case STORE_ANNOTATION: {
-            int dirty = 0;
-            r = index_store_annotation(state, msgno, msgrec, storeargs, &dirty);
-            if (r) goto doneloop;
-            if (!dirty) goto doneloop;
-
-            // rewrite message
-            r = msgrecord_rewrite(msgrec);
-            if (r) goto doneloop;
-
-            // XXX mboxevents?
-
-            break;
-        }
-
-        default:
-            r = IMAP_INTERNAL;
-            break;
-        }
-        if (r) goto doneloop;
-
-        /* msgrecord_rewrite already took care of rewriting the index_record,
-         * but we want to stay up to date of the changes in the index_map.
-         * Pass the silent flag to index_rewrite_record. */
-        r = msgrecord_get_index_record(msgrec, &record);
-        if (r) goto doneloop;
-        r = index_rewrite_record(state, msgno, &record, /*silent*/1);
-
-doneloop:
-        msgrecord_unref(&msgrec);
-        if (r) goto out;
+        bv_set(&stored, msgno);
+        /* a \Deleted copy passes on no change */
+        if (changed && storeargs->operation != STORE_ANNOTATION
+            && !(state->map[msgno-1].system_flags & FLAG_DELETED))
+            strarray_append(&changed_guids, message_guid_encode(&guid));
     }
 
+    strarray_sort(&changed_guids, cmpstringp_raw);
+    r = index_store_siblings(state, &stored, storeargs, &changed_guids,
+                             &mboxevents, &flagsset, &flagsclear);
+    if (r) goto out;
 
     /* let mboxevent_notify split FlagsSet into MessageRead, MessageTrash
      * and FlagsSet events */
@@ -1561,6 +1784,8 @@ out:
     if (seq != state->searchres) seqset_free(&seq);
 
 done:
+    strarray_fini(&changed_guids);
+    bv_fini(&stored);
     index_unlock(state);
     unsigned tell_flags = 0;
     if (storeargs->silent) tell_flags |= TELL_SILENT;
@@ -1881,11 +2106,19 @@ EXPORTED void index_unlock(struct index_state *state)
     /* grab the latest modseq */
     state->highestmodseq = state->mailbox->i.highestmodseq;
 
+    /* drain before filling the status.  Copies the drain changes here aren't
+     * in the map: the old highestmodseq makes the next lock read them, and
+     * numunseen is stale. */
+    mailbox_drain_flags(state->mailbox);
+    bool drained = state->highestmodseq != state->mailbox->i.highestmodseq;
+
     if (state->mailbox->i.dirty) {
         struct statusdata sdata = STATUSDATA_INIT;
         status_fill_mailbox(state->mailbox, &sdata);
         // we zero out recent data for everyone else
-        status_fill_seen(state->userid, &sdata, /*recent*/0, state->numunseen);
+        if (!drained)
+            status_fill_seen(state->userid, &sdata, /*recent*/0,
+                             state->numunseen);
         mailbox_unlock_index(state->mailbox, &sdata);
     }
     else {
@@ -2557,6 +2790,11 @@ EXPORTED int index_copy(struct index_state *state,
 done:
     free(copyargs.records);
     mailbox_close(&destmailbox);
+    /* a copy into the selected mailbox locks it through the reopen; unlock it
+     * while the caller still holds the user namespace lock.  Not index_unlock:
+     * the session hasn't seen the new messages yet. */
+    if (srcmailbox && mailbox_index_islocked(srcmailbox, 0))
+        mailbox_unlock_index(srcmailbox, NULL);
     if (msgrecs) {
         for (i = 0; i < msgrecs->count; i++) {
             msgrecord_t *mr = ptrarray_nth(msgrecs, i);
@@ -3372,9 +3610,17 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 
     if (state->oldexists != state->exists) index_tellexists(state);
 
-    if (state->oldhighestmodseq == state->highestmodseq) return;
+    bool forced = state->anyforcetell;
+    state->anyforcetell = false;
 
-    index_checkflags(state, !(tell_flags & TELL_SILENT), 0);
+    if (state->oldhighestmodseq == state->highestmodseq) {
+        for (msgno = 1; forced && msgno <= state->exists; msgno++)
+            state->map[msgno-1].forcetell = 0;
+        return;
+    }
+
+    /* a forced FETCH may carry a keyword the client hasn't seen */
+    index_checkflags(state, !(tell_flags & TELL_SILENT) || forced, 0);
 
     /* RFC 7162, 3.1.0:
      * Once a client issues a CONDSTORE enabling command, it has announced
@@ -3401,15 +3647,19 @@ EXPORTED void index_tellchanges(struct index_state *state, unsigned tell_flags)
 
             /* Per RFC 7162: MODSEQ overrides .SILENT */
             if ((tell_flags & (TELL_SILENT | TELL_MODSEQ)) != TELL_SILENT
-                || strarray_size(&annots))
+                || strarray_size(&annots) || im->forcetell)
             {
-                index_printflags(state, msgno, tell_flags, &annots);
+                index_printflags(state, msgno,
+                                 im->forcetell ? tell_flags & ~TELL_SILENT
+                                               : tell_flags,
+                                 &annots);
             }
             strarray_fini(&annots);
 
             /* Update reported MODSEQ even if we were .SILENT */
             im->told_modseq = im->modseq;
         }
+        im->forcetell = 0;
     }
 }
 
@@ -4641,6 +4891,11 @@ static int index_storeflag(struct index_state *state,
         else {
             modified_flags->removed_system_flags |= FLAG_SEEN;
             modified_flags->removed_flags++;
+        }
+        struct message_guid guid;
+        if (!msgrecord_get_guid(msgrec, &guid)) {
+            index_queue_seenchange(state, &guid, im->uid, system_flags,
+                                   im->isseen);
         }
     }
 
