@@ -30,12 +30,14 @@ sub new
                  httpmodules => 'jmap',
                  httpallowcompress => 'no',
                  event_groups => 'mailbox message flags calendar applepushservice jmap',
-                 jmap_nonstandard_extensions => 'yes');
+                 jmap_nonstandard_extensions => 'yes',
+                 jmap_emailpush => 'yes');
 
     return $class->SUPER::new({
         config => $config,
         jmap => 1,
         adminstore => 1,
+        deliver => 1,
         services => [ 'imap', 'http' ]
     }, @args);
 }

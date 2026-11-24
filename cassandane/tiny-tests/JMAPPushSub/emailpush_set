@@ -1,0 +1,125 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailpush_set
+    :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    my @using = (
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:emailpush',
+    );
+    $jmap->DefaultUsing([ @using ]);
+
+    xlog $self, "the user's own account has the capability";
+    my $session = $jmap->get_client_session->client_session;
+    $self->assert_cmp_deeply({},
+        $session->{capabilities}{'urn:ietf:params:jmap:emailpush'});
+    $self->assert_cmp_deeply({
+        filterConditions => undef,
+        maxFilterDepth => undef,
+        countProperties => undef,
+    }, $session->{accounts}{cassandane}{accountCapabilities}
+                {'urn:ietf:params:jmap:emailpush'});
+
+    my $res = $jmap->request([[ 'Mailbox/get', { properties => [ 'name' ] } ]]);
+    my ($inbox) = map  { "" . $_->{id} }
+                  grep { $_->{name} eq 'Inbox' }
+                  $res->single_sentence->arguments->{list}->@*;
+
+    my %base = (
+        deviceClientId => 'a889-ffea-910',
+        url => 'https://example.com/push',
+    );
+    my %keys = (keys => { p256dh => 'x', auth => 'y' });
+    my $emailPush = {
+        cassandane => {
+            filter => { from => 'boss@example.com' },
+            properties => [ 'id', 'from', 'subject', 'header:X-Spam:asText' ],
+            urgency => 'high',
+        },
+    };
+    my $emailCount = {
+        cassandane => { mailboxId => $inbox, property => 'unreadEmails' },
+    };
+
+    $res = $jmap->request([
+        [ 'PushSubscription/set', {
+            accountId => \undef,
+            create => {
+                good => {
+                    %base, %keys,
+                    emailPush => $emailPush,
+                    emailCount => $emailCount,
+                },
+                nokeys => { %base, emailPush => { cassandane => {} } },
+                account => { %base, %keys, emailPush => { other => {} } },
+                filter => { %base, %keys,
+                    emailPush => { cassandane => { filter => { bogus => 1 } } } },
+                props => { %base, %keys,
+                    emailPush => { cassandane => {
+                        properties => [ 'subject', 'bodyValues' ] } } },
+                urgency => { %base, %keys,
+                    emailPush => { cassandane => { urgency => 'urgent' } } },
+                count => { %base, %keys,
+                    emailCount => { cassandane => {
+                        mailboxId => 'nope', property => 'allEmails' } } },
+            },
+        } ],
+    ]);
+    my $args = $res->single_sentence->arguments;
+    my $id = "" . $args->{created}{good}{id};
+
+    my $invalid = sub {
+        return superhashof({
+            type => 'invalidProperties', properties => bag(@_),
+        });
+    };
+    $self->assert_cmp_deeply({
+        nokeys  => $invalid->('keys', 'emailPush'),
+        account => $invalid->('emailPush/other', 'emailPush'),
+        filter  => $invalid->('emailPush/cassandane/filter', 'emailPush'),
+        props   => $invalid->('emailPush/cassandane/properties', 'emailPush'),
+        urgency => $invalid->('emailPush/cassandane/urgency', 'emailPush'),
+        count   => $invalid->('emailCount/cassandane/mailboxId',
+                              'emailCount/cassandane/property', 'emailCount'),
+    }, $args->{notCreated});
+
+    xlog $self, "get returns the properties only with the capability";
+    $res = $jmap->request([
+        [ 'PushSubscription/get', { accountId => \undef } ],
+    ]);
+    my $got = $res->single_sentence->arguments->{list}[0];
+    $self->assert_cmp_deeply($emailPush, $got->{emailPush});
+    $self->assert_cmp_deeply($emailCount, $got->{emailCount});
+
+    $res = $jmap->request({
+        using => [ 'urn:ietf:params:jmap:core' ],
+        methodCalls => [
+            [ 'PushSubscription/get', { accountId => \undef } ],
+            [ 'PushSubscription/set', {
+                accountId => \undef,
+                update => { $id => { emailPush => undef } },
+            } ],
+        ],
+    });
+    $got = $res->sentence(0)->arguments->{list}[0];
+    $self->assert(!exists $got->{emailPush});
+    $self->assert(!exists $got->{emailCount});
+    $self->assert_cmp_deeply(['emailPush'],
+        $res->sentence(1)->arguments->{notUpdated}{$id}{properties});
+
+    xlog $self, "a null emailPush turns it off";
+    $res = $jmap->request([
+        [ 'PushSubscription/set', {
+            accountId => \undef,
+            update => { $id => { emailPush => undef } },
+        } ],
+        [ 'PushSubscription/get', { accountId => \undef } ],
+    ]);
+    $self->assert(exists $res->sentence(0)->arguments->{updated}{$id});
+    $self->assert_null($res->sentence(1)->arguments->{list}[0]{emailPush});
+}
