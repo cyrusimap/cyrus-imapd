@@ -187,6 +187,8 @@ sub undump_user {
       'RECORD' => \@records,
       'UIDVALIDITY' => $uidvalidity,
       'UNIQUEID' => $uniqueid,
+      # 0 is the server's newest; omitting it gets the 3.12 format
+      'VERSION' => '0',
     );
 
     $self->{sync}->dlwrite('APPLY', 'MAILBOX', \%maildata);
