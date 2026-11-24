@@ -846,7 +846,11 @@ The following is an inventory of RFCs supported by Cyrus IMAP.
 
     .. NOTE::
 
-        The PushSubscription object and its methods are not yet supported.
+        Cyrus stores PushSubscription objects and implements their methods,
+        but doesn't send the pushes.  It reports each new subscription as a
+        PushSubscriptionCreated event, and lists a user's subscriptions at
+        ``/dblookup/pushsubs``, so that a separate notification service can
+        send the PushVerification and StateChange objects.
 
 :rfc:`8621`
 

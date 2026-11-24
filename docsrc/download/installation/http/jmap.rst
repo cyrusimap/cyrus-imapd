@@ -42,7 +42,8 @@ The JMAP implementation in Cyrus is at various stages of maturity.
 Implemented
 -----------
 
-* The core protocol (:rfc:`8620`), except for PushSubscription
+* The core protocol (:rfc:`8620`); PushSubscription needs an external
+  service to send the pushes
 * JMAP for Mail (:rfc:`8621`)
 * JMAP Blob Management Extension (:rfc:`9404`)
 * JMAP for Quotas (:rfc:`9425`)
