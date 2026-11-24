@@ -1223,49 +1223,69 @@ EXPORTED uint32_t mailbox_uidvalidity(const struct mailbox *mailbox)
     return mailbox->i.uidvalidity;
 }
 
+/* Add identifier to users, or its members if it's a group. */
+static void visible_users_add(strarray_t *users, const char *identifier)
+{
+    if (strncmp(identifier, "group:", 6)) {
+        strarray_append(users, identifier);
+    }
+    else {
+        mboxlist_lookup_usergroups(identifier, users);
+    }
+}
+
+/* The users that the mailbox's ACL lets read it, tab-separated, or NULL if
+ * none.  As in cyrus_acl_myrights(), a negative entry takes read away from a
+ * user or a group's members whatever the positive entries grant.  Admins, and
+ * identifiers that can't be listed (anyone, anonymous), are left out. */
 EXPORTED char *mailbox_visible_users(const struct mailbox *mailbox)
 {
-    const char *aclstr = mailbox_acl(mailbox);
-    const char *p, *q;
+    strarray_t *acl = strarray_split(mailbox_acl(mailbox), "\t", 0);
     strarray_t users = STRARRAY_INITIALIZER;
+    strarray_t denied = STRARRAY_INITIALIZER;
+    bool nobody = false;
 
-    p = aclstr;
+    for (int i = 0; i + 1 < strarray_size(acl); i += 2) {
+        const char *identifier = strarray_nth(acl, i);
+        const char *rights = strarray_nth(acl, i + 1);
 
-    while (p && *p) {
-        char *name,*val;
-
-        q = strchr(p, '\t');
-        if (!q) break;
-
-        name = xstrndup(p, q-p);
-        q++;
-
-        p = strchr(q, '\t');
-        if (p) {
-            val = xstrndup(q, p-q);
-            p++;
+        if (!strchr(rights, 'r')) {
+            continue;
         }
-        else
-            val = xstrdup(q);
 
-        // only readable
-        if (!strchr(val, 'r')) goto done;
-        // not admin or special name
-        if (strcmp(name, "anyone")) goto done;
-        if (strcmp(name, "anonymous")) goto done;
-        if (strarray_contains(config_admins, name)) goto done;
-        // OK, this belongs
-        if (strncmp(name, "group:", 6)) {
-            strarray_appendm(&users, name);
-            name = NULL;
+        if (identifier[0] == '-') {
+            identifier++;
+            if (!strcmp(identifier, "anyone")) {
+                nobody = true;
+            }
+            else {
+                visible_users_add(&denied, identifier);
+            }
+            continue;
         }
-        else {
-            mboxlist_lookup_usergroups(name, &users);
+
+        if (!strcmp(identifier, "anyone")) {
+            continue;
         }
-done:
-        free(name);
-        free(val);
+        if (!strcmp(identifier, "anonymous")) {
+            continue;
+        }
+        if (strarray_contains(config_admins, identifier)) {
+            continue;
+        }
+
+        visible_users_add(&users, identifier);
     }
+
+    if (nobody) {
+        strarray_truncate(&users, 0);
+    }
+    for (int i = 0; i < strarray_size(&denied); i++) {
+        strarray_remove_all(&users, strarray_nth(&denied, i));
+    }
+
+    strarray_free(acl);
+    strarray_fini(&denied);
 
     strarray_sort(&users, cmpstringp_raw);
     strarray_uniq(&users);

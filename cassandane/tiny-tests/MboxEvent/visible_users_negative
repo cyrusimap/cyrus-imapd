@@ -1,0 +1,43 @@
+#!perl
+use Cassandane::Tiny;
+
+# A negative entry takes read access away from a user, or from every member of
+# a group, whatever the positive entries grant.
+sub test_visible_users_negative
+    :Mboxgroups
+    ($self)
+{
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $self->{instance}->create_user('other');
+    for my $member (qw( alice bob )) {
+        $admintalk->_imap_cmd('SETUSERGROUP', 0, '', $member, 'group:team');
+        $self->assert_str_equals('ok',
+                                 $admintalk->get_last_completion_response());
+    }
+
+    $self->assert_visible_users('negative on a user', {
+        acl     => [ bob => 'lr', '-bob' => 'r' ],
+        visible => [qw( other )],
+    });
+
+    $self->assert_visible_users('negative on a group member', {
+        acl     => [ 'group:team' => 'lr', '-bob' => 'r' ],
+        visible => [qw( alice other )],
+    });
+
+    $self->assert_visible_users('negative on a group', {
+        acl     => [ alice => 'lr', bob => 'lr', '-group:team' => 'r' ],
+        visible => [qw( other )],
+    });
+
+    $self->assert_visible_users('negative without read', {
+        acl     => [ bob => 'lr', '-bob' => 'w' ],
+        visible => [qw( bob other )],
+    });
+
+    $self->assert_visible_users('negative on anyone', {
+        acl     => [ bob => 'lr', '-anyone' => 'r' ],
+        visible => [],
+    });
+}

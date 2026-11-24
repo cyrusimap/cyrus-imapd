@@ -584,8 +584,10 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
     case EVENT_MAILBOX_UNIQUEID:
     case EVENT_MBTYPE:
     case EVENT_MAILBOX_ACL:
-    case EVENT_VISIBLE_USERS:
         return (type & MAILBOX_EVENTS);
+    case EVENT_VISIBLE_USERS:
+        return (type & MAILBOX_EVENTS)
+               && (extra_params & IMAP_ENUM_EVENT_EXTRA_PARAMS_VND_CMU_VISIBLEUSERS);
 
     case EVENT_METADATA_ENTRIES:
         return type & METADATA_EVENTS;
@@ -1910,7 +1912,8 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         xstrdup(mboxlist_mbtype_to_string(mailbox_mbtype(mailbox))));
 
     FILL_STRING_PARAM(event, EVENT_MAILBOX_ACL, xstrdup(mailbox_acl(mailbox)));
-    FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
+    if (mboxevent_expected_param(event->type, EVENT_VISIBLE_USERS))
+        FILL_STRING_PARAM(event, EVENT_VISIBLE_USERS, mailbox_visible_users(mailbox));
 
     if (want_specialuse && specialuse)
         FILL_STRING_PARAM(event, EVENT_SPECIAL_USE, specialuse);
