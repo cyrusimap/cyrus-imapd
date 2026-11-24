@@ -70,12 +70,23 @@ extern void jmap_filter_parser_pop(void *rock);
 extern void jmap_email_filtercondition_validate(const char *field, json_t *arg,
                                                 void *rock);
 
+/**
+ * Where a delivery put a message, and the keywords it set.
+ */
+struct jmap_email_delivery
+{
+    strarray_t mailboxids; /**< JMAP ids of the mailboxes it was delivered to */
+    strarray_t keywords;   /**< its JMAP keywords */
+};
+
 /* Matches MIME message mime against the JMAP Email query
  * filter.
  *
  * Contact groups are looked up in the default addressbook
  * of accountid. Before/after filters are matched against
- * internaldate.
+ * internaldate.  The inMailbox, inMailboxOtherThan, hasKeyword
+ * and notKeyword conditions are matched against delivery, and
+ * ignored if delivery is NULL.
  *
  * Returns non-zero if filter matches.
  * On error, sets the JMAP error in err. */
@@ -89,6 +100,7 @@ extern int jmap_email_matchmime(matchmime_t *matchmime,
                                 const struct auth_state *authstate,
                                 const struct namespace *ns,
                                 time_t internaldate,
+                                const struct jmap_email_delivery *delivery,
                                 json_t **err);
 
 struct jmap_headermatch {

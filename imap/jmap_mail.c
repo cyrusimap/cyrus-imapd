@@ -16663,7 +16663,7 @@ static int jmap_email_matchmime_method(jmap_req_t *req)
     matchmime_t *matchmime = jmap_email_matchmime_new(&mime, &err);
     int matches = matchmime ? jmap_email_matchmime(matchmime, jfilter, 
             req->cstate, req->accountid,
-            req->authstate, &jmap_namespace, time(NULL), &err) : 0;
+            req->authstate, &jmap_namespace, time(NULL), NULL, &err) : 0;
     jmap_email_matchmime_free(&matchmime);
     buf_free(&mime);
     if (!err) {

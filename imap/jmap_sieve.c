@@ -1577,7 +1577,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
                                        jfilter, ctx->cstate, userid,
                                        sd->authstate,
                                        sd->ns,
-                                       time(NULL), &err);
+                                       time(NULL), NULL, &err);
 
     if (err) {
         char *errstr = json_dumps(err, JSON_COMPACT);
