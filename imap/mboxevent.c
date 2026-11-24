@@ -170,12 +170,14 @@ static struct mboxevent event_template =
     /* always at end to let the parser to easily truncate this part */
     { EVENT_MESSAGE_CONTENT, "messageContent", EVENT_PARAM_STRING, { 0 }, 0 }
   },
-  STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL, NULL
+  STRARRAY_INITIALIZER, { 0, 0 }, NULL, STRARRAY_INITIALIZER, NULL, NULL,
+  false, NULL, NULL
 };
 
 static json_t *json_formatter(enum event_type type, struct event_parameter params[]);
 static int filled_params(enum event_type type, struct mboxevent *mboxevent);
 static int mboxevent_expected_param(enum event_type type, enum event_param param);
+static void fill_jmap_states(json_t *states, const char *mboxname, bool compact);
 
 static int mboxevent_initialized = 0;
 
@@ -422,6 +424,7 @@ EXPORTED void mboxevent_free(struct mboxevent **mboxevent)
     seqset_free(&event->olduidset);
     strarray_fini(&event->midset);
     strarray_fini(&event->flagnames);
+    free(event->jmapstates_mboxname);
 
     for (i = 0; i <= MAX_PARAM; i++) {
         if (event->params[i].filled) {
@@ -705,9 +708,12 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
  * other writer for as long as notifyd takes to answer.
  *
  * So queue the formatted messages and hand them to notifyd once the locks are
- * gone.  Formatting stays here, where the event data is; only the socket work
- * is deferred.  The queue is FIFO because event order is meaningful - see the
- * FlagsSet/FlagsClear swap below, and mailbox_commit()'s Modseq event.
+ * gone.  Formatting stays here, where the event data is, except for the
+ * contents of vnd.fastmail.jmapStates: the counters aren't committed until
+ * after an event like MessageNew is notified, so they're read at flush time,
+ * and every event the command queued reports the same final states.  The
+ * queue is FIFO because event order is meaningful - see the FlagsSet/FlagsClear
+ * swap below, and mailbox_commit()'s Modseq event.
  *
  * Services drive this by calling mboxevent_flush_notifications() once their
  * locks are gone but before the client has been answered, which is where the
@@ -722,7 +728,9 @@ static int mboxevent_expected_param(enum event_type type, enum event_param param
 struct pending_notify {
     struct pending_notify *next;
     char *notifier;
-    char *message;
+    json_t *jevent;
+    char *jmapstates_mboxname;
+    bool jmapstates_compact;
 };
 
 static struct pending_notify *pending_notifies = NULL;
@@ -735,10 +743,21 @@ EXPORTED void mboxevent_flush_notifications(void)
         pending_notifies = p->next;
         if (!pending_notifies) pending_notifies_tail = &pending_notifies;
 
-        notify(p->notifier, "EVENT", NULL, NULL, NULL, 0, NULL, p->message, NULL);
+        json_t *states = json_object_get(p->jevent, "vnd.fastmail.jmapStates");
+        if (states)
+            fill_jmap_states(states, p->jmapstates_mboxname,
+                             p->jmapstates_compact);
 
+        char *message =
+            json_dumps(p->jevent, JSON_PRESERVE_ORDER|JSON_COMPACT);
+        /* this path never passes a file to notifyd, so there is no
+         * file lifetime to keep open until it has been read */
+        notify(p->notifier, "EVENT", NULL, NULL, NULL, 0, NULL, message, NULL);
+
+        free(message);
         free(p->notifier);
-        free(p->message);
+        json_decref(p->jevent);
+        free(p->jmapstates_mboxname);
         free(p);
     }
 }
@@ -748,13 +767,16 @@ static void mboxevent_delayed_flush(void *rock __attribute__((unused)))
     mboxevent_flush_notifications();
 }
 
-/* takes ownership of message */
-static void mboxevent_queue_notify(const char *notifier, char *message)
+static void mboxevent_queue_notify(const char *notifier, json_t *jevent,
+                                   const struct mboxevent *event)
 {
     struct pending_notify *p = xzmalloc(sizeof(struct pending_notify));
 
     p->notifier = xstrdup(notifier);
-    p->message = message;
+    /* a copy, as the idle notifier adds its own keys to jevent */
+    p->jevent = json_copy(jevent);
+    p->jmapstates_mboxname = xstrdupnull(event->jmapstates_mboxname);
+    p->jmapstates_compact = event->jmapstates_compact;
 
     *pending_notifies_tail = p;
     pending_notifies_tail = &p->next;
@@ -773,7 +795,6 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
     enum event_type type;
     struct mboxevent *event;
     char stimestamp[TIMESTAMP_MAX+1];
-    char *formatted_message;
 
     /* nothing to notify */
     if (!*mboxevents)
@@ -887,11 +908,7 @@ EXPORTED void mboxevent_notify(struct mboxevent **mboxevents)
                 /* check if expected event parameters are filled */
                 assert(filled_params(type, event));
 
-                formatted_message = json_dumps(jevent,
-                                               JSON_PRESERVE_ORDER|JSON_COMPACT);
-                /* this path never passes a file to notifyd, so there is no
-                 * file lifetime to keep open until it has been read */
-                mboxevent_queue_notify(notifier, formatted_message);
+                mboxevent_queue_notify(notifier, jevent, event);
             }
 
             if (idle_notifier &&
@@ -1836,7 +1853,7 @@ EXPORTED void mboxevent_set_numunseen(struct mboxevent *event,
 
 struct jmap_states_rock {
     json_t *states;
-    struct conversations_state *cstate;
+    bool compact;
     const struct mboxname_counters *counters;
 };
 
@@ -1850,10 +1867,20 @@ static void add_jmap_state_cb(const jmap_data_type_t *dtype, void *rock)
     modseq_t modseq =
         *(modseq_t *)((off_t) jrock->counters + dtype->modseq_offset);
     char *state =
-        jmap_state_string_cstate(jrock->cstate, modseq, dtype->mbtype);
+        jmap_state_string_compact(jrock->compact, modseq, dtype->mbtype);
 
     json_object_set_new(jrock->states, dtype->name, json_string(state));
     free(state);
+}
+
+static void fill_jmap_states(json_t *states, const char *mboxname, bool compact)
+{
+    struct mboxname_counters counters;
+
+    if (mboxname_read_counters(mboxname, &counters)) return;
+
+    struct jmap_states_rock jrock = { states, compact, &counters };
+    jmap_data_types_foreach(&add_jmap_state_cb, &jrock);
 }
 
 EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
@@ -1966,22 +1993,12 @@ EXPORTED void mboxevent_extract_mailbox(struct mboxevent *event,
         }
     }
 
-    /* add vnd.fastmail.jmapStates */
+    /* filled in by mboxevent_flush_notifications */
     if (mboxevent_expected_param(event->type, EVENT_JMAP_STATES)) {
-        struct mboxname_counters counters;
-
-        int r = mboxname_read_counters(mailbox_name(mailbox), &counters);
-        if (!r) {
-            struct jmap_states_rock jrock = {
-                json_object(),
-                mailbox_get_cstate(mailbox),
-                &counters
-            };
-
-            jmap_data_types_foreach(&add_jmap_state_cb, &jrock);
-
-            FILL_JSON_PARAM(event, EVENT_JMAP_STATES, jrock.states);
-        }
+        FILL_JSON_PARAM(event, EVENT_JMAP_STATES, json_object());
+        event->jmapstates_mboxname = xstrdup(mailbox_name(mailbox));
+        event->jmapstates_compact =
+            USER_COMPACT_EMAILIDS(mailbox_get_cstate(mailbox));
     }
 }
 
