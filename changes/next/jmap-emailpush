@@ -1,0 +1,29 @@
+Description:
+
+JMAP Email Delivery Push Notifications (draft-ietf-jmap-emailpush) in the
+user's own account.  PushSubscription gains the emailPush and emailCount
+properties, and lmtpd evaluates each subscription's EmailPush filter when it
+delivers a message, reporting the matches as an EmailPush event for the
+notification service to send.
+
+
+Documentation:
+
+docsrc/rfc-support.rst
+
+
+Config changes:
+
+New `jmap_emailpush` switch, off by default.
+
+
+Upgrade instructions:
+
+Enable `jmap_emailpush` only once the notification service that handles
+PushSubscriptionCreated events also handles EmailPush events, and tracks
+mailbox counts for EmailCount.
+
+
+GitHub issue:
+
+None.

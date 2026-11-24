@@ -1035,6 +1035,17 @@ draft-ietf-jmap-mail-sharing
 
     JMAP Mail Sharing
 
+draft-ietf-jmap-emailpush
+
+    JMAP Email Delivery Push Notifications
+
+    .. NOTE::
+
+        Only in the user's own account.  Cyrus validates EmailPush and
+        EmailCount configs and evaluates EmailPush filters at delivery,
+        reporting matches as an EmailPush event; a separate notification
+        service sends the pushes and tracks the EmailCount counts.
+
 ..
 
     caldav-ctag     Calendar Collection Entity Tag (CTag) in CalDAV

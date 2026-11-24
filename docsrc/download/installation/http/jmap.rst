@@ -56,6 +56,7 @@ In development
 --------------
 
 * JMAP for Calendars (:draft:`draft-ietf-jmap-calendars`)
+* JMAP Email Delivery Push Notifications (:draft:`draft-ietf-jmap-emailpush`)
 * Handling MDN with JMAP (:rfc:`9007`)
 
 Not implemented
