@@ -185,6 +185,17 @@ static inline size_t table_index(const hash_table *table, uint32_t hash) {
     return mixed >> (64 - table->size_log2);
 }
 
+EXPORTED hash_table *malloc_hash_table(size_t size)
+{
+    hash_table *table = xmalloc(sizeof(*table));
+    /* It's an implementation detail that *currently* we don't need to assign
+     * HASH_TABLE_INITIALIZER because *currently* construct_hash_table() assigns
+     * to all memebers. Don't copy this code without adding that in here.
+     * We don't add it here as this is a relatively hot code path. */
+    return construct_hash_table(table, size, 0);
+}
+
+
 /* We've changed the hash table size from "whatever the user asked for" to
  * power of two (and therefore sizes must round up to the next power of two).
  * This permits us to use a bitmask to map the hash code to the bucket, which is
@@ -550,6 +561,13 @@ EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
       table->table = NULL;
       table->size_log2 = 0;
       table->count = 0;
+}
+
+EXPORTED void release_hash_table(hash_table **table, void (*func)(void *))
+{
+    free_hash_table(*table, func);
+    free(*table);
+    *table = NULL;
 }
 
 /*

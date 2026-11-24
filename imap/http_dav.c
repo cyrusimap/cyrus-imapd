@@ -3613,7 +3613,7 @@ HIDDEN int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
         if (!hash_constructed(fctx->ns_table)) {
             xmlNsPtr nsDef;
 
-            construct_hash_table(fctx->ns_table, 10, 1);
+            construct_hash_table(fctx->ns_table, 0, 0);
 
             for (nsDef = fctx->root->nsDef; nsDef; nsDef = nsDef->next) {
                 hash_insert((const char *) nsDef->href, nsDef, fctx->ns_table);
@@ -6803,7 +6803,7 @@ EXPORTED int meth_propfind(struct transaction_t *txn, void *params)
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
     fctx.ret = &ret;
-    construct_hash_table(&fctx.per_prop_data, 1024, 0);
+    construct_hash_table(&fctx.per_prop_data, 0, 0);
 
     /* Parse the list of properties and build a list of callbacks */
     ret = preload_proplist(props, &fctx);
@@ -8755,7 +8755,7 @@ int meth_report(struct transaction_t *txn, void *params)
     fctx.ns = ns;
     fctx.ns_table = &ns_table;
     fctx.ret = &ret;
-    construct_hash_table(&fctx.per_prop_data, 1024, 0);
+    construct_hash_table(&fctx.per_prop_data, 0, 0);
 
     /* Parse the list of properties and build a list of callbacks */
     if (fctx.mode) {
