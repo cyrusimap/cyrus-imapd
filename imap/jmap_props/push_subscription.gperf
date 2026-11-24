@@ -33,6 +33,8 @@ jmap_property_t;
 "verificationCode", NULL, 0
 "expires",          NULL, 0
 "types",            NULL, 0
+"emailPush",        JMAP_URN_EMAILPUSH, 0
+"emailCount",       JMAP_URN_EMAILPUSH, 0
 %%
 
 const jmap_prop_hash_table_t jmap_pushsub_props_map = {

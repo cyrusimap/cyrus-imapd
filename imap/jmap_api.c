@@ -521,6 +521,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_quota_capabilities(capas);
         jmap_mail_capabilities(capas, accountid, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
+        jmap_emailpush_capabilities(capas);
         jmap_mdn_capabilities(capas);
         jmap_contact_capabilities(capas, authstate, authuserid, accountid);
         jmap_calendar_capabilities(capas, authstate, authuserid, accountid);

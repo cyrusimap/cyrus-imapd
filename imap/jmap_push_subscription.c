@@ -16,6 +16,8 @@
 
 #include "append.h"
 #include "http_jmap.h"
+#include "jmap_mail_query.h"
+#include "jmap_mail_query_parse.h"
 #include "json_support.h"
 #include "pushsub_db.h"
 #include "times.h"
@@ -23,12 +25,23 @@
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
+#include "imap/jmap_props/email.h"
 #include "imap/jmap_props/push_subscription.h"
 
-/* PushSubscription/get method */
-static int getpushsub(void *rock, struct pushsub_data *psdata)
+/* draft-ietf-jmap-emailpush properties, null when absent */
+static const char *const emailpush_props[] = { "emailPush", "emailCount" };
+
+struct getpushsub_rock
 {
-    struct jmap_get *get = (struct jmap_get *) rock;
+    jmap_req_t *req;
+    struct jmap_get *get;
+};
+
+/* PushSubscription/get method */
+static int getpushsub(void *vrock, struct pushsub_data *psdata)
+{
+    struct getpushsub_rock *rock = vrock;
+    struct jmap_get *get = rock->get;
 
     /* cyr_expire destroys it later */
     if (psdata->expires <= time(NULL)) {
@@ -51,6 +64,18 @@ static int getpushsub(void *rock, struct pushsub_data *psdata)
 
     if (!json_object_get(pushsub, "types")) {
         json_object_set_new(pushsub, "types", json_null());
+    }
+
+    bool using_emailpush = jmap_is_using(rock->req, JMAP_URN_EMAILPUSH);
+    for (size_t i = 0; i < sizeof(emailpush_props) / sizeof(*emailpush_props);
+         i++)
+    {
+        if (!using_emailpush) {
+            json_object_del(pushsub, emailpush_props[i]);
+        }
+        else if (!json_object_get(pushsub, emailpush_props[i])) {
+            json_object_set_new(pushsub, emailpush_props[i], json_null());
+        }
     }
 
     const char *name;
@@ -141,6 +166,8 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
         goto done;
     }
 
+    struct getpushsub_rock rock = { req, &get };
+
     /* Does the client request specific responses? */
     if (JNOTNULL(get.ids)) {
         json_t *jval;
@@ -156,12 +183,12 @@ HIDDEN int jmap_pushsub_get(jmap_req_t *req)
                 r = 0;
             }
             else {
-                getpushsub(&get, psdata);
+                getpushsub(&rock, psdata);
             }
         }
     }
     else {
-        pushsubdb_foreach(db, &getpushsub, &get);
+        pushsubdb_foreach(db, &getpushsub, &rock);
     }
 
 resp:
@@ -358,9 +385,177 @@ static void validate_types(json_t *types, json_t *invalid)
     }
 }
 
+/* An urgency-option from RFC 8030, or absent for "normal" */
+static bool urgency_is_valid(json_t *jval)
+{
+    if (!jval) {
+        return true;
+    }
+
+    const char *s = json_string_value(jval);
+    return s
+           && (!strcmp(s, "very-low") || !strcmp(s, "low")
+               || !strcmp(s, "normal") || !strcmp(s, "high"));
+}
+
+/* As jmap_email_matchmime() parses it, so the filter can be evaluated at
+ * delivery */
+static bool emailpush_filter_is_valid(jmap_req_t *req, json_t *filter)
+{
+    struct jmap_parser parser = JMAP_PARSER_INITIALIZER;
+    json_t *unsupported = json_array();
+    struct jmap_email_filter_parser_rock frock = { &parser, unsupported };
+    jmap_email_filter_parse_ctx_t ctx = {
+        &jmap_email_filtercondition_validate,
+        &jmap_filter_parser_invalid,
+        &jmap_filter_parser_push_index,
+        &jmap_filter_parser_pop,
+        req->using_capabilities,
+        &frock,
+    };
+
+    jmap_email_filter_parse(filter, &ctx);
+    bool valid =
+        !json_array_size(parser.invalid) && !json_array_size(unsupported);
+
+    jmap_parser_fini(&parser);
+    json_decref(unsupported);
+
+    return valid;
+}
+
+/* Email/get supports it, and needs no further arguments to return it */
+static bool emailpush_property_is_valid(jmap_req_t *req, json_t *jval)
+{
+    const char *name = json_string_value(jval);
+    if (!name || !strcmp(name, "bodyValues")) {
+        return false;
+    }
+    if (!strncmp(name, "header:", 7)) {
+        return name[7] != '\0';
+    }
+
+    const jmap_property_t *prop = jmap_property_find(name, &email_props);
+    return prop && (!prop->capability || jmap_is_using(req, prop->capability));
+}
+
+static void validate_emailpushconfig(jmap_req_t *req,
+                                     json_t *jconfig,
+                                     const char *path,
+                                     json_t *invalid)
+{
+    json_t *jval = json_object_get(jconfig, "filter");
+    if (JNOTNULL(jval) && !emailpush_filter_is_valid(req, jval)) {
+        json_array_append_new(invalid, json_sprintf("%s/filter", path));
+    }
+
+    jval = json_object_get(jconfig, "properties");
+    if (jval) {
+        bool valid = json_is_array(jval);
+        size_t i;
+        json_t *jprop;
+        json_array_foreach (jval, i, jprop) {
+            valid = valid && emailpush_property_is_valid(req, jprop);
+        }
+        if (!valid) {
+            json_array_append_new(invalid, json_sprintf("%s/properties", path));
+        }
+    }
+
+    if (!urgency_is_valid(json_object_get(jconfig, "urgency"))) {
+        json_array_append_new(invalid, json_sprintf("%s/urgency", path));
+    }
+}
+
+static void validate_emailcountconfig(jmap_req_t *req,
+                                      json_t *jconfig,
+                                      const char *path,
+                                      json_t *invalid)
+{
+    const char *mboxid =
+        json_string_value(json_object_get(jconfig, "mailboxId"));
+    const mbentry_t *mbentry =
+        mboxid ? jmap_mbentry_by_mboxid(req, mboxid) : NULL;
+    if (!mbentry || mbtype_isa(mbentry->mbtype) != MBTYPE_EMAIL
+        || !jmap_hasrights_mbentry(req, mbentry, JACL_READITEMS))
+    {
+        json_array_append_new(invalid, json_sprintf("%s/mailboxId", path));
+    }
+
+    const char *prop = json_string_value(json_object_get(jconfig, "property"));
+    if (!prop
+        || (strcmp(prop, "totalEmails") && strcmp(prop, "unreadEmails")
+            && strcmp(prop, "totalThreads") && strcmp(prop, "unreadThreads")))
+    {
+        json_array_append_new(invalid, json_sprintf("%s/property", path));
+    }
+
+    if (!urgency_is_valid(json_object_get(jconfig, "urgency"))) {
+        json_array_append_new(invalid, json_sprintf("%s/urgency", path));
+    }
+}
+
+/* Validate the emailPush and emailCount maps of jpushsub, unless they're
+ * unchanged from jold.  Only the user's own account supports emailpush. */
+static void validate_emailpush(jmap_req_t *req,
+                               json_t *jpushsub,
+                               json_t *jold,
+                               json_t *invalid)
+{
+    for (size_t i = 0; i < sizeof(emailpush_props) / sizeof(*emailpush_props);
+         i++)
+    {
+        const char *pname = emailpush_props[i];
+        json_t *jmap = json_object_get(jpushsub, pname);
+
+        if (!JNOTNULL(jmap)
+            || (jold && json_equal(jmap, json_object_get(jold, pname))))
+        {
+            continue;
+        }
+
+        size_t ninvalid = json_array_size(invalid);
+
+        if (!json_is_object(jmap)) {
+            json_array_append_new(invalid, json_string(pname));
+            continue;
+        }
+
+        const char *accountid;
+        json_t *jconfig;
+        json_object_foreach (jmap, accountid, jconfig) {
+            char *enc = jmap_pointer_encode(accountid);
+            char *path = strconcat(pname, "/", enc, (char *) NULL);
+
+            if (strcmp(accountid, req->userid) || !json_is_object(jconfig)) {
+                json_array_append_new(invalid, json_string(path));
+            }
+            else if (i == 0) {
+                validate_emailpushconfig(req, jconfig, path, invalid);
+            }
+            else {
+                validate_emailcountconfig(req, jconfig, path, invalid);
+            }
+
+            free(path);
+            free(enc);
+        }
+
+        /* the pushes carry user data, so they MUST be encrypted */
+        bool need_keys = !JNOTNULL(json_object_get(jpushsub, "keys"));
+        if (need_keys) {
+            json_array_append_new(invalid, json_string("keys"));
+        }
+        if (need_keys || json_array_size(invalid) > ninvalid) {
+            json_array_append_new(invalid, json_string(pname));
+        }
+    }
+}
+
 /* jmap_set_parse() has already rejected a client-set id
  * and reported a missing deviceClientId or url */
-static const char *set_create(const char *creation_id,
+static const char *set_create(jmap_req_t *req,
+                              const char *creation_id,
                               json_t *jpushsub,
                               struct mailbox *mailbox,
                               struct jmap_set *set)
@@ -407,6 +602,7 @@ static const char *set_create(const char *creation_id,
     }
 
     validate_types(json_object_get(jpushsub, "types"), invalid);
+    validate_emailpush(req, jpushsub, NULL, invalid);
 
     if (json_array_size(invalid)) {
         err = json_pack("{s:s, s:O}",
@@ -459,7 +655,8 @@ done:
 
 /* readonly holds the patch's immutable properties, as jmap_set_parse()
  * collected them */
-static void set_update(const char *id,
+static void set_update(jmap_req_t *req,
+                       const char *id,
                        json_t *jpatch,
                        json_t *readonly,
                        struct mailbox *mailbox,
@@ -519,6 +716,7 @@ static void set_update(const char *id,
     }
 
     validate_types(json_object_get(jnew, "types"), invalid);
+    validate_emailpush(req, jnew, jold, invalid);
 
     if (json_array_size(invalid)) {
         goto done;
@@ -674,7 +872,7 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
     const char *creation_id, *id;
     json_t *val;
     json_object_foreach (set.create, creation_id, val) {
-        id = set_create(creation_id, val, mailbox, &set);
+        id = set_create(req, creation_id, val, mailbox, &set);
         if (id) {
             /* Register creation id */
             jmap_add_id(req, creation_id, id);
@@ -683,7 +881,8 @@ HIDDEN int jmap_pushsub_set(struct jmap_req *req)
 
     /* update */
     json_object_foreach (set.update, id, val) {
-        set_update(id,
+        set_update(req,
+                   id,
                    val,
                    json_object_get(set.update_readonly, id),
                    mailbox,
@@ -720,4 +919,20 @@ done:
     pushsubdb_close(db);
 
     return 0;
+}
+
+HIDDEN void jmap_emailpush_capabilities(json_t *account_capabilities)
+{
+    if (!config_getswitch(IMAPOPT_JMAP_EMAILPUSH)) {
+        return;
+    }
+
+    /* the mail capability requires all of Email/query's filter conditions
+     * and every count property */
+    json_object_set_new(account_capabilities,
+                        JMAP_URN_EMAILPUSH,
+                        json_pack("{s:n s:n s:n}",
+                                  "filterConditions",
+                                  "maxFilterDepth",
+                                  "countProperties"));
 }

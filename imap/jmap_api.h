@@ -37,6 +37,7 @@
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
 #define JMAP_URN_MAIL_SHARE "urn:ietf:params:jmap:mail:share"
+#define JMAP_URN_EMAILPUSH  "urn:ietf:params:jmap:emailpush"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -290,6 +291,7 @@ extern void jmap_quota_capabilities(json_t *account_capabilities);
 extern void jmap_mail_capabilities(json_t *account_capabilities,
                                    const char *accountid, int mayCreateTopLevel);
 extern void jmap_emailsubmission_capabilities(json_t *account_capabilities);
+extern void jmap_emailpush_capabilities(json_t *account_capabilities);
 extern void jmap_mdn_capabilities(json_t *account_capabilities);
 extern void jmap_vacation_capabilities(json_t *account_capabilities);
 extern void jmap_contact_capabilities(json_t *account_capabilities,
