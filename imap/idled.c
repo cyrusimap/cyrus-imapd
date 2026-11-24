@@ -280,13 +280,13 @@ static void process_message(struct sockaddr_un *remote, json_t *msg)
     const char *type = json_string_value(json_object_get(msg, "@type"));
     pid_t pid = json_integer_value(json_object_get(msg, "pid"));
     struct sqldb_bindval bval[] = {
-        { ":pid", SQLITE_INTEGER, { .i = pid } },
-        { NULL,   SQLITE_INTEGER, { 0        } },
-        { NULL,   SQLITE_INTEGER, { 0        } },
-        { NULL,   SQLITE_INTEGER, { 0        } },
-        { NULL,   SQLITE_TEXT,    { 0        } },
-        { NULL,   SQLITE_BLOB,    { 0        } },
-        { NULL,   SQLITE_NULL,    { 0        } } };
+        { ":pid", SQLITE_INTEGER, { .i = pid             } },
+        { NULL,   SQLITE_INTEGER, { 0                    } },
+        { NULL,   SQLITE_INTEGER, { 0                    } },
+        { NULL,   SQLITE_INTEGER, { 0                    } },
+        { NULL,   SQLITE_TEXT,    { 0                    } },
+        { NULL,   SQLITE_BLOB,    { .b = BUF_INITIALIZER } },
+        { NULL,   SQLITE_NULL,    { 0                    } } };
 
     if (!strcmp(type, "start")) {
         unsigned long events = json_integer_value(json_object_get(msg, "events"));
