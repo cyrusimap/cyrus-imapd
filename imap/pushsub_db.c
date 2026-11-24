@@ -229,30 +229,6 @@ EXPORTED int pushsubdb_lookup_id(struct pushsub_db *pushsubdb, const char *id,
 }
 
 
-#define CMD_SELIMAPUID CMD_GETFIELDS                                        \
-    " WHERE imap_uid = :imap_uid;"
-
-EXPORTED int pushsubdb_lookup_imapuid(struct pushsub_db *pushsubdb, int imap_uid,
-                                    struct pushsub_data **result, int tombstones)
-{
-    struct sqldb_bindval bval[] = {
-        { ":imap_uid", SQLITE_INTEGER, { .i = imap_uid      } },
-        { NULL,        SQLITE_NULL,    { .s = NULL          } } };
-    static struct pushsub_data psdata;
-    struct read_rock rrock = { pushsubdb, &psdata, tombstones, NULL, NULL };
-    int r;
-
-    *result = memset(&psdata, 0, sizeof(struct pushsub_data));
-
-    r = sqldb_exec(pushsubdb->db, CMD_SELIMAPUID, bval, &read_cb, &rrock);
-    if (!r && !psdata.rowid) r = CYRUSDB_NOTFOUND;
-
-    psdata.imap_uid = imap_uid;
-
-    return r;
-}
-
-
 #define CMD_SELMBOX CMD_GETFIELDS                                       \
     " WHERE alive = 1;"
 
@@ -321,7 +297,7 @@ HIDDEN int pushsubdb_write(struct pushsub_db *pushsubdb, struct pushsub_data *ps
 
 #define CMD_DELETE "DELETE FROM push_subscriptions WHERE rowid = :rowid;"
 
-EXPORTED int pushsubdb_delete(struct pushsub_db *pushsubdb, unsigned rowid)
+HIDDEN int pushsubdb_delete(struct pushsub_db *pushsubdb, unsigned rowid)
 {
     struct sqldb_bindval bval[] = {
         { ":rowid", SQLITE_INTEGER, { .i = rowid } },
@@ -354,9 +330,9 @@ EXPORTED int pushsub_ensure_folder(const char *userid, struct mailbox **mailboxp
                                    1/*isadmin*/, userid, NULL/*auth_state*/,
                                    0/*flags*/, &mailbox);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to create",
-                    "mailbox=<%s> error=<%s>",
-                    mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.pushsub.folder.create.failed",
+                   lf_s("mbox.name", mboxname),
+                   lf_err("error", r));
             goto done;
         }
 
@@ -370,9 +346,9 @@ EXPORTED int pushsub_ensure_folder(const char *userid, struct mailbox **mailboxp
     if (!r && mailboxptr) {
         r = mailbox_open_iwl(mboxname, mailboxptr);
         if (r) {
-            xsyslog(LOG_ERR, "IOERROR: failed to open",
-                    "mailbox=<%s> error=<%s>",
-                    mboxname, error_message(r));
+            xsyslog_ev(LOG_ERR, "jmap.pushsub.folder.open.failed",
+                       lf_s("mbox.name", mboxname),
+                       lf_err("error", r));
             goto done;
         }
     }

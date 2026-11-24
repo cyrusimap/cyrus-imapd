@@ -42,11 +42,6 @@ int pushsubdb_close(struct pushsub_db *pushsubdb);
 int pushsubdb_lookup_id(struct pushsub_db *pushsubdb, const char *id,
                       struct pushsub_data **result, int tombstones);
 
-/* lookup an entry from 'pushsubdb' by IMAP uid
-   (optionally inside a transaction for updates) */
-int pushsubdb_lookup_imapuid(struct pushsub_db *pushsubdb, int uid,
-                           struct pushsub_data **result, int tombstones);
-
 /* process each entry in 'pushsubdb' with cb() */
 int pushsubdb_foreach(struct pushsub_db *pushsubdb,
                     int (*cb)(void *rock, struct pushsub_data *data),

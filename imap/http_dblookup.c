@@ -473,43 +473,40 @@ static int get_mbpath(struct transaction_t *txn __attribute__((unused)),
 static int get_pushsub(void *rock, struct pushsub_data *data)
 {
     json_t *array = (json_t *) rock;
-    json_t *obj;
-    json_error_t jerr;
+    json_t *obj = json_loads(data->subscription, 0, NULL);
 
-    obj = json_loads(data->subscription, 0, &jerr);
+    if (!obj) {
+        return 0;
+    }
+
     json_object_set_new(obj, "isVerified", json_boolean(data->isverified));
-
     json_array_append_new(array, obj);
 
     return 0;
 }
 
-static int get_pushsubs(struct transaction_t *txn __attribute__((unused)),
-                        const char *userid, const char *key __attribute__((unused)))
+static int get_pushsubs(struct transaction_t *txn,
+                        const char *userid,
+                        const char *key __attribute__((unused)))
 {
-    struct pushsub_db *db = NULL;
-    char *result = NULL;
-    json_t *json;
-    int ret = HTTP_NO_CONTENT;
+    struct pushsub_db *db = pushsubdb_open_userid(userid);
+    if (!db) {
+        return HTTP_NO_CONTENT;
+    }
 
-    db = pushsubdb_open_userid(userid);
-    if (!db) goto done;
-
-    json = json_array();
+    json_t *json = json_array();
     pushsubdb_foreach(db, &get_pushsub, json);
-    result = json_dumps(json, JSON_PRESERVE_ORDER|JSON_COMPACT);
+    pushsubdb_close(db);
+
+    char *result = json_dumps(json, JSON_PRESERVE_ORDER | JSON_COMPACT);
     json_decref(json);
 
     txn->resp_body.type = "application/json";
     txn->resp_body.len = strlen(result);
-
     write_body(HTTP_OK, txn, result, txn->resp_body.len);
-    ret = 0;
-
-done:
     free(result);
-    if (db) pushsubdb_close(db);
-    return ret;
+
+    return 0;
 }
 
 struct lookup_type_t {

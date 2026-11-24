@@ -3982,8 +3982,6 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
     struct pushsub_data *psdata = NULL;
     const char *id = NULL;
     struct buf msg_buf = BUF_INITIALIZER;
-    int isexpunged = (new->internal_flags & FLAG_INTERNAL_EXPUNGED ? 1 : 0);
-    int isverified = (new->system_flags & FLAG_FLAGGED ? 1 : 0);
     int r;
 
     if (mbtype_isa(mailbox_mbtype(mailbox)) != MBTYPE_JMAPPUSHSUB) return 0;
@@ -3994,6 +3992,9 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
     /* conditions in which there's nothing to do */
     if (!new) return 0;
 
+    bool isexpunged = new->internal_flags & FLAG_INTERNAL_EXPUNGED;
+    bool isverified = new->system_flags & FLAG_FLAGGED;
+
     /* phantom record - never really existed here */
     if (!old && isexpunged) return 0;
 
@@ -4002,11 +4003,20 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
 
     /* Get subscription id from Subject */
     message_read_bodystructure(new, &body);
-    id = body->subject;
-
-    assert(id);
+    id = body ? body->subject : NULL;
+    if (!id) {
+        /* not one of ours, so there's nothing to index */
+        xsyslog_ev(LOG_WARNING, "jmap.pushsub.record.invalid",
+                   lf_mailbox(mailbox),
+                   lf_msgrecord(new));
+        goto done;
+    }
 
     pushsubdb = mailbox_open_pushsub(mailbox);
+    if (!pushsubdb) {
+        r = IMAP_IOERROR;
+        goto done;
+    }
 
     /* Find existing record for this id */
     pushsubdb_lookup_id(pushsubdb, id, &psdata, /*tombstones*/1);
@@ -4029,14 +4039,18 @@ static int mailbox_update_pushsub(struct mailbox *mailbox,
         r = pushsubdb_write(pushsubdb, psdata);
     }
     else {
-        /* Load message containing the script */
+        /* Load message containing the subscription */
         r = mailbox_map_record(mailbox, new, &msg_buf);
         if (r) goto done;
 
-        /* Parse existing subscription */
-        json_error_t err;
         json_t *jpushsub =
-            json_loads(buf_cstring(&msg_buf) + new->header_size, 0, &err);
+            json_loads(buf_cstring(&msg_buf) + new->header_size, 0, NULL);
+        if (!jpushsub) {
+            xsyslog_ev(LOG_WARNING, "jmap.pushsub.record.invalid",
+                       lf_mailbox(mailbox),
+                       lf_msgrecord(new));
+            goto done;
+        }
         char *subscription = json_dumps(jpushsub, JSON_COMPACT);
 
         psdata->mailbox = mailbox_uniqueid(mailbox);
