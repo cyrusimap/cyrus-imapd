@@ -982,6 +982,15 @@ draft-ietf-jmap-calendars
 
     JMAP for Calendars
 
+draft-ietf-jmap-conditional
+
+    JMAP Conditional Set (-03).  "ifUnchangedBy" is supported on every
+    Foo/set.  A precondition on a property Foo/get withholds from the user
+    (a sharee's view of a non-public CalendarEvent, the counts of a Mailbox
+    the user may only look up) fails with "forbidden".  "atomic" is always
+    rejected with "cannotApplyAtomically", before "ifUnchangedBy" is
+    evaluated.
+
 draft-ietf-mailmaint-imap-objectid-bis
 
     IMAP Extension for Object Identifiers (OBJECTID+)

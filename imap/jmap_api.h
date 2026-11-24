@@ -37,6 +37,7 @@
 #define JMAP_URN_PRINCIPALS "urn:ietf:params:jmap:principals"
 #define JMAP_URN_CALENDAR_PREFERENCES "urn:ietf:params:jmap:calendars:preferences"
 #define JMAP_URN_MAIL_SHARE "urn:ietf:params:jmap:mail:share"
+#define JMAP_URN_CONDITIONAL "urn:ietf:params:jmap:conditional"
 
 #define JMAP_CORE_EXTENSION          "https://cyrusimap.org/ns/jmap/core"
 #define JMAP_CONTACTS_EXTENSION      "https://cyrusimap.org/ns/jmap/contacts"
@@ -188,6 +189,10 @@ typedef struct jmap_req {
     ptrarray_t *method_calls;
     strarray_t *scheduled_emails;
     const strarray_t *using_capabilities;
+
+    /** Set while Foo/get runs for ifUnchangedBy preconditions: object id to
+     *  the properties it withheld.  See jmap_report_withheld(). */
+    json_t *withheld;
 } jmap_req_t;
 
 /* Fetch the contents of the blob identified by blobid,
@@ -321,6 +326,16 @@ extern int jmap_mboxlist_lookup(const char *name,
  * completion. */
 extern void jmap_add_subreq(jmap_req_t *req, const char *method,
                             json_t *args, const char *client_id);
+
+/**
+ * Record that Foo/get withheld property @p prop of object @p id, or gave a
+ * placeholder for it, because the user may not read it.  An ifUnchangedBy
+ * precondition on it then fails the method with "forbidden"
+ * (draft-ietf-jmap-conditional Section 9.1).  Does nothing otherwise.
+ */
+extern void jmap_report_withheld(jmap_req_t *req,
+                                 const char *id,
+                                 const char *prop);
 
 /* Creation ids */
 extern const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id);
@@ -497,6 +512,18 @@ struct jmap_set {
 extern void jmap_set_default_failed(struct jmap_set *set, const char *id,
                                     const char *type, const char *desc);
 
+/**
+ * Parse the arguments of a Foo/set (or Blob/upload) call into @p set.
+ *
+ * When the request is using urn:ietf:params:jmap:conditional, this also
+ * evaluates "ifUnchangedBy" by running Foo/get for the referenced objects,
+ * and rejects "atomic": true.  Either can set @p err, so a caller must
+ * check @p err before making any change.
+ *
+ * @param valid_props  the type's properties, used to validate patches and
+ *                     precondition pointers; NULL skips that validation
+ * @param err          set to a method-level error object on failure
+ */
 extern void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,

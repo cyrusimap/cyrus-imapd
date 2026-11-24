@@ -1081,6 +1081,21 @@ HIDDEN void jmap_add_subreq(jmap_req_t *req, const char *method,
     ptrarray_push(req->method_calls, json_pack("[s,o,s]", method, args, client_id));
 }
 
+HIDDEN void jmap_report_withheld(jmap_req_t *req,
+                                 const char *id,
+                                 const char *prop)
+{
+    if (!req->withheld || !id) {
+        return;
+    }
+    json_t *props = json_object_get(req->withheld, id);
+    if (!props) {
+        props = json_object();
+        json_object_set_new(req->withheld, id, props);
+    }
+    json_object_set_new(props, prop, json_true());
+}
+
 const char *jmap_lookup_id(jmap_req_t *req, const char *creation_id)
 {
     return hash_lookup(creation_id, req->created_ids);
@@ -1936,6 +1951,208 @@ HIDDEN void jmap_set_default_failed(struct jmap_set *set, const char *id,
     }
 }
 
+/* Name the top-level property of a PatchObject pointer.  Caller must free. */
+static char *pointer_propname(const char *path)
+{
+    const char *slash = strchr(path, '/');
+    char *name = slash ? jmap_pointer_decode(path, slash - path) : NULL;
+    return name ? name : xstrdup(path);
+}
+
+static void set_validate_preconditions(jmap_req_t *req,
+                                       struct jmap_parser *parser,
+                                       json_t *if_unchanged_by,
+                                       const jmap_property_set_t *valid_props)
+{
+    const char *id;
+    json_t *patch;
+
+    jmap_parser_push(parser, "ifUnchangedBy");
+    json_object_foreach (if_unchanged_by, id, patch) {
+        if (json_is_null(patch)) {
+            continue;
+        }
+        if (!json_is_object(patch)) {
+            jmap_parser_invalid(parser, id);
+            continue;
+        }
+        if (!valid_props) {
+            continue;
+        }
+
+        const char *path;
+        json_t *jval;
+        jmap_parser_push(parser, id);
+        json_object_foreach (patch, path, jval) {
+            char *pname = pointer_propname(path);
+            const jmap_property_t *prop =
+                jmap_property_find(pname, valid_props);
+            if (!prop
+                || (prop->capability && !jmap_is_using(req, prop->capability)))
+            {
+                jmap_parser_invalid(parser, path);
+            }
+            free(pname);
+        }
+        jmap_parser_pop(parser);
+    }
+    jmap_parser_pop(parser);
+}
+
+/* Evaluate every ifUnchangedBy precondition against the Foo/get
+ * representation of its object, before the Foo/set changes anything.
+ * Returns NULL if all hold, else the method-level error to return.
+ * ifInState is checked first, against the state Foo/get reports, so its
+ * stateMismatch wins over any precondition error. */
+static json_t *set_check_preconditions(jmap_req_t *req,
+                                       json_t *if_unchanged_by,
+                                       const char *if_in_state)
+{
+    const char *slash = strrchr(req->method, '/');
+    struct buf getname = BUF_INITIALIZER;
+    buf_printf(&getname, "%.*s/get", (int) (slash - req->method), req->method);
+
+    const jmap_method_t *get_mp =
+        find_methodproc(buf_cstring(&getname),
+                        &req->settings->methods,
+                        (strarray_t *) req->using_capabilities);
+    if (!get_mp || ((get_mp->flags & JMAP_NEED_CSTATE) && !req->cstate)) {
+        xsyslog_ev(LOG_ERR, "jmap.set.precondition.noget",
+                   lf_s("jmap.method", req->method));
+        buf_free(&getname);
+        return jmap_server_error(IMAP_INTERNAL);
+    }
+
+    /* Fetch only the properties the preconditions reference */
+    json_t *ids = json_array();
+    json_t *proplist = json_pack("[s]", "id");
+    const char *key;
+    json_t *patch;
+    json_object_foreach (if_unchanged_by, key, patch) {
+        const char *id = *key == '#' ? jmap_lookup_id(req, key + 1) : key;
+        if (id) {
+            json_array_append_new(ids, json_string(id));
+        }
+
+        const char *path;
+        json_t *jval;
+        json_object_foreach (patch, path, jval) {
+            /* Foo/get ignores repeated properties */
+            char *pname = pointer_propname(path);
+            json_array_append_new(proplist, json_string(pname));
+            free(pname);
+        }
+    }
+
+    /* Run Foo/get in this request's context, collecting its response */
+    struct jmap_req getreq = *req;
+    getreq.method = buf_cstring(&getname);
+    getreq.args = json_pack("{s:s s:o s:o}",
+                            "accountId",
+                            req->accountid,
+                            "ids",
+                            ids,
+                            "properties",
+                            proplist);
+    getreq.response = json_array();
+    getreq.perf_details = json_object();
+    getreq.withheld = json_object();
+
+    int r = get_mp->proc(&getreq);
+
+    /* Keep any caches Foo/get populated, so jmap_finireq frees them */
+    req->mbentry_byid = getreq.mbentry_byid;
+    req->mboxid_byrole = getreq.mboxid_byrole;
+
+    json_t *err = NULL;
+    json_t *current = json_object();
+    json_t *res = json_array_get(getreq.response, 0);
+    const char *resname = json_string_value(json_array_get(res, 0));
+    json_t *resargs = json_array_get(res, 1);
+
+    if (r) {
+        err = jmap_server_error(r);
+    }
+    else if (!strcmpsafe(resname, "error")) {
+        const char *type = json_string_value(json_object_get(resargs, "type"));
+        if (!strcmpsafe(type, "invalidArguments")) {
+            err = json_pack("{s:s s:[s]}",
+                            "type",
+                            "invalidArguments",
+                            "arguments",
+                            "ifUnchangedBy");
+        }
+        else {
+            err = json_incref(resargs);
+        }
+    }
+    else {
+        const char *state =
+            json_string_value(json_object_get(resargs, "state"));
+        if (if_in_state && state && strcmp(if_in_state, state)) {
+            err = json_pack("{s:s}", "type", "stateMismatch");
+        }
+
+        size_t i;
+        json_t *obj;
+        json_array_foreach (json_object_get(resargs, "list"), i, obj) {
+            const char *id = json_string_value(json_object_get(obj, "id"));
+            if (id) {
+                json_object_set(current, id, obj);
+            }
+        }
+    }
+
+    json_t *failed = json_array();
+    json_object_foreach (if_unchanged_by, key, patch) {
+        if (err) {
+            break;
+        }
+        const char *id = *key == '#' ? jmap_lookup_id(req, key + 1) : key;
+
+        /* A precondition can't read what Foo/get withheld */
+        json_t *withheld = id ? json_object_get(getreq.withheld, id) : NULL;
+        const char *path;
+        json_t *jval;
+        json_object_foreach (patch, path, jval) {
+            char *pname = pointer_propname(path);
+            if (!err && json_object_get(withheld, pname)) {
+                err = json_pack("{s:s s:s}",
+                                "type",
+                                "forbidden",
+                                "description",
+                                "ifUnchangedBy reads a property the user "
+                                "may not read");
+            }
+            free(pname);
+        }
+
+        /* null requires that the object not exist; a pointer that does not
+         * apply cleanly is not satisfied */
+        json_t *obj = id ? json_object_get(current, id) : NULL;
+        bool holds = json_is_null(patch)
+                         ? !obj
+                         : obj
+                               && jmap_precondition_check(obj, patch)
+                                      == JMAP_PRECOND_MATCH;
+        if (!holds) {
+            json_array_append_new(failed, json_string(key));
+        }
+    }
+    if (!err && json_array_size(failed)) {
+        err = json_pack("{s:s s:O}", "type", "stateMismatch", "failed", failed);
+    }
+    json_decref(failed);
+
+    json_decref(current);
+    json_decref(getreq.perf_details);
+    json_decref(getreq.withheld);
+    json_decref(getreq.response);
+    json_decref(getreq.args);
+    buf_free(&getname);
+    return err;
+}
+
 HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
                            const jmap_property_set_t *valid_props,
                            jmap_args_parse_cb args_parse, void *args_rock,
@@ -1958,9 +2175,15 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
     const char *key, *id;
     json_t *arg, *val, *create = NULL, *update = NULL, *destroy = NULL;
+    json_t *if_unchanged_by = NULL;
+    bool atomic = false;
     hash_table willDestroy = HASH_TABLE_INITIALIZER;
     uint64_t limit = req->settings->limits[MAX_OBJECTS_IN_SET];
     uint64_t total = 0;
+
+    /* The conditional arguments are defined only for Foo/set */
+    bool is_conditional = jmap_is_using(req, JMAP_URN_CONDITIONAL)
+                          && strcmp(req->method, "Blob/upload");
 
     json_object_foreach(jargs, key, arg) {
         size_t size = 0;
@@ -1986,6 +2209,36 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
             }
             else if (JNOTNULL(arg)) {
                 jmap_parser_invalid(parser, "applyEmptyUpdates");
+            }
+        }
+
+        /* ifUnchangedBy and atomic (urn:ietf:params:jmap:conditional) */
+        else if (is_conditional && !strcmp(key, "ifUnchangedBy")) {
+            /* Evaluated by a Foo/get, so bounded by its limit */
+            if (json_object_size(arg)
+                > (size_t) req->settings->limits[MAX_OBJECTS_IN_GET])
+            {
+                *err = json_pack("{s:s s:s}",
+                                 "type",
+                                 "requestTooLarge",
+                                 "description",
+                                 "number of ifUnchangedBy ids exceeds "
+                                 "maxObjectsInGet limit");
+                return;
+            }
+            if (json_is_object(arg)) {
+                if_unchanged_by = arg;
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "ifUnchangedBy");
+            }
+        }
+        else if (is_conditional && !strcmp(key, "atomic")) {
+            if (json_is_boolean(arg)) {
+                atomic = json_is_true(arg);
+            }
+            else if (JNOTNULL(arg)) {
+                jmap_parser_invalid(parser, "atomic");
             }
         }
 
@@ -2133,9 +2386,19 @@ HIDDEN void jmap_set_parse(jmap_req_t *req, struct jmap_parser *parser,
 
     free_hash_table(&willDestroy, NULL);
 
+    if (if_unchanged_by) {
+        set_validate_preconditions(req, parser, if_unchanged_by, valid_props);
+    }
+
     if (json_array_size(parser->invalid)) {
         *err = json_pack("{s:s s:O}", "type", "invalidArguments",
                 "arguments", parser->invalid);
+    }
+    else if (atomic) {
+        *err = json_pack("{s:s}", "type", "cannotApplyAtomically");
+    }
+    else if (json_object_size(if_unchanged_by)) {
+        *err = set_check_preconditions(req, if_unchanged_by, set->if_in_state);
     }
 }
 
