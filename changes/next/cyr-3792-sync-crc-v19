@@ -22,6 +22,10 @@ Mailboxes that a 3.12 or earlier server replicates or transfers to this version
 are created as version 19.  Upgrade them with `reconstruct -V max` once the
 whole cluster runs this version.
 
+A tool that writes mailboxes with the sync protocol should send `VERSION 0` in
+APPLY MAILBOX to get the server's newest mailbox version, as
+`Cyrus::AccountSync` now does.
+
 
 GitHub issue:
 
