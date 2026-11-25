@@ -85,6 +85,9 @@ Build and packaging changes
 ===========================
 
 * OpenSSL 3.0 or later is now required for all builds.
+* Cyrus now builds against OpenSSL 4.0 as well as 3.x.  Certificate common
+  names that aren't plain ASCII are now converted to UTF-8 before being
+  logged or used as the SASL EXTERNAL identity.
 * Use libical 4.0.0 or later, or a compatible development snapshot reporting
   at least 3.99.99.
 * Xapian search now requires Xapian 2.0.0 or later, or a recent 1.5.x
