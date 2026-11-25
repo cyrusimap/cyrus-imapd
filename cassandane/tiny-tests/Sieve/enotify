@@ -23,12 +23,12 @@ EOF
     $self->{instance}->deliver($msg1);
 
     my $data = $self->{instance}->getnotify();
-    my ($updatecal) = grep { $_->{METHOD} eq 'updatecal' } @$data;
-    my ($mailto) = grep { $_->{METHOD} eq 'mailto' } @$data;
+    my ($updatecal) = grep { $_->{method} eq 'updatecal' } @$data;
+    my ($mailto) = grep { $_->{method} eq 'mailto' } @$data;
 
     $self->assert_not_null($updatecal);
     $self->assert_matches(qr/<text\@example.com>: Message 1/,
-                          $updatecal->{MESSAGE});
+                          $updatecal->{message});
     $self->assert_not_null($mailto);
-    $self->assert_matches(qr/Hello World!/, $mailto->{MESSAGE});
+    $self->assert_matches(qr/Hello World!/, $mailto->{message});
 }

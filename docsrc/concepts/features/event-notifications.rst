@@ -47,6 +47,24 @@ Available Event Notifications
     *   :ref:`imap-features-event-notifications-applepushservice`
 
 
+.. _imap-features-event-notifications-transport:
+
+Transport
+=========
+
+Event notifications are sent to the :imapdconf:`notifysocket` with the
+:imapdconf:`event_notifier` method.  With a ``json:`` notifysocket, each
+notification is one line of JSON on a new connection to that stream socket::
+
+    {"method":"pusher","class":"EVENT","message":{"event":"MessageNew",...}}
+
+``class`` is ``EVENT`` for the events below, and ``message`` is the event
+itself, as in the examples.  The same socket also carries ``MAIL``,
+``SIEVE`` and ``IMIP`` notifications, with ``priority``, ``user``,
+``mailbox``, ``options`` and ``filepath`` members when they apply.  An
+``IMIP`` message is a JSON object; the others are strings.  The listener
+replies with one line, ``{"status":"OK"}`` on success.
+
 Example Event Notifications
 ===========================
 

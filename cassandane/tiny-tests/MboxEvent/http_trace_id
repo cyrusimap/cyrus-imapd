@@ -39,7 +39,7 @@ sub test_http_trace_id ($self) {
         'X-Trace-Id'   => $trace_id,
     );
 
-    my @events = map { decode_json($_->{MESSAGE}) }
+    my @events = map { $_->{message} }
                      $self->{instance}->getnotify->@*;
 
     # We expect at least one event for the PUT; whatever events fired,

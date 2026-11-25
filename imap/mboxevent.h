@@ -98,11 +98,10 @@ enum event_param {
     EVENT_VISIBLE_USERS,
     /* 24 */ EVENT_DAV_FILENAME,
     /* 25 */ EVENT_DAV_UID,
-    /* 26 */ EVENT_ENVELOPE,
-    /* 27 */ EVENT_SESSIONID,
-    /* 28 */ EVENT_BODYSTRUCTURE,
-    /* 29 */ EVENT_CLIENT_ID,
-    /* 30 */ EVENT_SESSION_ID,
+    /* 26 */ EVENT_SESSIONID,
+    /* 27 */ EVENT_BODYSTRUCTURE,
+    /* 28 */ EVENT_CLIENT_ID,
+    /* 29 */ EVENT_SESSION_ID,
     EVENT_TRACE_ID,
     EVENT_CONVEXISTS,
     EVENT_CONVUNSEEN,
@@ -150,7 +149,7 @@ enum event_param {
     EVENT_MESSAGES_UNSCHEDULED_USERID,
     EVENT_MESSAGES_UNSCHEDULED_COUNT,
     EVENT_METADATA_ENTRIES,
-    /* 31 */ EVENT_MESSAGE_CONTENT
+    /* 30 */ EVENT_MESSAGE_CONTENT
 };
 
 /* messageContent number that is always the last */

@@ -6,6 +6,7 @@
 #include <config.h>
 #endif
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <syslog.h>
@@ -26,6 +27,9 @@
 #include "mailbox.h"
 #include "util.h"
 #include "times.h"
+#include "charset.h"
+
+#include <jansson.h>
 
 /* generated headers are not necessarily in current directory */
 #include "imap/imap_err.h"
@@ -45,31 +49,58 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
     return 0;
 }
 
-static void notify_dlist(const char *sockpath, const char *method,
-                         const char *class, const char *priority,
-                         const char *user, const char *mailbox,
-                         int nopt, const char **options,
-                         const char *message, const char *fname)
+/* The only reply is {"status":"..."}, so anything longer is broken */
+#define NOTIFY_MAXREPLY 1024
+/* Seconds to wait for the reply; the notification has been sent by then */
+#define NOTIFY_REPLY_TIMEOUT 10
+
+static void set_optstring(json_t *obj, const char *key, const char *val)
+{
+    if (val) json_object_set_new(obj, key, json_string(val));
+}
+
+/* Send one notification as a line of JSON on a stream socket, and read the
+ * one-line JSON reply. */
+static void notify_stream(const char *sockpath, const char *method,
+                          const char *class, const char *priority,
+                          const char *user, const char *mailbox,
+                          int nopt, const char **options,
+                          json_t *message, const char *fname)
 {
     struct sockaddr_un sun_data;
     struct protstream *in = NULL, *out = NULL;
-    struct dlist *dl = dlist_newkvlist(NULL, "NOTIFY");
-    struct dlist *res = NULL;
-    struct dlist *il;
-    int c;
+    struct buf line = BUF_INITIALIZER;
+    json_t *req = json_object();
+    json_t *res = NULL;
+    char *payload = NULL;
+    const char *status;
     int soc = -1;
-    int i;
+    int c;
 
-    dlist_setatom(dl, "METHOD", method);
-    dlist_setatom(dl, "CLASS", class);
-    dlist_setatom(dl, "PRIORITY", priority);
-    dlist_setatom(dl, "USER", user);
-    dlist_setatom(dl, "MAILBOX", mailbox);
-    il = dlist_newlist(dl, "OPTIONS");
-    for (i = 0; i < nopt; i++)
-        dlist_setatom(il, NULL, options[i]);
-    dlist_setatom(dl, "MESSAGE", message);
-    dlist_setatom(dl, "FILEPATH", fname);
+    set_optstring(req, "method", method);
+    set_optstring(req, "class", class);
+    set_optstring(req, "priority", priority);
+    set_optstring(req, "user", user);
+    set_optstring(req, "mailbox", mailbox);
+    if (nopt) {
+        json_t *jopts = json_array();
+        for (int i = 0; i < nopt; i++)
+            json_array_append_new(jopts, json_string(options[i]));
+        json_object_set_new(req, "options", jopts);
+    }
+    if (message) json_object_set(req, "message", message);
+    set_optstring(req, "filepath", fname);
+
+    payload = json_dumps(req, JSON_COMPACT | JSON_PRESERVE_ORDER);
+    if (!payload) {
+        xsyslog_ev(LOG_ERR, "notify.send.failed",
+                   lf_s("notify.class", class),
+                   lf_s_opt("u.username", user),
+                   lf_s_opt("mbox.name", mailbox),
+                   lf_s("notify.method", method),
+                   lf_s("notify.step", "encode"));
+        goto out;
+    }
 
     memset((char *)&sun_data, 0, sizeof(sun_data));
     sun_data.sun_family = AF_UNIX;
@@ -97,28 +128,30 @@ static void notify_dlist(const char *sockpath, const char *method,
 
     in = prot_new(soc, 0);
     out = prot_new(soc, 1);
-    /* Force use of LITERAL+ */
-    prot_setisclient(in, 1);
-    prot_setisclient(out, 1);
+    prot_settimeout(in, NOTIFY_REPLY_TIMEOUT);
 
-    dlist_print(dl, 1, out);
-    prot_printf(out, "\r\n");
+    prot_printf(out, "%s\r\n", payload);
     prot_flush(out);
 
-    c = dlist_parse(&res, DLIST_PARSE_PARSEKEY | DLIST_PARSE_ALLOW_FILE_LITERALS, in);
-    if (c == '\r') c = prot_getc(in);
-    /* XXX - do something with the response?  Like have NOTIFY answer */
-    if (c == '\n' && res && res->name) {
-        if (strcmp(res->name, "OK")) {
-            xsyslog_ev(LOG_NOTICE, "notify.send.refused",
+    while ((c = prot_getc(in)) != EOF && c != '\n') {
+        if (c == '\r') continue;
+        if (buf_len(&line) >= NOTIFY_MAXREPLY) {
+            xsyslog_ev(LOG_ERR, "notify.send.failed",
                        lf_s("notify.class", class),
                        lf_s_opt("u.username", user),
                        lf_s_opt("mbox.name", mailbox),
                        lf_s("notify.method", method),
-                       lf_s("notify.response", res->name));
+                       lf_s("notify.step", "response"),
+                       lf_s("notify.reason", "too_long"),
+                       lf_s("sys.path", sockpath));
+            goto out;
         }
+        buf_putc(&line, c);
     }
-    else {
+
+    res = json_loads(buf_cstring(&line), 0, NULL);
+    status = json_string_value(json_object_get(res, "status"));
+    if (!status) {
         xsyslog_ev(LOG_ERR, "notify.send.failed",
                    lf_s("notify.class", class),
                    lf_s_opt("u.username", user),
@@ -127,36 +160,68 @@ static void notify_dlist(const char *sockpath, const char *method,
                    lf_s("notify.step", "response"),
                    lf_s("sys.path", sockpath));
     }
+    else if (strcmp(status, "OK")) {
+        xsyslog_ev(LOG_NOTICE, "notify.send.refused",
+                   lf_s("notify.class", class),
+                   lf_s_opt("u.username", user),
+                   lf_s_opt("mbox.name", mailbox),
+                   lf_s("notify.method", method),
+                   lf_s("notify.response", status));
+    }
 
 out:
     if (in) prot_free(in);
     if (out) prot_free(out);
     if (soc >= 0) close(soc);
-    dlist_free(&dl);
-    dlist_free(&res);
+    buf_free(&line);
+    free(payload);
+    json_decref(req);
+    json_decref(res);
 }
 
 EXPORTED void notify(const char *method,
-            const char *class, const char *priority,
-            const char *user, const char *mailbox,
-            int nopt, const char **options,
-            const char *message, const char *fname)
+                     const char *class, const char *priority,
+                     const char *user, const char *mailbox,
+                     int nopt, const char **options,
+                     json_t *message, const char *fname)
 {
     const char *notify_sock = config_getstring(IMAPOPT_NOTIFYSOCKET);
     int soc = -1;
     struct sockaddr_un sun_data;
     char buf[NOTIFY_MAXSIZE] = "", noptstr[20];
+    const char *text = NULL;
+    char *freeme = NULL;
     int buflen = 0;
     int i, r = 0;
     unsigned bufsiz;
     socklen_t optlen;
 
-    if (!strncmp(notify_sock, "dlist:", 6)) {
-        notify_dlist(notify_sock+6, method, class, priority,
-                     user, mailbox, nopt, options,
-                     message, fname);
+    const char *stream_path = NULL;
+    if (notify_sock && !strncmp(notify_sock, "json:", 5)) {
+        stream_path = notify_sock + 5;
+    }
+    else if (notify_sock && !strncmp(notify_sock, "dlist:", 6)) {
+        /* the stream format is JSON now, whichever prefix selects it */
+        static bool warned = false;
+        if (!warned) {
+            xsyslog_ev(LOG_WARNING, "notify.config.deprecated",
+                       lf_s("config.option", "notifysocket"),
+                       lf_s("sys.path", notify_sock + 6));
+            warned = true;
+        }
+        stream_path = notify_sock + 6;
+    }
+    if (stream_path) {
+        notify_stream(stream_path, method, class, priority,
+                      user, mailbox, nopt, options, message, fname);
         return;
     }
+
+    /* A string message goes into the datagram as is */
+    if (json_is_string(message))
+        text = json_string_value(message);
+    else if (message)
+        text = freeme = json_dumps(message, JSON_COMPACT | JSON_PRESERVE_ORDER);
 
     soc = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (soc == -1) {
@@ -214,7 +279,7 @@ EXPORTED void notify(const char *method,
         r = add_arg(buf, bufsiz, options[i], &buflen);
     }
 
-    if (!r) r = add_arg(buf, bufsiz, message, &buflen);
+    if (!r) r = add_arg(buf, bufsiz, text, &buflen);
     if (!r && fname) r = add_arg(buf, bufsiz, fname, &buflen);
 
     if (r) {
@@ -250,4 +315,23 @@ EXPORTED void notify(const char *method,
 
 out:
     xclose(soc);
+    free(freeme);
+}
+
+EXPORTED json_t *notify_text(const char *text)
+{
+    json_t *jtext;
+    char *utf8;
+
+    if (!text) text = "";
+    if ((jtext = json_string(text))) return jtext;
+
+    /* Not valid UTF-8: each bad sequence becomes U+FFFD, the rest is kept */
+    charset_t cs = charset_lookupname("utf-8");
+    utf8 = charset_to_utf8cstr(text, strlen(text), cs, ENCODING_NONE);
+    charset_free(&cs);
+    jtext = json_string(utf8 ? utf8 : "");
+    free(utf8);
+
+    return jtext;
 }

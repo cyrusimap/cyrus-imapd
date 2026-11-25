@@ -82,8 +82,8 @@ EOF
     $CalDAV->Request('PUT', $href, $card, 'Content-Type' => 'text/calendar', 'Schedule-Address' => 'cassandane@example.net');
 
     my $newdata = $self->{instance}->getnotify();
-    my ($imip) = grep { $_->{METHOD} eq 'imip' } @$newdata;
-    my $payload = decode_json($imip->{MESSAGE});
+    my ($imip) = grep { $_->{method} eq 'imip' } @$newdata;
+    my $payload = $imip->{message};
 
     $self->assert_str_equals($payload->{recipient}, "friend\@example.com");
 }

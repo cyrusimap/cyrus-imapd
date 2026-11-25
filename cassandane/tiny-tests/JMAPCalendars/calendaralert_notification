@@ -94,8 +94,8 @@ EOF
     my $data = $self->{instance}->getnotify();
     my @events;
     foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
+        if ($_->{class} eq 'EVENT') {
+            my $e = $_->{message};
             if ($e->{event} eq "CalendarAlarm") {
                 push @events, $e;
             }
@@ -119,8 +119,8 @@ EOF
     $data = $self->{instance}->getnotify();
     @events = ();
     foreach (@$data) {
-        if ($_->{CLASS} eq 'EVENT') {
-            my $e = decode_json($_->{MESSAGE});
+        if ($_->{class} eq 'EVENT') {
+            my $e = $_->{message};
             if ($e->{event} eq "CalendarAlarm") {
                 push @events, $e;
             }
