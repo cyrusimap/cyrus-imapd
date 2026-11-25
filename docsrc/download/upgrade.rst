@@ -343,6 +343,8 @@ JMAP Mail:
   capability, and its values are MailboxRights objects.  The ``mayRead``,
   ``mayWrite`` and ``mayAdmin`` rights are gone, and ``myRights`` no longer
   includes ``mayAdmin``.
+* Setting ``shareWith`` on a Mailbox requires administrative access to it, or
+  to its parent when creating one.
 * The ``imageSize`` and ``isDeleted`` body properties, and SearchSnippet
   attachments, need ``https://cyrusimap.org/ns/jmap/mail`` in ``using``.
 * ``Email/query`` keyword filters apply to the Email as a whole: "notKeyword"
