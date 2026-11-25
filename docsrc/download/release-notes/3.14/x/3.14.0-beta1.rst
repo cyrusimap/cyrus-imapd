@@ -79,9 +79,6 @@ Storage changes
   existing behavior.  ``always`` will be the only behavior in the next major
   release, so see :ref:`upgrade_3.14_compact_ids` for how to get there.
 
-But if your upgrade is skipping over earlier releases, please do not miss
-:ref:`3.6.0 Storage changes <relnotes_3.6.0_storage_changes>`.
-
 .. _relnotes-3.14.0-beta1_build:
 
 Build and packaging changes
