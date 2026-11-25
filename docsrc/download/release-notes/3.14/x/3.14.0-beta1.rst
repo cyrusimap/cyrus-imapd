@@ -314,6 +314,8 @@ The 3.12 series first addressed these issues in :ref:`3.12.5
 * :cve:`CVE-2026-61914`: A JMAP sharee with ``mayWriteOwn`` on a calendar
   could update or destroy any event in it, not only the events the sharee
   organizes.  Reported by Michael Lynch (mtlynch.io).
+* :cve:`CVE-2026-111857`: A JMAP blob id containing an overlong GUID could
+  overflow a fixed-size buffer.  Reported by offsetmd@riseup.net.
 
 The following security fixes were made in public, without an embargo, as
 described in :ref:`security-classification`.  Several also shipped in 3.12.5.
