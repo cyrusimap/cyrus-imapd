@@ -4400,6 +4400,18 @@ static void validate_recurrencerule(jscal_ctx_t *ctx,
 static void validate_entry(jscal_ctx_t *ctx,
                            struct jmap_parser *parser, json_t *jentry);
 
+static bool has_scheduled_participant(json_t *jentry)
+{
+    const char *key;
+    json_t *jpart;
+    json_object_foreach (json_object_get(jentry, "participants"), key, jpart) {
+        if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool same_calendaraddress(json_t *jpart1, json_t *jpart2)
 {
     return !strcmpsafe(
@@ -4502,6 +4514,16 @@ static void validate_recurrenceoverrides(jscal_ctx_t *ctx,
             }
             if (JNOTNULL(jovr) && !json_array_size(jinvalid)) {
                 validate_override_calendaraddresses(jmaster, jovr, jinvalid);
+            }
+            // An override can only be scheduled if the main event is.  The
+            // override can't set organizerCalendarAddress, so report the
+            // participants as invalid instead.
+            if (JNOTNULL(jovr) && !json_array_size(jinvalid)
+                && JNULL(json_object_get(jmaster, "organizerCalendarAddress"))
+                && has_scheduled_participant(jovr)
+                && !jobj_has_icalquirk(jovr, ICALQUIRK_NO_ORGANIZER_ATTENDEE))
+            {
+                json_array_append_new(jinvalid, json_string("participants"));
             }
             if (JNOTNULL(jovr) && !json_array_size(jinvalid)) {
                 // The patch-object is valid, let's validate if the resulting
@@ -4831,21 +4853,14 @@ static void validate_entry(jscal_ctx_t *ctx,
     // Validate co-existence of organizerCalendarAddress and participants.
     bool has_organizer =
         JNOTNULL(json_object_get(jentry, "organizerCalendarAddress"));
-    bool has_scheduled_participant = false;
-    json_t *jpart;
-    json_object_foreach(json_object_get(jentry, "participants"), key, jpart) {
-        if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
-            has_scheduled_participant = true;
-            break;
-        }
-    }
+    bool has_scheduled = has_scheduled_participant(jentry);
 
-    if (has_organizer != has_scheduled_participant) {
+    if (has_organizer != has_scheduled) {
         if (!jobj_has_icalquirk(jentry, ICALQUIRK_NO_ORGANIZER_ATTENDEE)) {
             if (!has_organizer) {
                 jmap_parser_invalid(parser, "organizerCalendarAddress");
             }
-            else if (!has_scheduled_participant) {
+            else if (!has_scheduled) {
                 jmap_parser_invalid(parser, "participants");
             }
         }

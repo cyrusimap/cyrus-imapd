@@ -144,4 +144,71 @@ sub test_calendarevent_set_organizer
     $self->assert_str_equals('mailto:cassandane@example.com',
         $res->[0][1]{created}{eventFirstUnscheduled}{organizerCalendarAddress});
     $jmap->_json_codec->canonical(0);
+
+    xlog "Create recurring event without participants";
+    my $recurring = $self->default_user->calendarevents->create({
+        start => '2022-01-28T14:00:00',
+        recurrenceRule => {
+            frequency => 'daily',
+            count => 3,
+        },
+    });
+    $eventId = $recurring->id;
+    my $instanceId = encode_eventid($eventId, '20220129T140000');
+
+    xlog "Reject participants added only to a recurrence override";
+    $res = $jmap->request([
+        ['CalendarEvent/set', {
+            update => {
+                $eventId => {
+                    recurrenceOverrides => {
+                        '2022-01-29T14:00:00' => {
+                            participants => {
+                                someone => {
+                                    calendarAddress => 'mailto:someone@example.com',
+                                },
+                            },
+                        },
+                    },
+                },
+                $instanceId => {
+                    participants => {
+                        someone => {
+                            calendarAddress => 'mailto:someone@example.com',
+                        },
+                    },
+                },
+            },
+        }],
+    ]);
+    $self->assert_cmp_deeply({
+        $eventId => superhashof({
+            type => 'invalidProperties',
+            properties => ['recurrenceOverrides/2022-01-29T14:00:00/participants'],
+        }),
+        $instanceId => superhashof({
+            type => 'invalidProperties',
+            properties => ['recurrenceOverrides/2022-01-29T14:00:00/participants'],
+        }),
+    }, $res->single_sentence('CalendarEvent/set')->as_set->update_errors);
+
+    xlog "Use server-set organizerCalendarAddress when participants added to main event and override";
+    $recurring->update({
+        participants => {
+            someone => {
+                calendarAddress => 'mailto:someone@example.com',
+            },
+        },
+        recurrenceOverrides => {
+            '2022-01-29T14:00:00' => {
+                participants => {
+                    other => {
+                        calendarAddress => 'mailto:other@example.com',
+                    },
+                },
+            },
+        },
+    });
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $recurring->organizerCalendarAddress);
 }
