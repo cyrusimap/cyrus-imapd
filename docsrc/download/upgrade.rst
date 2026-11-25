@@ -129,8 +129,11 @@ Audit logging is now always on.  Sites that did not previously enable
 Your logging volume will increase.  Make sure your logging setup is ready for
 it, and consider limiting which syslog priorities are kept.
 
-Login and audit log lines are now written as ``logfmt``.  Anything that parses
-those lines will need updating.
+Cyrus now writes all of its syslog output as ``logfmt``: each line is an
+``event=`` name followed by ``key=value`` pairs.  Every log line has changed,
+so anything that parses Cyrus logs will need updating.
+:ref:`developer-logfmt` describes the format, and ``doc/logfmt-keys`` in the
+source lists the keys.
 
 .. _upgrade_3.14_first_start:
 

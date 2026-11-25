@@ -193,10 +193,10 @@ Logging
 -------
 
 * Audit logging is now always enabled.
-* Cyrus syslogs are being converted to ``logfmt``, a structured logging
-  format with a documented event and key vocabulary.  So far this affects
-  primarily the login logs and the audit log.  Tools that parse those lines
-  need updating.
+* Cyrus now writes its syslog output as ``logfmt``, a structured logging
+  format with a documented event and key vocabulary.  Every log line has
+  changed, so tools that parse Cyrus logs need updating.  See
+  :ref:`upgrade_3.14_logging`.
 * The audit log's traffic counts (``used.bytes.out``) now include all output.
   Previously large responses were logged as much smaller than they were.
 
