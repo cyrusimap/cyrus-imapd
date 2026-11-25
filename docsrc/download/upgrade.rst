@@ -227,6 +227,10 @@ sync repairs such a user: run ``sync_client -u <user>`` or ``sync_client -A``.
 Replication no longer deletes the wrong mailbox when a mailbox name has been
 reused, but only once both ends have been upgraded.
 
+The new ``/vendor/cmu/cyrus-imapd/accountid`` annotation is kept in
+``mailboxes.db`` and replicated with the INBOX.  An older replica doesn't
+store it, so upgrade replicas before setting it.
+
 .. _upgrade_3.14_freebusy:
 
 Sharing and access control

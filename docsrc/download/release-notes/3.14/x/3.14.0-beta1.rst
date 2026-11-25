@@ -441,6 +441,9 @@ IMAP
   response carrying MAILBOXID and ACCOUNTID (and EMAILID and THREADID for
   messages), mailbox selection by identifier, and OBJECTID as a STATUS
   attribute, FETCH item and LIST return option.
+* An admin can set the new ``/vendor/cmu/cyrus-imapd/accountid`` annotation
+  on a user's INBOX to choose the OBJECTID+ ACCOUNTID reported for all of that
+  user's mailboxes.  Without it, the ACCOUNTID remains the userid.
 * Metadata and annotation changes are now reported: through the IMAP NOTIFY
   events MailboxMetadataChange, ServerMetadataChange and AnnotationChange
   (:rfc:`5465`), as unsolicited METADATA responses after ENABLE METADATA
