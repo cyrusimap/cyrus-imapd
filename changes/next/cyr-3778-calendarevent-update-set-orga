@@ -1,0 +1,27 @@
+Description:
+
+CalendarEvent/set now sets organizerCalendarAddress when an update adds
+participants to an event that had none, as JMAP Calendars requires.  Creating
+an event also sets it if the first participant has no calendarAddress.
+Participants with a calendarAddress in a recurrence override are rejected
+unless the main event has an organizerCalendarAddress.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
