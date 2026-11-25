@@ -1,0 +1,68 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_pushsub_expire
+    :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create an expired and a live subscription";
+    my $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            create => {
+                old => {
+                    deviceClientId => 'a889-ffea-910',
+                    url => 'https://example.com/push/old',
+                    expires => '2020-01-01T00:00:00Z',
+                },
+                new => {
+                    deviceClientId => 'a889-ffea-911',
+                    url => 'https://example.com/push/new',
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $oldid = "" . $res->single_sentence->arguments->{created}{old}{id};
+    my $newid = "" . $res->single_sentence->arguments->{created}{new}{id};
+
+    xlog $self, "the expired subscription is gone from get and set";
+    $res = $jmap->request([
+        ['PushSubscription/get', { accountId => \undef }, 'R1'],
+        ['PushSubscription/get', {
+            accountId => \undef,
+            ids => [ $oldid, $newid ],
+        }, 'R2'],
+        ['PushSubscription/set', {
+            accountId => \undef,
+            update => { $oldid => { types => [ 'Email' ] } },
+        }, 'R3'],
+    ]);
+    $self->assert_cmp_deeply([ $newid ],
+        [ map { $_->{id} } $res->sentence(0)->arguments->{list}->@* ]);
+    $self->assert_cmp_deeply([ $newid ],
+        [ map { $_->{id} } $res->sentence(1)->arguments->{list}->@* ]);
+    $self->assert_cmp_deeply([ $oldid ],
+        $res->sentence(1)->arguments->{notFound});
+    $self->assert_str_equals('notFound',
+        $res->sentence(2)->arguments->{notUpdated}{$oldid}{type});
+
+    xlog $self, "cyr_expire destroys only the expired subscription";
+    $self->{instance}->getnotify();
+    $self->{instance}->run_command({ cyrus => 1 },
+        'cyr_expire', '-E' => '1', '-X' => '0');
+
+    my @expired =
+        grep { $_->{event} eq 'MessageExpire' }
+        map  { decode_json($_->{MESSAGE}) }
+        grep { $_->{CLASS} eq 'EVENT' } $self->{instance}->getnotify()->@*;
+    $self->assert_num_equals(1, scalar @expired);
+
+    $res = $jmap->request([
+        ['PushSubscription/get', { accountId => \undef }, 'R1'],
+    ]);
+    $self->assert_cmp_deeply([ $newid ],
+        [ map { $_->{id} } $res->single_sentence->arguments->{list}->@* ]);
+}

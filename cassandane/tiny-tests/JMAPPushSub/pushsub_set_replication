@@ -1,0 +1,65 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_pushsub_set_replication
+    :needs_component_jmap
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+
+    xlog $self, "create subscription";
+    my $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            create => {
+                1 => {
+                    deviceClientId => 'a889-ffea-910',
+                    url => 'https://example.com/push/?device=X8980fc&client=12c6d086',
+                    types => [ 'Mailbox', 'Email' ],
+                },
+            },
+        }, 'R1'],
+    ]);
+    my $id = "" . $res->single_sentence->arguments->{created}{1}{id};
+
+    my ($code) =
+        map  { $_->{content}{verificationCode} }
+        grep { $_->{event} eq 'PushSubscriptionCreated' }
+        map  { decode_json($_->{MESSAGE}) }
+        grep { $_->{CLASS} eq 'EVENT' } $self->{instance}->getnotify()->@*;
+    $self->assert_not_null($code);
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "verify and update subscription";
+    $res = $jmap->request([
+        ['PushSubscription/set', {
+            accountId => \undef,
+            update => {
+                $id => {
+                    verificationCode => $code,
+                    expires => '2038-01-19T03:14:07Z',
+                    types => [ 'Email', 'EmailSubmission' ],
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_not_null(
+        $res->single_sentence->arguments->{updated}{$id}{expires});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+
+    xlog $self, "destroy subscription";
+    $res = $jmap->request([
+        ['PushSubscription/set', { accountId => \undef, destroy => [ $id ] }, 'R1'],
+        ['PushSubscription/get', { accountId => \undef }, 'R2'],
+    ]);
+    $self->assert_cmp_deeply([ $id ], $res->sentence(0)->arguments->{destroyed});
+    $self->assert_cmp_deeply([], $res->sentence(1)->arguments->{list});
+
+    $self->run_replication();
+    $self->check_replication('cassandane');
+}
