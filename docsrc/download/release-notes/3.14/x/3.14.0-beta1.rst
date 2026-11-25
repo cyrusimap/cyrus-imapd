@@ -647,6 +647,10 @@ Server
 * The TLS session cache now requests writes without syncing to disk.  The
   ``twom`` backend honors the request.  The default ``twoskip`` backend still
   syncs its writes.
+* Renaming a Sieve script now deletes the bytecode stored under its old
+  name.  A destroyed script can no longer hide a live one of the same name,
+  which let ``SieveScript/set`` create a duplicate.  ``SieveScript/set`` no
+  longer runs ``onSuccessActivateScript`` after a failed destroy.
 * :cyrusman:`promstatsd(8)` is less susceptible to timing drift.
 * :cyrusman:`ctl_zoneinfo(8)` ``-r`` now indexes a time zone alias in a region
   directory under its full name (``Indian/Mayotte``, not ``Mayotte``).
