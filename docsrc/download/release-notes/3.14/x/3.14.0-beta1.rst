@@ -479,6 +479,10 @@ Sieve
   usernames.
 * Sieve redirect can add a DKIM2 Message-Instance header field recording the
   header fields the script changed.  See :imapdconf:`dkim2_message_instance`.
+* Admins can manage global Sieve scripts over ManageSieve again, both
+  server-wide and per domain, and attach them to shared mailboxes.  Global
+  scripts are now stored in a shared #sieve mailbox, one per domain.
+  (:issue:`4546`)
 * :cyrusman:`sieveshell(1)` has a new ``--tls`` option to use STARTTLS,
   verifying the server certificate, with ``--cafile`` and ``--capath`` to
   trust extra CAs.  (:issue:`530`)

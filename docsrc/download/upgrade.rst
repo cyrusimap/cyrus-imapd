@@ -260,6 +260,14 @@ templates before reinstalling them.  ``ihave`` now enables only the extensions
 successfully tested, and templates that use ``$text[...]$`` must enable the
 ``body`` extension.
 
+Global Sieve scripts
+~~~~~~~~~~~~~~~~~~~~
+
+Global scripts installed directly in the global Sieve directory keep working.
+The first time an admin connects to :cyrusman:`timsieved(8)`, they are moved
+into a shared #sieve mailbox, and from then on should be managed over
+ManageSieve.
+
 Special-use mailboxes
 ~~~~~~~~~~~~~~~~~~~~~
 
