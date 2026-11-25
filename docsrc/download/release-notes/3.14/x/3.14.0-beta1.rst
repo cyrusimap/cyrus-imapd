@@ -501,6 +501,10 @@ JMAP
   are MailboxRights objects, so each right can be granted on its own.  It
   requires :imapdconf:`jmap_nonstandard_extensions` until the draft is
   published.
+* The new ``Mailbox/markAllEmailRead`` method, part of the Cyrus Mail
+  extension, marks all email in another user's mailboxes as seen for the
+  caller in one call.  It logs one ``auditlog.touched.bulk`` line per mailbox
+  in place of an ``auditlog.touched`` line per email.
 * ``MDN/parse`` (:rfc:`9007`) is implemented.
 * ``Identity/set`` (:rfc:`8621`) is implemented.  The user's one Identity
   cannot be created, changed or destroyed, and the method says so, rather than
