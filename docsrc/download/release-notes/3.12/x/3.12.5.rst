@@ -1,0 +1,252 @@
+:tocdepth: 3
+
+===============================
+Cyrus IMAP 3.12.5 Release Notes
+===============================
+
+Download from GitHub:
+
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.5/cyrus-imapd-3.12.5.tar.gz
+    *   https://github.com/cyrusimap/cyrus-imapd/releases/download/cyrus-imapd-3.12.5/cyrus-imapd-3.12.5.tar.gz.sig
+
+.. _relnotes-3.12.5-changes:
+
+Changes since 3.12.4
+====================
+
+Security fixes
+--------------
+
+* :cve:`CVE-2026-61914`: JMAP CalendarEvent/set ACL bypass
+
+  An authenticated user with mayWriteOwn access on another user's calendar
+  could patch owner-controlled fields (title, timing, location, etc.) on any
+  event in that calendar, or destroy that event, and not only the events that
+  the sharee organized.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-111857`: Overlong GUID in a blob id overflows a buffer
+
+  An authenticated JMAP user could construct a blob id containing an overlong
+  GUID and overflow a fixed-size buffer when the server decoded it.
+
+  Reported by: offsetmd@riseup.net.
+
+* :cve:`CVE-2026-111859`: Changing mailbox permissions gated by wrong
+  permissions
+
+  Through the nonstandard mailbox sharing feature of JMAP for Mail, an
+  authenticated JMAP user with whom a mailbox had been shared could update the
+  permissions on that mailbox, including granting themselves or others further
+  access.  The correct behavior (now enforced) is to require administrative
+  access to the mailbox.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* :cve:`CVE-2026-111860`: Sieve script delivery permits path traversal
+
+  By appending a message to the hidden, special #sieve mailbox, an attacker
+  could write a file outside the designated storage for Sieve scripts.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+* Revoked mailbox access not enforced on an already-selected mailbox (no CVE
+  assigned)
+
+  When an authenticated user's access to a shared mailbox was revoked by the
+  sharing user, they retained access through any existing connection's current
+  mailbox selection until the mailbox was closed or the session ended.
+
+  Reported by: Michael Lynch (mtlynch.io).
+
+The following security fixes were made in public, without an embargo, as
+described in the `security classification policy
+<https://www.cyrusimap.org/dev/support/security-classification.html>`_.
+
+* Revoking a sharee's DAV access to a calendar or address book now also drops
+  their subscription to it, and calalarmd no longer sends alarms to a sharee
+  whose access has been revoked.
+* IMAP CATENATE now counts TEXT and UTF8 parts toward
+  :imapdconf:`maxmessagesize`, which could previously be exceeded.
+* JMAP ``Email/copy`` between accounts and the saved copy made by
+  ``EmailSubmission/set`` are now charged against the storage quota.
+* The list form of IMAP GETMETADATA now performs the same ACL checks as the
+  single-mailbox form, and no longer reveals whether a mailbox exists.
+* IMAP LIST ... RETURN (STATUS) now returns STATUS only for mailboxes the user
+  can read, and LIST (SUBSCRIBED) reports a subscribed mailbox the user can no
+  longer look up as \\NonExistent.
+* IMAP THREAD now reads at most 20 references from any one message, and
+  returns NO rather than corrupting memory if the thread node count would
+  overflow.
+* Fixed a buffer overflow when appending DEPTH to a long metadata entry name.
+* xtext escapes in an LMTP ``AUTH=`` parameter now decode correctly, rather
+  than truncating the identity used for ACL checks.
+* The number of parameters accepted from one MIME header is now capped at 128.
+* Parsing a relative IMAP URL with an empty mailbox part no longer reads (or
+  writes) the byte before the start of the URL.
+* An HTTP Authorization header with no credentials, or with a malformed
+  parameter list, no longer causes a read past the end of its buffer.
+* HTTP/2 request bodies are now bounded by :imapdconf:`maxmessagesize`.
+* WebSocket messages are now bounded in size, both as received and after
+  permessage-deflate inflation.
+* Malformed or out-of-range HTTP chunk sizes are now rejected, rather than
+  truncated so that a chunk could be read as the start of another request.
+  A chunk size with a ``0x`` prefix is also now rejected.
+* A malformed DAV If: header no longer crashes httpd.
+* Fixed an off-by-one in reinserting the "magic plus" suffix into a
+  canonicalized username.  This was reachable only with
+  :imapdconf:`imapmagicplus` or :imapdconf:`popsubfolders` enabled.
+* A JMAP ``Email/query`` whose ``anchorOffset`` lands past the end of the
+  results now returns an empty slice, rather than reading past the end of the
+  results.
+* httpd now escapes the client-supplied Host header in HTML responses,
+  preventing reflected cross-site scripting.
+* The RSS module now escapes message data before writing it into HTML pages
+  and Atom feeds.
+* :cyrusman:`smmapd(8)` now rejects a netstring length that is negative or
+  larger than the maximum request size, rather than overflowing a stack
+  buffer.
+* A Sieve notify ``:message`` template with a malformed ``$text[`` reference
+  is now rejected at compile time, and no longer reads past the end of the
+  message body at run time.  Using ``$text[`` now requires the "body"
+  extension.
+* Computing the length of a base64-encoded message body no longer overflows
+  for bodies over roughly 1.5GB.
+* Base64-encoding an empty body no longer writes a CRLF past the end of its
+  buffer, which could crash imapd during APPEND or merge one MIME part into
+  the next.
+* Negative numeric Sieve match variable references are now rejected.
+* Sieve "ihave" (:rfc:`5463`) is now handled strictly: an extension is usable
+  only once required or successfully tested, and a failed test suppresses
+  syntax errors only within the block it guards.  Previously, a script that
+  should have been rejected could run and read uninitialized memory.
+* A Sieve include whose script name contains ``/`` once variables are
+  expanded is now rejected.  Previously, such a name passed compilation and
+  let a user's script load and execute any compiled script on the server,
+  including other users' scripts.  JMAP ``SieveScript/test`` now resolves
+  include names in the account's own Sieve directory (or the global one, for
+  ``:global``), as lmtpd does.
+* A Sieve ``fileinto`` that targets a mailbox the script owner doesn't own,
+  by name or by ``:mailboxid``, now requires the ``i`` (insert) right on it.
+  Previously ``p`` (post) was enough, so a mailbox granting "anyone p" for
+  plus-addressing could be filed into from any other user's script, bypassing
+  its owner's own Sieve script.  Sharees who file into another user's or a
+  shared mailbox from their Sieve scripts must now hold ``i`` on it; messages
+  that lack it are delivered to the script owner's INBOX instead.
+* A Sieve mailboxid, as used by ``:mailboxid`` and ``mailboxidexists``, now
+  matches another user's mailbox only if the script owner has the ``l``
+  (lookup) right on it.
+* A sharee can no longer rename their own Sieve, calendar, or address book
+  mailbox into the sharer's tree.  Previously, a Sieve mailbox moved this way
+  would then filter the sharer's incoming mail.  Only an admin may now move a
+  non-email mailbox into another user's tree.
+* A dlist parsed from stored metadata can no longer contain a file literal,
+  which previously wrote a file to disk.
+* JMAP vCard blobIds now encode the content identifier of the card, so they
+  cannot be constructed and do not resolve to replaced content.  Older blobIds
+  are rejected.
+* A calendar's display name is now properly escaped in a Content-Disposition
+  header, and httpd drops any response header containing control characters.
+* JMAP ``accountId`` and ``fromAccountId`` arguments are now validated before
+  being used to build paths.
+* Setting ``isSeenShared`` with JMAP ``Mailbox/set`` now requires the admin
+  right.
+* JMAP email keyword names may no longer contain ``/``.  Previously, a
+  read-only sharee could use such a keyword to write arbitrary keywords,
+  including ``$seen``.
+* JMAP ``Blob/upload`` now enforces ``maxSizeBlobSet``, including across
+  chains of uploads that each catenate the one before.
+* JMAP ``SieveScript/test`` no longer crashes when ``emailBlobIds`` contains
+  a non-string value, nor when the last email it tests fails.
+* JMAP ``MDN/send`` no longer lets CR/LF from the original message's Subject
+  or Original-Recipient, or from a client-supplied ``reportingUA``, into the
+  MDN it generates.  Previously, the sender of a message requesting a receipt
+  could inject header fields and body content into the MDN sent back.
+* A JMAP calendar event's ``hideAttendees`` setting now also applies to the
+  event's blob and to ``CalendarEvent/copy``, which previously revealed the
+  hidden attendees to sharees.
+* MANAGED-ID parameters are now stripped from ATTACH properties in iMIP
+  messages, so a sender can no longer cause another event's managed
+  attachment to be expunged.
+* iTIP scheduling messages can no longer modify, cancel, or add occurrences to
+  an event that has no ORGANIZER.
+* Every component of an incoming iTIP REPLY must now name the attendee who
+  sent it, and a REPLY can no longer add an attendee who wasn't invited.
+  Previously, a REPLY could set another attendee's participation status in a
+  later component, or add its sender to an event as a new attendee.
+* CalDAV and JMAP scheduling no longer let a user schedule as another local
+  user's address, whether that address comes from the user's
+  calendar-user-address-set, a Schedule-Address request header, or the
+  addresses a stored calendar resource was scheduled with.  Previously, a
+  user could list another user's address and then update or cancel that
+  user's events in other local users' calendars, or reply in an attendee's
+  name.  Aliases that are no user's own address keep working; to schedule on
+  behalf of another user, share their calendar instead.
+* An incoming iTIP message carrying more than one VTIMEZONE with the same TZID
+  no longer causes a double free.
+* A CalDAV free/busy request naming more than one local attendee no longer
+  causes a double free.
+* A CalDAV free/busy request with very many attendees no longer replaces the
+  organizer address in its replies with unrelated server memory.
+* JMAP ``Backup/restoreCalendars`` now stores each user's private per-user
+  data under that user, rather than all of it under the restored account.
+* The iSchedule receiver now requires the Originator header to match the
+  ORGANIZER (or, for a REPLY, an ATTENDEE) of the message.
+* CalDAV and CardDAV DELETE and MOVE now require both the ``t`` and ``e``
+  rights.
+* A calendar sharee without ``mayWriteAll`` or ``mayWriteOwn`` can no longer
+  change an event's SEQUENCE.
+* A CalDAV or CardDAV DELETE of a shared collection now only removes the share
+  from the authenticated user's own home, and only for a collection they can
+  see.  Previously any authenticated user could unsubscribe any other user from
+  a shared collection and mark their invitation declined.
+* The DAV expand-property REPORT now requires read rights on its target and on
+  every resource it expands into, as PROPFIND does.  Previously, a user could
+  read the display name, home-set URLs, quota, and sync-token of any other
+  user's principal or home-set collection.
+* A stored VPATCH with a PATCH-TARGET, PATCH-DELETE, or PATCH-PARAMETER that
+  has no value or no initial segment no longer crashes httpd and calalarmd.
+* Hex-decoding routines no longer accept non-ASCII bytes as hex digits, nor
+  read past their lookup table when given them.
+
+Updates to default configuration
+--------------------------------
+
+* The IMAP URLAUTH extension is now disabled by default.  Sites whose clients
+  need it can enable it with the new :imapdconf:`allowurlauth` option.  Note
+  that URLAUTH tokens survive mailbox deletion and grant access to recreated
+  mailbox content.  Support for URLAUTH will be removed in Cyrus 3.14.
+
+Removed features
+----------------
+
+* CalDAV no longer honors the experimental ``Schedule-Sender-Address`` and
+  ``Schedule-Sender-Name`` request headers.
+
+Build changes
+-------------
+
+* Cyrus IMAP 3.12 can now be built and tested by cyd and dar.
+
+Bug fixes
+---------
+
+* Fixed: :issue:`6454`: the OK response to IMAP AUTHENTICATE is now sent
+  before a negotiated SASL security layer takes effect
+* HTTP/1.1 chunk size extensions are now accepted (and ignored), rather than
+  rejected
+* httpd now rejects a request that repeats the method override header, and
+  closes the connection after a request with an unknown method
+* JMAP ``SieveScript/test`` now accepts an empty ``emailBlobIds``, and no
+  longer fails on its second call in the same process
+* Improved the performance of search cost estimation, which was spreading its
+  cache across only a handful of hash buckets
+* A domain's global Sieve scripts are now found by ``include :global``, rather
+  than always falling back to the server-wide ones
+* CalDAV free/busy lookups now combine multiple VAVAILABILITY components
+  correctly, rather than reporting available time as busy
+* An ACL set with the DAV ACL method now always keeps the owner's implicit
+  rights, as IMAP SETACL does
+* The DAV acl-principal-prop-set REPORT now lists principals with negative
+  rights correctly, and lists each principal once
