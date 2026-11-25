@@ -1198,6 +1198,97 @@ static void test_parse_nstring(void)
     buf_free(&b);
 }
 
+static void test_parse_nstring_corrupt(void)
+{
+    /* a corrupt cache must not be read past its end */
+    static const char *const inputs[] = {
+        "{", "{5", "{5}", "{5}\r", "{5}\r\nab", "{}\r\nab",
+        "{99999999999}\r\nab", "\"unterminated", "N", "NI",
+    };
+
+    for (size_t i = 0; i < VECTOR_SIZE(inputs); i++) {
+        char *str = xstrdup(inputs[i]);
+        char *ptr = str;
+
+        CU_ASSERT_PTR_NULL(parse_nstring(&ptr));
+        CU_ASSERT_PTR_EQUAL(ptr, str + strlen(inputs[i]));
+        free(str);
+    }
+}
+
+static void test_parse_env_address(void)
+{
+    struct address addr;
+    char *str;
+
+    str = xstrdup("(\"Name\" NIL {4}\r\nuser \"example.com\")");
+    message_parse_env_address(str, &addr);
+    CU_ASSERT_STRING_EQUAL(addr.name, "Name");
+    CU_ASSERT_PTR_NULL(addr.route);
+    CU_ASSERT_STRING_EQUAL(addr.mailbox, "user");
+    CU_ASSERT_STRING_EQUAL(addr.domain, "example.com");
+    free(str);
+
+    /* truncated: the missing fields are NIL */
+    str = xstrdup("(\"Name\"");
+    message_parse_env_address(str, &addr);
+    CU_ASSERT_STRING_EQUAL(addr.name, "Name");
+    CU_ASSERT_PTR_NULL(addr.route);
+    CU_ASSERT_PTR_NULL(addr.mailbox);
+    CU_ASSERT_PTR_NULL(addr.domain);
+    free(str);
+
+    str = xstrdup("(\"Name\" NIL {9}\r\nuser");
+    message_parse_env_address(str, &addr);
+    CU_ASSERT_STRING_EQUAL(addr.name, "Name");
+    CU_ASSERT_PTR_NULL(addr.mailbox);
+    CU_ASSERT_PTR_NULL(addr.domain);
+    free(str);
+}
+
+static void test_parse_cached_envelope(void)
+{
+    char *tokens[NUMENVTOKENS];
+    char *env;
+
+    env = xstrdup("\"Mon, 1 Jan 2024 00:00:00 +0000\" {5}\r\nHello "
+                  "((\"Name\" NIL \"user\" \"example.com\")) "
+                  "NIL NIL NIL NIL NIL NIL \"<id@example.com>\"");
+    parse_cached_envelope(env, tokens, NUMENVTOKENS);
+    CU_ASSERT_STRING_EQUAL(tokens[ENV_DATE], "Mon, 1 Jan 2024 00:00:00 +0000");
+    CU_ASSERT_STRING_EQUAL(tokens[ENV_SUBJECT], "Hello");
+    CU_ASSERT_STRING_EQUAL(tokens[ENV_FROM],
+                           "(\"Name\" NIL \"user\" \"example.com\")");
+    CU_ASSERT_PTR_NULL(tokens[ENV_SENDER]);
+    CU_ASSERT_STRING_EQUAL(tokens[ENV_MSGID], "<id@example.com>");
+    free(env);
+}
+
+static void test_parse_cached_envelope_corrupt(void)
+{
+    /* a corrupt cache must not be read past its end */
+    static const char *const inputs[] = {
+        "{", "{5", "{5}", "{5}\r", "\"Date\" {5}\r\nab",
+        "{99999999999}\r\nab", "N", "NI", "(N", "({",
+        /* more tokens than fit, which used to loop forever */
+        "NIL NIL NIL NIL NIL NIL NIL NIL NIL NIL NIL",
+    };
+    char *tokens[NUMENVTOKENS];
+
+    for (size_t i = 0; i < VECTOR_SIZE(inputs); i++) {
+        char *env = xstrdup(inputs[i]);
+        parse_cached_envelope(env, tokens, NUMENVTOKENS);
+        free(env);
+    }
+
+    /* the tokens before a corrupt literal are kept */
+    char *env = xstrdup("\"Date\" {5}\r\nab");
+    parse_cached_envelope(env, tokens, NUMENVTOKENS);
+    CU_ASSERT_STRING_EQUAL(tokens[ENV_DATE], "Date");
+    CU_ASSERT_PTR_NULL(tokens[ENV_SUBJECT]);
+    free(env);
+}
+
 #undef TESTCASE
 
 #define TESTCASE(input, expout) \

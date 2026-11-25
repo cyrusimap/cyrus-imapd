@@ -2937,16 +2937,53 @@ EXPORTED void message_free_body(struct body *body)
     if (body->decoded_body) free(body->decoded_body);
 }
 
+/* The most digits a cached literal's length may have */
+#define CACHED_LITERAL_MAXDIGITS 9
+
+/*
+ * Parse the literal at *cp, "{len}\r\n" followed by len bytes.  On success,
+ * points *cp at the literal's first byte, sets *lenp, and returns true.
+ * Returns false, leaving *cp alone, if the literal is malformed or runs past
+ * the end of the string, as it can in a corrupt cache.
+ */
+static bool parse_cached_literal(char **cp, size_t *lenp)
+{
+    char *c = *cp + 1; /* skip open brace */
+    size_t len = 0;
+    int ndigits = 0;
+
+    while (cyrus_isdigit((int) *c)) {
+        if (++ndigits > CACHED_LITERAL_MAXDIGITS) return false;
+        len = len * 10 + (*c - '0');
+        c++;
+    }
+    if (!ndigits || c[0] != '}' || c[1] != '\r' || c[2] != '\n') return false;
+    c += 3;
+    if (strnlen(c, len) < len) return false;
+
+    *cp = c;
+    *lenp = len;
+    return true;
+}
+
+/* Skip "NIL", or as much of it as the string holds */
+static char *skip_cached_nil(char *c)
+{
+    for (int n = 0; n < 3 && *c; n++) c++;
+    return c;
+}
+
 /*
  * Parse a cached envelope into individual tokens
  *
  * When inside a list (ncom > 0), we parse the individual tokens but don't
  * isolate them -- we return the entire list as a single token.
  */
-HIDDEN void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
+EXPORTED void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
 {
     char *c;
-    int i = 0, ncom = 0, len;
+    int i = 0, ncom = 0;
+    size_t len;
 
     /*
      * We have no way of indicating that we parsed less than
@@ -2965,15 +3002,15 @@ HIDDEN void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
         case 'N':                       /* "NIL" */
         case 'n':
             if (!ncom) {
-                if(i>=tokens_size) break;
+                if (i >= tokens_size) return;
                 tokens[i++] = NULL;     /* empty token */
             }
-            c += 3;                     /* skip "NIL" */
+            c = skip_cached_nil(c);
             break;
         case '"':                       /* quoted string */
             c++;                        /* skip open quote */
             if (!ncom) {
-                if(i>=tokens_size) break;
+                if (i >= tokens_size) return;
                 tokens[i++] = c;        /* start of string */
             }
             while (*c && *c != '"') {           /* find close quote */
@@ -2986,15 +3023,10 @@ HIDDEN void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
             }
             break;
         case '{':                       /* literal */
-            c++;                        /* skip open brace */
-            len = 0;                    /* determine length of literal */
-            while (cyrus_isdigit((int) *c)) {
-                len = len*10 + *c - '0';
-                c++;
-            }
-            c += 3;                     /* skip close brace & CRLF */
-            if (!ncom){
-                if(i>=tokens_size) break;
+            /* the rest of a corrupt envelope can't be tokenized */
+            if (!parse_cached_literal(&c, &len)) return;
+            if (!ncom) {
+                if (i >= tokens_size) return;
                 tokens[i++] = c;        /* start of literal */
             }
             c += len;                   /* skip literal */
@@ -3002,7 +3034,7 @@ HIDDEN void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
         case '(':                       /* start of address */
             c++;                        /* skip open paren */
             if (!ncom) {
-                if(i>=tokens_size) break;
+                if (i >= tokens_size) return;
                 tokens[i++] = c;        /* start of address list */
             }
             ncom++;                     /* new open - inc counter */
@@ -3031,41 +3063,44 @@ EXPORTED char *parse_nstring(char **str)
         val = cp+1; /* skip " */
         do {
             cp = strchr(cp+1, '"');
-            if (!cp) return NULL; /* whole thing is broken */
+            if (!cp) goto broken;
         } while (*(cp-1) == '\\'); /* skip escaped " */
         *cp++ = '\0';
     }
     else if (*cp == '{') {
-        int len = 0;
         /* yeah, it may be a literal too */
-        cp++;
-        while (cyrus_isdigit((int) *cp)) {
-            len = len*10 + *cp - '0';
-            cp++;
-        }
-        cp += 3;                /* skip close brace & CRLF */
+        size_t len;
+        if (!parse_cached_literal(&cp, &len)) goto broken;
         val = cp;
         val[len] = '\0';
         cp += len;
     }
     else { /* NIL */
         val = NULL;
-        cp += 3;
+        cp = skip_cached_nil(cp);
     }
 
     *str = cp;
     return val;
+
+broken:
+    /* the whole thing is broken, so leave nothing more to parse */
+    *str += strlen(*str);
+    return NULL;
 }
 
 EXPORTED void message_parse_env_address(char *str, struct address *addr)
 {
+    /* parse_nstring() writes NULs into str, so find its end first */
+    const char *end = str + strlen(str);
+
     if (*str == '(') str++; /* skip ( */
     addr->name = parse_nstring(&str);
-    str++; /* skip SP */
+    if (str < end) str++; /* skip SP */
     addr->route = parse_nstring(&str);
-    str++; /* skip SP */
+    if (str < end) str++; /* skip SP */
     addr->mailbox = parse_nstring(&str);
-    str++; /* skip SP */
+    if (str < end) str++; /* skip SP */
     addr->domain = parse_nstring(&str);
 }
 
