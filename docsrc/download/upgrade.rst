@@ -464,8 +464,7 @@ were optional are now required:
   are now part of every build.  Drop the ``--enable-http`` and
   ``--enable-calalarmd`` configure options from build scripts.
 * For Xapian search, Xapian 2.0.0 or later, or a recent 1.5.x snapshot, and a
-  C++17 compiler.  Xapian 1.4 is no longer supported, although configure only
-  rejects versions older than that.
+  C++17 compiler.  configure rejects older versions.
 * perl 5.28.0 or later, with the ``Moo`` and ``App::Cmd`` modules
 * ``gperf``
 * ``vzic``, to build the time zone data (see :ref:`upgrade_timezones`)

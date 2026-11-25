@@ -91,8 +91,7 @@ Build and packaging changes
 * Use libical 4.0.0 or later, or a compatible development snapshot reporting
   at least 3.99.99.
 * Xapian search now requires Xapian 2.0.0 or later, or a recent 1.5.x
-  snapshot, and a C++17 compiler.  Xapian 1.4 is no longer supported, although
-  configure only rejects versions older than that.
+  snapshot, and a C++17 compiler.  configure now rejects older versions.
 * HTTP support, CalDAV, CardDAV, WebDAV and the calendar alarm daemon are now
   part of every build.  The ``--enable-http`` and ``--enable-calalarmd``
   configure options are gone, and their ``--disable`` forms no longer disable
