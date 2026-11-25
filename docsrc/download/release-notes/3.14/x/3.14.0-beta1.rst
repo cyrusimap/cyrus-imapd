@@ -261,6 +261,9 @@ Other
 * Sharing a mailbox, calendar or address book through JMAP, or with a WebDAV
   ACL request, now emits an AclChange event for each identifier whose rights
   changed, as IMAP SETACL always has.
+* httpd no longer serves an HTML listing of the enabled well-known URIs at
+  ``/.well-known/``, which now returns 404 Not Found.  The well-known URIs
+  themselves still redirect as before.
 * A graceful shutdown now waits for any write transaction in progress to
   finish.
 
