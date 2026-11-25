@@ -345,6 +345,11 @@ Message parsing and delivery:
   out-of-bounds memory access.  Reported by interpolwantme.
 * xtext escapes in an LMTP ``AUTH=`` parameter now decode correctly, rather
   than truncating the identity used for ACL checks.
+* Cyrus now refuses to send mail whose envelope sender or recipient could end
+  the SMTP command it is written in.  Previously a calendar attendee address
+  with a percent-encoded CRLF let any calendar user inject SMTP commands.
+  iMIP no longer sends to, or lists in invitations, attendees with such
+  addresses.
 * Negative numeric Sieve match variable references are now rejected.
 * A Sieve fileinto into another user's mailbox now requires the ``i`` right.
   This prevents bypassing the mailbox owner's Sieve script.
