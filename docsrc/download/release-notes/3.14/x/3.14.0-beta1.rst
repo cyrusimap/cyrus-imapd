@@ -659,6 +659,9 @@ Search
   first batch of a large mailbox forever.
 * :cyrusman:`squatter(8)` now records the highest createdmodseq it has
   indexed, preventing a race with JMAP ``Email/queryChanges``.
+* JMAP ``Email/query`` with a text filter no longer misses a message that was
+  unsnoozed or sent on schedule after an incremental update of the search
+  index, or one appended again while an identical copy was already indexed.
 * Zero-byte attachments are no longer sent to the attachment text extractor,
   which rejected them and logged an IOERROR for each one.
 * IMAP SEARCH now handles non-ASCII search terms when the client has enabled
