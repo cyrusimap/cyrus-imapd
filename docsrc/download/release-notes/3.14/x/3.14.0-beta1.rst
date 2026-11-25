@@ -683,6 +683,12 @@ JMAP
   sorts as mutable, reports the right index for an email with a copy in
   another mailbox, and reports every moved email of a thread when sorting by
   ``someInThreadHaveKeyword``.
+* Three JMAP operations no longer lose data when a step fails.
+  ``Mailbox/set`` no longer destroys a mailbox whose emails failed to move
+  to another mailbox first.  A ``CalendarEvent/set`` update that moves an
+  event no longer loses it when the store in the new calendar fails, such as
+  over quota.  A ``ContactCard/set`` update whose removal of the old card
+  fails no longer leaves two live copies.
 * A sharee moving an email between someone else's mailboxes no longer needs
   the right to add items to the mailbox the email is leaving.
 * ``ContactCard/set`` now rejects name and address components that lack a
