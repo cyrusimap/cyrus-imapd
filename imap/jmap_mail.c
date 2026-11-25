@@ -8633,18 +8633,6 @@ static int _cyrusmsg_from_record(msgrecord_t *mr, struct cyrusmsg **msgptr)
     return 0;
 }
 
-static int _cyrusmsg_from_rfc822body(msgrecord_t *mr,
-                                     const struct body *body,
-                                     struct cyrusmsg **msgptr)
-{
-    struct cyrusmsg *msg = xzmalloc(sizeof(struct cyrusmsg));
-    msg->mr = mr;
-    msg->part0 = body;
-    msg->rfc822part = body;
-    *msgptr = msg;
-    return 0;
-}
-
 static void _cyrusmsg_init_partids(struct body *body, const char *part_id)
 {
     if (!body) return;
@@ -9008,7 +8996,7 @@ static int _email_get_meta(jmap_req_t *req,
         if (jmap_wantprop(props, "keywords"))
             json_object_set_new(email, "keywords", json_null());
         if (jmap_wantprop(props, "size")) {
-            size_t size = msg->rfc822part->header_size + msg->rfc822part->content_size;
+            size_t size = msg->rfc822part->content_size;
             json_object_set_new(email, "size", json_integer(size));
         }
         if (jmap_wantprop(props, "receivedAt"))
@@ -10014,19 +10002,8 @@ static int _email_from_record(jmap_req_t *req,
     return r;
 }
 
-static int _email_from_rfc822body(jmap_req_t *req,
-                                  struct email_getargs *args,
-                                  msgrecord_t *mr,
-                                  const struct body *body,
-                                  json_t **emailptr)
-{
-    struct cyrusmsg *msg = NULL;
-    int r = _cyrusmsg_from_rfc822body(mr, body, &msg);
-    if (!r) r = _email_from_msg(req, args, msg, emailptr);
-    _cyrusmsg_free(&msg);
-    return r;
-}
-
+/* Parse an Email from buf, decoding it by the given transfer encoding.
+ * A NULL encoding means the content is not encoded. */
 static int _email_from_buf(jmap_req_t *req,
                            struct email_getargs *args,
                            const struct buf *buf,
@@ -10035,32 +10012,23 @@ static int _email_from_buf(jmap_req_t *req,
 {
     struct buf mybuf = BUF_INITIALIZER;
     buf_setcstr(&mybuf, "Content-Type: message/rfc822\r\n");
-    if (encoding) {
-        if (!strcasecmp(encoding, "BASE64")) {
-            char *tmp = NULL;
-            size_t tmp_size = 0;
-            charset_decode_mimebody(buf_base(buf), buf_len(buf),
-                    ENCODING_BASE64, &tmp, &tmp_size);
-            buf_appendcstr(&mybuf, "Content-Transfer-Encoding: binary\r\n");
-            /* Append base64-decoded body */
-            buf_appendcstr(&mybuf, "\r\n");
-            buf_appendmap(&mybuf, tmp, tmp_size);
-            free(tmp);
-        }
-        else {
-            buf_appendcstr(&mybuf, "Content-Transfer-Encoding: ");
-            buf_appendcstr(&mybuf, encoding);
-            buf_appendcstr(&mybuf, "\r\n");
-            /* Append encoded body */
-            buf_appendcstr(&mybuf, "\r\n");
-            buf_append(&mybuf, buf);
-        }
+
+    char *tmp = NULL;
+    size_t len = 0;
+    const char *dec = charset_decode_mimebody(buf_base(buf), buf_len(buf),
+                                              encoding_lookupname(encoding),
+                                              &tmp, &len);
+    if (!dec) {
+        /* Unknown encoding */
+        buf_free(&mybuf);
+        return IMAP_MESSAGE_BADHEADER;
     }
-    else {
-        /* Append raw body */
-        buf_appendcstr(&mybuf, "\r\n");
-        buf_append(&mybuf, buf);
+    if (tmp) {
+        buf_appendcstr(&mybuf, "Content-Transfer-Encoding: binary\r\n");
     }
+    buf_appendcstr(&mybuf, "\r\n");
+    buf_appendmap(&mybuf, dec, len);
+    free(tmp);
 
     struct cyrusmsg *msg = NULL;
     int r = _cyrusmsg_from_buf(&mybuf, &msg);
@@ -10396,13 +10364,7 @@ static int jmap_email_parse(jmap_req_t *req)
 
         struct buf *inmem = hash_lookup(blobid, req->inmemory_blobs);
         if (inmem) {
-            r = _email_from_buf(req, &getargs, inmem, NULL, &email);
-            if (r) {
-                /* notParsable is an ordinary answer to Email/parse */
-                xsyslog_ev(LOG_WARNING, "jmap.email.parse.failed",
-                           lf_jmapreq(req), lf_s("jmap.blobid", blobid),
-                           lf_err("error", r));
-            }
+            _email_from_buf(req, &getargs, inmem, NULL, &email);
             if (email) {
                 json_object_set_new(parse.parsed, blobid, email);
             }
@@ -10419,25 +10381,22 @@ static int jmap_email_parse(jmap_req_t *req)
             continue;
         }
 
-        if (part && (strcmpsafe(part->type, "MESSAGE") || !strcmpnull(part->encoding, "BASE64"))) {
+        if (part) {
             struct buf msg_buf = BUF_INITIALIZER;
             r = msgrecord_get_body(mr, &msg_buf);
             if (!r) {
                 struct buf buf = BUF_INITIALIZER;
                 buf_init_ro(&buf, buf_base(&msg_buf) + part->content_offset,
-                        part->content_size);
-                r = _email_from_buf(req, &getargs, &buf, part->encoding, &email);
+                            part->content_size);
+                _email_from_buf(req, &getargs, &buf, part->encoding, &email);
                 buf_free(&buf);
             }
-            buf_free(&msg_buf);
-            if (r) {
-                xsyslog_ev(LOG_WARNING, "jmap.email.parse.failed",
+            else {
+                xsyslog_ev(LOG_ERR, "jmap.email.parse.failed",
                            lf_jmapreq(req), lf_s("jmap.blobid", blobid),
                            lf_err("error", r));
             }
-        }
-        else if (part) {
-            _email_from_rfc822body(req, &getargs, mr, part, &email);
+            buf_free(&msg_buf);
         }
         else if (mr) {
             hash_table *props = getargs.props;

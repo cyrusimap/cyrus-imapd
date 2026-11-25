@@ -1,0 +1,45 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_email_parse_octet_stream ($self)
+{
+    my $jmap = $self->{jmap};
+
+    $self->make_message("foo",
+        mime_type => "multipart/mixed",
+        mime_boundary => "sub",
+        body => ""
+          . "--sub\r\n"
+          . "Content-Type: application/octet-stream\r\n"
+          . "Content-Disposition: attachment; filename=bar.eml\r\n"
+          . "\r\n"
+          . "From: bar\@example.com\r\n"
+          . "Subject: bar\r\n"
+          . "\r\n"
+          . "An attached email"
+          . "\r\n--sub--\r\n",
+    ) || die;
+
+    my $res = $jmap->CallMethods([
+        ['Email/query', { }, "R1"],
+        ['Email/get', {
+            '#ids' => { resultOf => 'R1', name => 'Email/query', path => '/ids' },
+            properties => ['attachments'],
+        }, 'R2' ],
+    ]);
+    my $blobId = $res->[1][1]{list}[0]{attachments}[0]{blobId};
+    $self->assert_not_null($blobId);
+
+    $res = $jmap->CallMethods([['Email/parse', {
+        blobIds => [ $blobId ],
+        properties => [qw(subject bodyValues)],
+        fetchAllBodyValues => JSON::true,
+    }, 'R1']]);
+
+    $self->assert_cmp_deeply({
+        subject => 'bar',
+        bodyValues => {
+            1 => superhashof({ value => 'An attached email' }),
+        },
+    }, $res->[0][1]{parsed}{$blobId});
+}

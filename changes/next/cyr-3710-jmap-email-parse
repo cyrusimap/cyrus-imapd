@@ -1,0 +1,25 @@
+Description:
+
+Email/parse now parses all decoded body part blobs using the MIME parser,
+rather than reading message/rfc822 and message/global body parts from the
+binary cache.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
