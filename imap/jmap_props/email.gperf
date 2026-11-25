@@ -60,7 +60,6 @@ jmap_property_t;
 "trustedSender",         JMAP_MAIL_EXTENSION, JMAP_PROP_SERVER_SET | JMAP_PROP_IMMUTABLE
 "spamScore",             JMAP_MAIL_EXTENSION, JMAP_PROP_IMMUTABLE
 "calendarEvents",        JMAP_MAIL_EXTENSION, JMAP_PROP_IMMUTABLE
-"previousCalendarEvent", JMAP_MAIL_EXTENSION, JMAP_PROP_IMMUTABLE
 "isDeleted",             JMAP_MAIL_EXTENSION, 0
 "imageSize",             JMAP_MAIL_EXTENSION, 0
 "snoozed",               JMAP_MAIL_EXTENSION, 0
