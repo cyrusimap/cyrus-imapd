@@ -179,22 +179,31 @@ HIDDEN void jmap_contact_capabilities(json_t *account_capabilities,
                                       const char *authuserid,
                                       const char *accountid)
 {
-    char *cardhomename = carddav_mboxname(accountid, NULL);
+    char *cardhomename = NULL;
     mbentry_t *mbentry = NULL;
-    int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
-    if (r) {
-        /* An account that has never used contacts has no addressbook
-         * home, and the capability is simply left out. */
-        xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
-                   "jmap.addressbook.home.lookup.failed",
-                   lf_s("jmap.accountid", accountid),
-                   lf_intname("mbox.name", cardhomename),
-                   lf_err("error", r));
-        goto done;
-    }
+    int rights;
+    bool is_main_account;
 
-    int rights = httpd_myrights(authstate, mbentry);
-    int is_main_account = !strcmpsafe(authuserid, accountid);
+    if (httpd_userisadmin) {
+        rights = ACL_ALL;
+        is_main_account = true;
+    }
+    else {
+        cardhomename = carddav_mboxname(accountid, NULL);
+        int r = mboxlist_lookup(cardhomename, &mbentry, NULL);
+        if (r) {
+            /* An account that has never used contacts has no addressbook
+             * home, and the capability is simply left out. */
+            xsyslog_ev(r == IMAP_MAILBOX_NONEXISTENT ? LOG_DEBUG : LOG_ERR,
+                       "jmap.addressbook.home.lookup.failed",
+                       lf_s("jmap.accountid", accountid),
+                       lf_intname("mbox.name", cardhomename),
+                       lf_err("error", r));
+            goto done;
+        }
+        rights = httpd_myrights(authstate, mbentry);
+        is_main_account = !strcmpsafe(authuserid, accountid);
+    }
 
     json_object_set_new(account_capabilities, JMAP_URN_CONTACTS,
                         json_pack("{s:i s:b}",
@@ -285,6 +294,22 @@ static int has_addressbooks(jmap_req_t *req)
     int r = mboxlist_mboxtree(mbname_intname(mbname), has_addressbooks_cb,
                               req, MBOXTREE_SKIP_ROOT);
     mbname_free(&mbname);
+    return r == CYRUSDB_DONE;
+}
+
+static int home_has_addressbooks_cb(const mbentry_t *mbentry,
+                                    void *rock __attribute__((unused)))
+{
+    return mbtype_isa(mbentry->mbtype) == MBTYPE_ADDRESSBOOK ? CYRUSDB_DONE
+                                                             : 0;
+}
+
+/* Whether the addressbook home cardhomename holds any addressbook at all,
+ * regardless of who can see it. */
+static bool home_has_addressbooks(const char *cardhomename)
+{
+    int r = mboxlist_mboxtree(cardhomename, home_has_addressbooks_cb, NULL,
+                              MBOXTREE_SKIP_ROOT);
     return r == CYRUSDB_DONE;
 }
 
@@ -2608,8 +2633,7 @@ static void setaddressbooks_create(struct jmap_req *req,
     struct setaddressbook_props props;
     mbentry_t *mbparent = NULL;
     char *parentname = carddav_mboxname(req->accountid, NULL);
-    char *uid = xstrdup(makeuuid());
-    char *mboxname = carddav_mboxname(req->accountid, uid);
+    char *mboxname = NULL;
     int r = 0;
 
     /* Parse and validate properties. */
@@ -2640,13 +2664,26 @@ static void setaddressbooks_create(struct jmap_req *req,
         free(acl);
         goto done;
     }
+    /* CardDAV clients that can't discover the default addressbook look for
+     * it by path, so the account's first addressbook goes where
+     * carddav_create_defaultaddressbook() would have put it. */
+    bool is_first = !home_has_addressbooks(parentname);
     mbentry_t mbentry = MBENTRY_INITIALIZER;
-    mbentry.name = mboxname;
     mbentry.acl = acl;
     mbentry.mbtype = MBTYPE_ADDRESSBOOK;
-    r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
-            0/*isadmin*/, req->userid, req->authstate,
-            0/*flags*/, NULL/*mailboxptr*/);
+    for (;;) {
+        mboxname = carddav_mboxname(req->accountid,
+                                    is_first ? DEFAULT_ADDRBOOK : makeuuid());
+        mbentry.name = mboxname;
+        r = mboxlist_createmailbox(&mbentry, 0/*options*/, 0/*highestmodseq*/,
+                0/*isadmin*/, req->userid, req->authstate,
+                0/*flags*/, NULL/*mailboxptr*/);
+        if (r != IMAP_MAILBOX_EXISTS || !is_first) break;
+
+        /* Lost a race for the first addressbook: fall back to a uuid. */
+        free(mboxname);
+        is_first = false;
+    }
     free(acl);
     if (r) {
         xsyslog_ev(LOG_ERR, "jmap.addressbook.create.failed", lf_jmapreq(req),
@@ -2738,7 +2775,6 @@ done:
     jmap_parser_fini(&parser);
     free(parentname);
     free(mboxname);
-    free(uid);
 }
 
 /* Check the immutable and server-set properties sent in an update
