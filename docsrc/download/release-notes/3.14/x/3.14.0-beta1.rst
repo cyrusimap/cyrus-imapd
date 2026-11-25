@@ -60,6 +60,7 @@ Storage changes
 * The conversations database format is now version 2.
   :cyrusman:`ctl_conversationsdb(8)` has a new ``-U`` option to upgrade a
   user's database.
+  Conversation records written by 3.14 cannot be read by older versions.
 * The DAV database schema is now version 19 (it was 16 in 3.12.0).  Cyrus
   upgrades existing DAV databases when they are opened.
 * The Xapian search index format is now version 18 (it was 17).  Calendar
@@ -459,6 +460,10 @@ IMAP
 * The :imapdconf:`admins_get_internal_seen` option has been added.  If set,
   admin users always get and set the same ``\Seen`` flags as the mailbox
   owner.
+* Conversation subjects are now NFKC-normalized, so replies join their
+  conversation when the reply prefix uses compatibility forms such as the
+  CJK full-width colon, as in "回复：foo".  A space before the colon, as in
+  French "RE : foo", is now also accepted.
 * Under FUZZY search, an IMAP HEADER search of Subject, From, To, Cc or Bcc is
   now handled by the search engine, like the dedicated search key.
 
