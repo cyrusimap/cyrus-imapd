@@ -4147,6 +4147,43 @@ static bool jsevent_is_origin(json_t *jsevent, const strarray_t *schedule_addres
     return true;
 }
 
+static bool jsevent_has_scheduled_participant(json_t *jsevent)
+{
+    const char *key;
+    json_t *jpart;
+    json_object_foreach (json_object_get(jsevent, "participants"), key, jpart) {
+        if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* If jsevent has a participant with a calendar address but no
+ * organizerCalendarAddress, set the latter to the first scheduling
+ * address and report it in serverset. */
+static void jsevent_set_default_organizer(json_t *jsevent,
+                                          const strarray_t *schedule_addresses,
+                                          json_t *serverset)
+{
+    if (JNOTNULL(json_object_get(jsevent, "organizerCalendarAddress"))
+        || !jsevent_has_scheduled_participant(jsevent))
+    {
+        return;
+    }
+
+    char *orga = _imip_calendar_address(schedule_addresses);
+    if (!orga) {
+        return;
+    }
+
+    json_t *jorga = json_string(orga);
+    json_object_set(jsevent, "organizerCalendarAddress", jorga);
+    json_object_set(serverset, "organizerCalendarAddress", jorga);
+    json_decref(jorga);
+    free(orga);
+}
+
 static void getcalendarevents_reset_ical(struct getcalendarevents_rock *rock)
 {
     if (rock->ical) {
@@ -5286,31 +5323,9 @@ static int createevent_toical(jmap_req_t *req,
                                     "sequence", json_integer(0));
             }
 
-            // XXX quirk: former implementation set organizer address
-            if (JNULL(json_object_get(create->jsevent,
-                                      "organizerCalendarAddress"))) {
-                json_t *jparts = json_object_get(create->jsevent,
-                                                 "participants");
-                json_t *jpart;
-                const char *key;
-                json_object_foreach(jparts, key, jpart) {
-                    if (JNOTNULL(json_object_get(jpart, "calendarAddress"))) {
-                        // At least one scheduled Participant is set.
-                        char *orga =
-                            _imip_calendar_address(&create->schedule_addresses);
-                        if (orga) {
-                            json_t *jorga = json_string(orga);
-                            json_object_set(create->jsevent,
-                                            "organizerCalendarAddress", jorga);
-                            json_object_set(create->serverset,
-                                            "organizerCalendarAddress", jorga);
-                            json_decref(jorga);
-                            free(orga);
-                        }
-                    }
-                    break;
-                }
-            }
+            jsevent_set_default_organizer(create->jsevent,
+                                          &create->schedule_addresses,
+                                          create->serverset);
         }
 
         json_decref(jupdated);
@@ -6249,6 +6264,12 @@ static int updateevent_apply_patch(jmap_req_t *req,
                 }
             }
         }
+    }
+
+    if (!jsevent_has_scheduled_participant(update->old_event)) {
+        jsevent_set_default_organizer(new_event,
+                                      update->schedule_addresses,
+                                      update->serverset);
     }
 
     bool updates_shared_prop =

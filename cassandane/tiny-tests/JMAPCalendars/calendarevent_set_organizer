@@ -90,8 +90,7 @@ sub test_calendarevent_set_organizer
     $self->assert_cmp_deeply(['participants'],
         $res->[0][1]{notCreated}{eventReplyToNoParticipants}{properties});
 
-    # XXX former implementation allowed this, but let's not
-    xlog "Do not use server-set organizerCalendarAddress when participants added in update";
+    xlog "Use server-set organizerCalendarAddress when participants added in update";
     my $eventId = $res->[0][1]{created}{eventNoScheduling}{id};
     $res = $jmap->CallMethods([
         ['CalendarEvent/set', {
@@ -105,7 +104,44 @@ sub test_calendarevent_set_organizer
                 },
             },
         }, 'R1'],
+        ['CalendarEvent/get', {
+            ids => [$eventId],
+            properties => ['organizerCalendarAddress'],
+        }, 'R2'],
     ]);
-    $self->assert_cmp_deeply(['organizerCalendarAddress'],
-        $res->[0][1]{notUpdated}{$eventId}{properties});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{updated}{$eventId}{organizerCalendarAddress});
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[1][1]{list}[0]{organizerCalendarAddress});
+
+    xlog "Use server-set organizerCalendarAddress if first participant is unscheduled";
+    # Sort keys so that participant "a" is sent before "b".
+    $jmap->_json_codec->canonical(1);
+    $res = $jmap->CallMethods([
+        ['CalendarEvent/set', {
+            create => {
+                eventFirstUnscheduled => {
+                    version => '2.0',
+                    calendarIds => {
+                        $default_cal_id => JSON::true,
+                    },
+                    start => '2022-01-28T13:00:00',
+                    timeZone => 'Etc/UTC',
+                    duration => 'PT1H',
+                    title => 'event',
+                    participants => {
+                        a => {
+                            name => 'unscheduled',
+                        },
+                        b => {
+                            calendarAddress => 'mailto:someone@example.com',
+                        },
+                    },
+                },
+            },
+        }, 'R1'],
+    ]);
+    $self->assert_str_equals('mailto:cassandane@example.com',
+        $res->[0][1]{created}{eventFirstUnscheduled}{organizerCalendarAddress});
+    $jmap->_json_codec->canonical(0);
 }
