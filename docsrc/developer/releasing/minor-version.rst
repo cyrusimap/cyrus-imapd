@@ -19,14 +19,31 @@ detailed at :ref:`releasing-major-version`.
 Prerequisites
 =============
 
-You will need a GPG key that you can use for signing.  Ellie doesn't remember
-off the top of her head how to create one of these, so for now just read the
-manual like she did. :)
+You need permission to send to the cyrus-announce mailing list, and a GPG key
+for signing the release tag and tarball.
 
-Once you have a GPG key, it's helpful to upload your public key to
-`the MIT key-server <http://pgp.mit.edu>`_
+If you don't have a key, make one.  This creates an ed25519 key that can sign
+and expires in two years; when it gets close, extend it with ``gpg
+--quick-set-expire <fingerprint> 2y`` rather than making a new one::
 
-And you need permission to send to the cyrus-announce mailing list.
+    gpg --quick-generate-key 'Your Name <you@example.com>' ed25519 sign 2y
+
+``gpg --list-secret-keys`` shows the key's fingerprint, the 40-character hex
+string under the ``sec`` line.  Then publish the public key:
+
+1. Send it to the Ubuntu keyserver:
+   ``gpg --keyserver hkps://keyserver.ubuntu.com --send-keys <fingerprint>``
+2. Optionally, also upload ``gpg --armor --export <fingerprint>`` at
+   https://keys.openpgp.org/upload, which emails you to confirm the address
+   before it will find the key by email.
+3. Add it to your GitHub account: copy the output of ``gpg --armor --export
+   <fingerprint>``, then go to Settings, "SSH and GPG keys", "New GPG key",
+   and paste it in.  GitHub then serves it at
+   ``https://github.com/<username>.gpg``, which ties the key that signs the
+   releases to the account that publishes them.
+
+If gpg chooses the wrong key when signing the tag, tell git which to use:
+``git config user.signingkey <fingerprint>``.
 
 Release notes
 =============
@@ -87,7 +104,11 @@ descendant of it, otherwise you may end up with a mess later.
    will have the correct version, now that you've tagged it.)
 8. If anything goes wrong up to here, delete the tag, fix the issue, and start
    again from scratch.
-9. Sign the distribution tarball: ``gpg --sign -b cyrus-imapd-<version>.tar.gz``
+9. Sign the distribution tarball, which writes
+   ``cyrus-imapd-<version>.tar.gz.sig``, then check the signature:
+   ``gpg --detach-sign -o cyrus-imapd-<version>.tar.gz.sig cyrus-imapd-<version>.tar.gz``
+   and
+   ``gpg --verify cyrus-imapd-<version>.tar.gz.sig cyrus-imapd-<version>.tar.gz``
 10. Ellie also likes to copy the tarball and signature file somewhere safe,
     just in case something happens between now and uploading.
 11. If you've been using a WIP branch for the release notes and docsrc/conf.py
