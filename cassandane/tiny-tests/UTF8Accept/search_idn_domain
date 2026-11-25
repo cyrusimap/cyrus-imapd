@@ -1,0 +1,31 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(encode);
+
+# SEARCH FROM with a U-label domain finds an address whose domain is in
+# A-labels (RFC 9755), before and after ENABLE UTF8=ACCEPT.
+sub test_search_idn_domain
+    :NoAltNameSpace
+    ($self)
+{
+    $self->make_message("idn", from => Cassandane::Address->new(
+        name => 'Jan', localpart => 'jan', domain => 'xn--dmi-0na.fo',
+    )) or die;
+    $self->make_message("other") or die;
+
+    my $talk = $self->{store}->get_client();
+    my $ulabel = encode('UTF-8', "d\x{f8}mi.fo");
+
+    xlog $self, "Before ENABLE, with CHARSET UTF-8";
+    my $uids = $talk->search('charset', 'utf-8', 'from', { Quote => $ulabel });
+    $self->assert_cmp_deeply([1], $uids);
+
+    xlog $self, "After ENABLE UTF8=ACCEPT, by U-labels and by A-labels";
+    my $res = $talk->_imap_cmd('ENABLE', 0, 'enabled', 'UTF8=ACCEPT');
+    $self->assert_num_equals(1, $res->{'utf8=accept'});
+
+    $uids = $talk->search('from', { Quote => encode('UTF-8', "jan\@d\x{f8}mi.fo") });
+    $self->assert_cmp_deeply([1], $uids);
+    $uids = $talk->search('from', 'xn--dmi-0na.fo');
+    $self->assert_cmp_deeply([1], $uids);
+}

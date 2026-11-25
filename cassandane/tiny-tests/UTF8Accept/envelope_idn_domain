@@ -1,0 +1,35 @@
+#!perl
+use Cassandane::Tiny;
+use Encode qw(decode);
+
+# FETCH ENVELOPE shows an A-label domain as U-labels to a client that
+# enabled UTF8=ACCEPT, and as is to one that didn't, while the message
+# itself is returned unchanged (RFC 9755).
+sub test_envelope_idn_domain
+    :NoAltNameSpace
+    ($self)
+{
+    $self->make_message("idn", from => Cassandane::Address->new(
+        name => 'Jan', localpart => 'jan', domain => 'xn--dmi-0na.fo',
+    )) or die;
+
+    my $talk = $self->{store}->get_client();
+    $talk->select('INBOX');
+
+    my sub from_host () {
+        my $res = $talk->fetch('1', '(ENVELOPE)');
+        return $res->{1}{envelope}{From};
+    }
+
+    xlog $self, "Without UTF8=ACCEPT, the domain is as in the message";
+    $self->assert_matches(qr/\@xn--dmi-0na\.fo>/, from_host());
+
+    xlog $self, "With UTF8=ACCEPT, it is shown as U-labels";
+    my $res = $talk->_imap_cmd('ENABLE', 0, 'enabled', 'UTF8=ACCEPT');
+    $self->assert_num_equals(1, $res->{'utf8=accept'});
+    $self->assert_matches(qr/\@d\x{f8}mi\.fo>/, decode('UTF-8', from_host()));
+
+    xlog $self, "but the message itself is unchanged";
+    $res = $talk->fetch('1', '(BODY.PEEK[HEADER.FIELDS (FROM)])');
+    $self->assert_matches(qr/\@xn--dmi-0na\.fo>/, $res->{1}{headers}{from}[0]);
+}

@@ -1,0 +1,29 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_invalid_utf8_string
+    :NoAltNameSpace
+    ($self)
+{
+    my $talk = $self->{store}->get_client();
+    $talk->_imap_cmd('ENABLE', 0, 'enabled', 'UTF8=ACCEPT');
+
+    # Latin-1, not UTF-8
+    my $name = "INBOX.B\xfccher";
+
+    xlog $self, "Malformed UTF-8 in an atom or quoted string is BAD";
+    $talk->_imap_cmd('SELECT', 0, '', $name);
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+    $talk->_imap_cmd('SELECT', 0, '', { Quote => $name });
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+
+    xlog $self, "A mailbox name in a literal must be UTF-8 too";
+    $talk->_imap_cmd('SELECT', 0, '', { Literal => $name });
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $talk->_imap_cmd('CREATE', 0, '', { Literal => $name });
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog $self, "The connection survives";
+    $talk->noop();
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
