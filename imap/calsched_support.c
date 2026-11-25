@@ -114,6 +114,26 @@ static int caladdress_mboxlist_lookup(const char *name, mbentry_t **mbentryp)
     return mboxlist_lookup(name, mbentryp, NULL);
 }
 
+/* The canonical form of a userid: a user of the default domain has none.
+   mbname_from_userid() drops the default domain from the name it parses but
+   keeps the userid it was given as its userid, so mbname_userid() still says
+   "user@defaultdomain" - which matches no ACL entry, no auth_state and no
+   other spelling of the same user. */
+static char *sched_canonical_userid(const char *userid)
+{
+    mbname_t *mbname = mbname_from_userid(userid);
+    struct buf buf = BUF_INITIALIZER;
+
+    if (mbname_localpart(mbname)) {
+        buf_setcstr(&buf, mbname_localpart(mbname));
+        if (mbname_domain(mbname))
+            buf_printf(&buf, "@%s", mbname_domain(mbname));
+    }
+    mbname_free(&mbname);
+
+    return buf_len(&buf) ? buf_release(&buf) : NULL;
+}
+
 EXPORTED char *caladdress_userid(const char *addr, bool defdomain_fallback,
                                  int (*mlookup)(const char *, mbentry_t **),
                                  mbentry_t **calhomep)
@@ -162,13 +182,13 @@ EXPORTED char *caladdress_userid(const char *addr, bool defdomain_fallback,
         mbentry_t *mbentry = NULL;
 
         if (!mlookup(calhome, &mbentry)) {
-            userid = xstrdup(mbname_userid(mbname));
+            userid = sched_canonical_userid(mbname_userid(mbname));
             if (calhomep) *calhomep = mbentry;
             else mboxlist_entry_free(&mbentry);
         }
         else if (!mboxlist_lookup(mbname_intname(mbname), NULL, NULL)) {
             /* a user with no calendars yet still owns the address */
-            userid = xstrdup(mbname_userid(mbname));
+            userid = sched_canonical_userid(mbname_userid(mbname));
         }
 
         free(calhome);
@@ -184,9 +204,11 @@ static bool sched_same_user(const char *a, const char *b)
 {
     if (!a || !b) return false;
 
-    mbname_t *mbname = mbname_from_userid(b);
-    bool same = !strcasecmpsafe(a, mbname_userid(mbname));
-    mbname_free(&mbname);
+    char *ca = sched_canonical_userid(a);
+    char *cb = sched_canonical_userid(b);
+    bool same = !strcasecmpsafe(ca, cb);
+    free(ca);
+    free(cb);
 
     return same;
 }

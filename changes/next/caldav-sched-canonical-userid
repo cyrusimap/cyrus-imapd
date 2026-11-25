@@ -1,0 +1,22 @@
+Description:
+
+Fix CalDAV scheduling on servers running with virtdomains enabled and a
+defaultdomain configured: an invitation stored by a user of the default
+domain was not scheduled at all, because the organizer's own address was
+taken for another user's.
+
+Documentation:
+
+No documentation change: the fix restores the documented behaviour.
+
+Config changes:
+
+None.
+
+Upgrade instructions:
+
+None.
+
+GitHub issue:
+
+None filed; the failure and its reproduction are described in the pull request.
