@@ -1,0 +1,24 @@
+Description:
+
+The non-standard previousCalendarEvent property of JMAP Email is
+removed.
+
+
+Documentation:
+
+None.
+
+
+Config changes:
+
+None.
+
+
+Upgrade instructions:
+
+None.
+
+
+GitHub issue:
+
+None.
