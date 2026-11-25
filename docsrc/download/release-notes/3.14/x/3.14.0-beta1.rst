@@ -308,6 +308,13 @@ The 3.12 series first addressed these issues in :ref:`3.12.4
 * :cve:`CVE-2026-61915`: VPATCH could crash a CalDAV worker.  Cyrus 3.14
   removes CalDAV PATCH support.  Reported by Michael Lynch (mtlynch.io).
 
+The 3.12 series first addressed these issues in :ref:`3.12.5
+<relnotes-3.12.5-changes>`:
+
+* :cve:`CVE-2026-61914`: A JMAP sharee with ``mayWriteOwn`` on a calendar
+  could update or destroy any event in it, not only the events the sharee
+  organizes.  Reported by Michael Lynch (mtlynch.io).
+
 The following security fixes were made in public, without an embargo, as
 described in :ref:`security-classification`.  Several also shipped in 3.12.5.
 
