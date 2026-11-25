@@ -325,6 +325,10 @@ The 3.12 series first addressed these issues in :ref:`3.12.5
   could write a file outside the storage for Sieve scripts.  Script names
   containing path separators or traversal components are now rejected.
   Reported by Michael Lynch (mtlynch.io).
+* An IMAP session kept the rights it held when it selected a mailbox, so
+  revoking a user's access did not stop them using the mailbox through an
+  existing connection.  Rights are now refreshed before each command.  No CVE
+  was assigned.  Reported by Michael Lynch (mtlynch.io).
 
 The following security fixes were made in public, without an embargo, as
 described in :ref:`security-classification`.  Several also shipped in 3.12.5.
