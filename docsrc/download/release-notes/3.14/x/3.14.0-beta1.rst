@@ -61,6 +61,8 @@ Storage changes
   :cyrusman:`ctl_conversationsdb(8)` has a new ``-U`` option to upgrade a
   user's database.
   Conversation records written by 3.14 cannot be read by older versions.
+* The mailbox cache format is now minor version 15.  See :ref:`the upgrade
+  guide <upgrade_3.14_maxheaderlines>`.
 * The DAV database schema is now version 19 (it was 16 in 3.12.0).  Cyrus
   upgrades existing DAV databases when they are opened.
 * The Xapian search index format is now version 18 (it was 17).  Calendar
@@ -253,6 +255,10 @@ Other
 * Sieve compilation enforces extension availability more strictly with
   ``ihave``.  Templates that use ``$text[...]$`` in a ``notify`` message
   must enable the ``body`` extension.
+* :imapdconf:`maxheaderlines` now limits the number of headers rather than
+  header lines, with a header folded over many lines counting once.  Headers
+  such as From, To, Subject or Content-Type are no longer ignored when they
+  follow a header folded over thousands of lines.
 * The annotator is now called only for items added to email mailboxes.
 * :cyrusman:`reconstruct(8)` no longer re-injects message files that have a
   UID the mailbox already handed out but are missing from the index.  It

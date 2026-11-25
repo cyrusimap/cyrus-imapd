@@ -606,6 +606,16 @@ back.
 
     reconstruct -V max
 
+.. _upgrade_3.14_maxheaderlines:
+
+:imapdconf:`maxheaderlines` now counts headers rather than header lines.
+Under 3.12, a message with a header folded over very many lines could have
+the headers after it left out of its cache record.  Such messages keep their
+incomplete cache records until reparsed.  To fix them, run this on the
+affected mailboxes::
+
+    reconstruct -G
+
 To upgrade a user's conversations database to the latest version::
 
     ctl_conversationsdb -U <userid>
