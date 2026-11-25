@@ -521,6 +521,7 @@ static json_t *lookup_capabilities(const char *accountid,
         jmap_quota_capabilities(capas);
         jmap_mail_capabilities(capas, accountid, mayCreateTopLevel);
         jmap_emailsubmission_capabilities(capas);
+        jmap_emailpush_capabilities(capas);
         jmap_mdn_capabilities(capas);
         jmap_contact_capabilities(capas, authstate, authuserid, accountid);
         jmap_calendar_capabilities(capas, authstate, authuserid, accountid);
@@ -1351,6 +1352,11 @@ HIDDEN modseq_t jmap_modseq(jmap_req_t *req, int mbtype, int flags)
             modseq = is_folder ?
                 req->counters.submissionfoldersmodseq :
                 req->counters.submissionmodseq;
+            break;
+        case MBTYPE_JMAPPUSHSUB:
+            modseq = is_folder ?
+                req->counters.jmappushsubfoldersmodseq :
+                req->counters.jmappushsubmodseq;
             break;
         case MBTYPE_SIEVE:
             modseq = is_folder ?

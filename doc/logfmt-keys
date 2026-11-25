@@ -476,6 +476,7 @@ jmap.push.active        1 if a push subscription was already running
 jmap.push.datatypes     how many data types a push subscription asked for
 jmap.push.next_ping     when an eventSource connection is next due a ping
 jmap.push.next_poll     when a push connection next checks for changes
+jmap.pushsubid          a JMAP PushSubscription id
 jmap.search.field       a field a cached search value was missing
 jmap.search.flag        a system flag mask guidsearch could not handle
 jmap.search.sortkey     the internal sort key code of a search sort

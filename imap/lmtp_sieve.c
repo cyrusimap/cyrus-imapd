@@ -2603,7 +2603,7 @@ static int jmapquery(void *ic, void *sc, void *mc, const char *json)
     /* Run query */
     if (content->matchmime && !err)
         matches = jmap_email_matchmime(content->matchmime, jfilter, ctx->cstate, userid,
-                sd->authstate, sd->ns, time(NULL), &err);
+                sd->authstate, sd->ns, time(NULL), NULL, &err);
 
     if (err) {
         const char *type = json_string_value(json_object_get(err, "type"));

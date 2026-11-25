@@ -1,0 +1,9 @@
+Name: jmap_push_types
+Type: BITFIELD
+Allowed-Values: Mailbox Thread Email EmailDelivery Identity EmailSubmission VacationResponse Quota SieveScript Principal ShareNotification AddressBook ContactCard Calendar CalendarEvent CalendarEventNotification ParticipantIdentity Note
+Default-Value: Mailbox Thread Email EmailDelivery EmailSubmission AddressBook ContactCard Calendar CalendarEvent
+Last-Modified: UNRELEASED
+
+JMAP data types that a PushSubscription may list in its "types" property.
+Cyrus doesn't send the pushes itself, so this should match the types the
+notification service handling PushSubscriptionCreated events can push.

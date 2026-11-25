@@ -1,0 +1,33 @@
+Description:
+
+JMAP PushSubscription (RFC 8620 section 7.2).  Cyrus stores subscriptions and
+implements PushSubscription/get and /set; a separate notification service
+sends the pushes, using the PushSubscriptionCreated event and the
+`/dblookup/pushsubs` endpoint.
+
+An expired subscription is no longer visible, and `cyr_expire` destroys it
+when run with `-E`, `-X` or `-a`.
+
+
+Documentation:
+
+docsrc/rfc-support.rst
+
+
+Config changes:
+
+New `jmap_push_types` option, listing the JMAP data types a PushSubscription
+may ask for.
+
+
+Upgrade instructions:
+
+The modseq counters file moves to format version 10, and the DAV database to
+schema version 20, both of which are upgraded automatically.  Older versions
+of Cyrus can't read the new counters format, so downgrading after the upgrade
+isn't supported.
+
+
+GitHub issue:
+
+None.

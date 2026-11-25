@@ -1,0 +1,94 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailpush_sieve_keep
+    :needs_component_jmap :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    $jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:emailpush',
+    ]);
+    $self->{store}->get_client()->create('foo');
+
+    $self->{instance}->install_sieve_script(<<'EOS');
+require ["imap4flags"];
+if header :contains "subject" "flag" {
+    addflag "\\Flagged";
+}
+keep;
+EOS
+
+    my $events = sub {
+        return map  { decode_json($_->{MESSAGE}) }
+               grep { $_->{CLASS} eq 'EVENT' }
+               $self->{instance}->getnotify()->@*;
+    };
+
+    my $res = $jmap->request([[ 'Mailbox/get', { properties => [ 'name' ] } ]]);
+    my %mboxid = map { $_->{name} => "" . $_->{id} }
+                 $res->single_sentence->arguments->{list}->@*;
+
+    my %filters = (
+        inbox   => { inMailbox => $mboxid{Inbox} },
+        foo     => { inMailbox => $mboxid{foo} },
+        flagged => { hasKeyword => '$flagged' },
+    );
+    my %create = map {;
+        $_ => {
+            deviceClientId => "device-$_",
+            url => "https://example.com/push/$_",
+            keys => { p256dh => 'x', auth => 'y' },
+            types => [],
+            emailPush => { cassandane => { filter => $filters{$_} } },
+        }
+    } keys %filters;
+    $res = $jmap->request([
+        [ 'PushSubscription/set', { accountId => \undef, create => \%create } ],
+    ]);
+    my $created = $res->single_sentence->arguments->{created};
+    my %subid = map { $_ => "" . $created->{$_}{id} } keys %$created;
+
+    my %code = map  { $_->{content}{id} => $_->{content}{verificationCode} }
+               grep { $_->{event} eq 'PushSubscriptionCreated' } $events->();
+    $jmap->request([
+        [ 'PushSubscription/set', {
+            accountId => \undef,
+            update => {
+                map {; $_ => { verificationCode => $code{$_} } } values %subid
+            },
+        } ],
+    ]);
+
+    my $pushes = sub {
+        return [ map  { $_->{content} }
+                 grep { $_->{event} eq 'EmailPush' } $events->() ];
+    };
+    $pushes->();
+
+    xlog $self, "keep to the inbox, flagged by sieve";
+    $self->{instance}->deliver($self->{gen}->generate(subject => 'flag me'));
+    $self->assert_cmp_deeply([ superhashof({
+        mailboxIds => { $mboxid{Inbox} => bool(1) },
+        pushSubscriptionIds => bag(@subid{qw(inbox flagged)}),
+    }) ], $pushes->());
+
+    xlog $self, "keep to user+foo";
+    $self->{instance}->deliver($self->{gen}->generate(subject => 'hello'),
+                               folder => 'foo');
+    $self->assert_cmp_deeply([ superhashof({
+        mailboxIds => { $mboxid{foo} => bool(1) },
+        pushSubscriptionIds => [ $subid{foo} ],
+    }) ], $pushes->());
+
+    xlog $self, "keep to user+foo, flagged by sieve";
+    $self->{instance}->deliver($self->{gen}->generate(subject => 'flag me too'),
+                               folder => 'foo');
+    $self->assert_cmp_deeply([ superhashof({
+        mailboxIds => { $mboxid{foo} => bool(1) },
+        pushSubscriptionIds => bag(@subid{qw(foo flagged)}),
+    }) ], $pushes->());
+}

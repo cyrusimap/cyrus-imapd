@@ -1,0 +1,10 @@
+Name: jmap_emailpush
+Type: SWITCH
+Default-Value: 0
+Last-Modified: UNRELEASED
+
+If enabled, support JMAP email delivery push notifications
+(draft-ietf-jmap-emailpush) in the user's own account.  Cyrus evaluates each
+PushSubscription's filter when a message is delivered, and reports the matches
+as an EmailPush event; the notification service that handles
+PushSubscriptionCreated events must send the pushes.

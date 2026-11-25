@@ -941,9 +941,18 @@ static matchmime_query_t *matchmime_query_new_string(enum matchmime_op op, const
     return expr;
 }
 
-static matchmime_query_t *_matchmime_query_new_internal(json_t *filter,
-                                                        xapian_db_t *xdb,
-                                                        struct email_contactfilter *cfilter)
+static matchmime_query_t *matchmime_query_new_bool(bool matches)
+{
+    matchmime_query_t *q = xzmalloc(sizeof(matchmime_query_t));
+    q->op = matches ? MATCHMIME_OP_MATCHALL : MATCHMIME_OP_MATCHNONE;
+    return q;
+}
+
+static matchmime_query_t *_matchmime_query_new_internal(
+    json_t *filter,
+    xapian_db_t *xdb,
+    struct email_contactfilter *cfilter,
+    const struct jmap_email_delivery *delivery)
 {
     if (!json_object_size(filter)) {
         matchmime_query_t *q = xzmalloc(sizeof(matchmime_query_t));
@@ -972,8 +981,10 @@ static matchmime_query_t *_matchmime_query_new_internal(json_t *filter,
         size_t i;
         ptrarray_t xap_queries = PTRARRAY_INITIALIZER;
         json_array_foreach(conditions, i, condition) {
-            matchmime_query_t *subq =
-                _matchmime_query_new_internal(condition, xdb, cfilter);
+            matchmime_query_t *subq = _matchmime_query_new_internal(condition,
+                                                                    xdb,
+                                                                    cfilter,
+                                                                    delivery);
             if (subq && subq->op == MATCHMIME_OP_XAPIAN)
                 ptrarray_append(&xap_queries, subq);
             else if (subq)
@@ -1272,6 +1283,38 @@ static matchmime_query_t *_matchmime_query_new_internal(json_t *filter,
         ptrarray_append(&queries, q);
     }
 
+    /* Without a delivery these are unknown, so they are left out */
+    if (delivery) {
+        if (JNOTNULL(jval = json_object_get(filter, "inMailbox"))) {
+            bool in = strarray_contains(&delivery->mailboxids,
+                                        json_string_value(jval));
+            ptrarray_append(&queries, matchmime_query_new_bool(in));
+        }
+        if (JNOTNULL(jval = json_object_get(filter, "inMailboxOtherThan"))) {
+            bool in_other = false;
+            const char *mboxid;
+            int i;
+            strarray_foreach(&delivery->mailboxids, i, mboxid)
+            {
+                if (json_array_find(jval, mboxid) < 0) {
+                    in_other = true;
+                    break;
+                }
+            }
+            ptrarray_append(&queries, matchmime_query_new_bool(in_other));
+        }
+        if (JNOTNULL(jval = json_object_get(filter, "hasKeyword"))) {
+            bool has = strarray_contains_case(&delivery->keywords,
+                                              json_string_value(jval));
+            ptrarray_append(&queries, matchmime_query_new_bool(has));
+        }
+        if (JNOTNULL(jval = json_object_get(filter, "notKeyword"))) {
+            bool has = strarray_contains_case(&delivery->keywords,
+                                              json_string_value(jval));
+            ptrarray_append(&queries, matchmime_query_new_bool(!has));
+        }
+    }
+
     if (ptrarray_size(&queries) == 1) {
         matchmime_query_t *q = ptrarray_pop(&queries);
         ptrarray_fini(&queries);
@@ -1294,11 +1337,14 @@ static matchmime_query_t *_matchmime_query_new_internal(json_t *filter,
     }
 }
 
-static matchmime_query_t *_matchmime_buildquery(json_t *filter,
-                                                xapian_db_t *xdb,
-                                                struct email_contactfilter *cfilter)
+static matchmime_query_t *_matchmime_buildquery(
+    json_t *filter,
+    xapian_db_t *xdb,
+    struct email_contactfilter *cfilter,
+    const struct jmap_email_delivery *delivery)
 {
-    matchmime_query_t *q = _matchmime_query_new_internal(filter, xdb, cfilter);
+    matchmime_query_t *q =
+        _matchmime_query_new_internal(filter, xdb, cfilter, delivery);
     if (!q) {
         // This filter only contains criteria for which the Xapian
         // backend does not include the required search terms. For
@@ -1743,6 +1789,7 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
                                 const struct auth_state *authstate,
                                 const struct namespace *namespace,
                                 time_t internaldate,
+                                const struct jmap_email_delivery *delivery,
                                 json_t **err)
 {
     int r = 0;
@@ -1821,7 +1868,8 @@ HIDDEN int jmap_email_matchmime(matchmime_t *matchmime,
         *err = jmap_server_error(r);
         goto done;
     }
-    matchmime_query_t *q = _matchmime_buildquery(jfilter, xdb, &cfilter);
+    matchmime_query_t *q =
+        _matchmime_buildquery(jfilter, xdb, &cfilter, delivery);
 
     /* Evaluate filter */
     struct convmatch *convmatch = matchmime->convmatch;

@@ -430,6 +430,23 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 }
 
 /*
+ * mailbox_expunge() callback to destroy expired PushSubscriptions,
+ * whose internaldate is their expires time.
+ */
+static unsigned pushsub_expire_cb(struct mailbox *mailbox
+                                  __attribute__((unused)),
+                                  const struct index_record *record,
+                                  void *rock)
+{
+    struct expire_rock *erock = (struct expire_rock *) rock;
+
+    if (record->internaldate.tv_sec > progtime) return 0;
+
+    erock->messages_expired++;
+    return 1;
+}
+
+/*
  * callback function to:
  * - expire messages from mailboxes,
  * - build a hash table of mailboxes in which we expired messages,
@@ -483,6 +500,20 @@ restart:
     /* a replica takes expiry from the master, but still cleans up locally */
     if (user_isreplicaonlymb(mbentry->name))
         goto cleanup;
+
+    if (mbtype_isa(mbentry->mbtype) == MBTYPE_JMAPPUSHSUB) {
+        r = mailbox_expunge(mailbox, NULL, pushsub_expire_cb, erock, NULL,
+                            EVENT_MESSAGE_EXPIRE, ctx.args.batchsize);
+        if (r == IMAP_AGAIN) {
+            mailbox_close(&mailbox);
+            goto restart;
+        }
+        if (r)
+            xsyslog_ev(LOG_ERR, "expire.pushsubs.failed",
+                       lf_intname("mbox.name", mbentry->name),
+                       lf_err("error", r));
+        goto cleanup;
+    }
 
     /* see if we need to expire messages.
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,

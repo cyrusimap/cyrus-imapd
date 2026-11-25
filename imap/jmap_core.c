@@ -19,6 +19,8 @@
 
 /* JMAP Core API Methods */
 static int jmap_core_echo(jmap_req_t *req);
+extern int jmap_pushsub_get(jmap_req_t *req);
+extern int jmap_pushsub_set(jmap_req_t *req);
 
 /* JMAP extension methods */
 static int jmap_userstate_get(jmap_req_t *req);
@@ -30,6 +32,18 @@ static jmap_method_t jmap_core_methods_standard[] = {
         JMAP_URN_CORE,
         &jmap_core_echo,
         JMAP_NO_ACCOUNTID
+    },
+    {
+        "PushSubscription/get",
+        JMAP_URN_CORE,
+        &jmap_pushsub_get,
+        JMAP_NO_ACCOUNTID
+    },
+    {
+        "PushSubscription/set",
+        JMAP_URN_CORE,
+        &jmap_pushsub_set,
+        JMAP_NO_ACCOUNTID | JMAP_READ_WRITE
     },
     { NULL, NULL, NULL, 0}
 };
@@ -111,6 +125,12 @@ HIDDEN void jmap_core_init(jmap_settings_t *settings)
             json_pack("{s:I}",
                 "maxCreatedIdsInRequest",
                 (json_int_t) limits[MAX_CREATEDIDS_IN_REQUEST]));
+
+    if (config_getswitch(IMAPOPT_JMAP_EMAILPUSH)) {
+        json_object_set_new(settings->server_capabilities,
+                            JMAP_URN_EMAILPUSH,
+                            json_object());
+    }
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
         struct utsname buf;

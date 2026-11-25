@@ -6,6 +6,7 @@
 #define _MBOXEVENT_H
 
 #include <jansson.h>
+#include <limits.h>
 
 #include "strarray.h"
 
@@ -57,6 +58,10 @@ enum event_type {
     EVENT_MAILBOX_METADATA_CHANGE = (1<<27),
     EVENT_SERVER_METADATA_CHANGE  = (1<<28),
     EVENT_ANNOTATION_CHANGE       = (1<<29),
+
+    EVENT_PUSHSUB_CREATED      = (1<<30),
+    /* (1<<31), which isn't an int */
+    EVENT_EMAILPUSH            = INT_MIN,
 };
 
 /*
@@ -150,6 +155,8 @@ enum event_param {
     EVENT_MESSAGES_UNSCHEDULED_USERID,
     EVENT_MESSAGES_UNSCHEDULED_COUNT,
     EVENT_METADATA_ENTRIES,
+    EVENT_PUSHSUB_USERID,
+    EVENT_PUSHSUB_CONTENT,
     /* 31 */ EVENT_MESSAGE_CONTENT
 };
 

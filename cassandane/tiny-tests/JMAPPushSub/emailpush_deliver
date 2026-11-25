@@ -1,0 +1,115 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_emailpush_deliver
+    :needs_component_jmap :needs_component_sieve
+{
+    my ($self) = @_;
+
+    my $jmap = $self->{jmap};
+    $jmap->DefaultUsing([
+        'urn:ietf:params:jmap:core',
+        'urn:ietf:params:jmap:mail',
+        'urn:ietf:params:jmap:emailpush',
+    ]);
+    $self->{store}->get_client()->create('foo');
+
+    my $events = sub {
+        return map  { decode_json($_->{MESSAGE}) }
+               grep { $_->{CLASS} eq 'EVENT' }
+               $self->{instance}->getnotify()->@*;
+    };
+
+    my $res = $jmap->request([[ 'Mailbox/get', { properties => [ 'name' ] } ]]);
+    my %mboxid = map { $_->{name} => "" . $_->{id} }
+                 $res->single_sentence->arguments->{list}->@*;
+    my $inbox = $mboxid{Inbox};
+
+    xlog $self, "create a subscription for each filter";
+    my %filters = (
+        inbox      => { inMailbox => $inbox },
+        other      => { inMailboxOtherThan => [ $inbox ] },
+        urgent     => {
+            operator => 'AND',
+            conditions => [ { inMailbox => $inbox }, { subject => 'urgent' } ],
+        },
+        unseen     => { notKeyword => '$seen' },
+        unverified => undef,
+    );
+    my %create = map {;
+        $_ => {
+            deviceClientId => "device-$_",
+            url => "https://example.com/push/$_",
+            keys => {
+                p256dh => 'BM0HH37xD8sEh8NeiHu1hFuwxqeeruxPlX5S7XGWGjHY5UT5'
+                        . 'yZFQKAiihFQLP6GuEQPQOtD9z28HRyV7e1nndh8',
+                auth => 'uwPFKACOLBipGPTVz4UCDg',
+            },
+            types => [],
+            emailPush => {
+                cassandane => {
+                    filter => $filters{$_},
+                    properties => [ 'id', 'subject' ],
+                },
+            },
+        }
+    } keys %filters;
+
+    $res = $jmap->request([
+        [ 'PushSubscription/set', { accountId => \undef, create => \%create } ],
+    ]);
+    my $created = $res->single_sentence->arguments->{created};
+    $self->assert_cmp_deeply([ sort keys %filters ], [ sort keys %$created ]);
+    my %subid = map { $_ => "" . $created->{$_}{id} } keys %$created;
+
+    xlog $self, "verify all but one";
+    my %code = map  { $_->{content}{id} => $_->{content}{verificationCode} }
+               grep { $_->{event} eq 'PushSubscriptionCreated' } $events->();
+    $res = $jmap->request([
+        [ 'PushSubscription/set', {
+            accountId => \undef,
+            update => {
+                map {; $subid{$_} => { verificationCode => $code{$subid{$_}} } }
+                grep { $_ ne 'unverified' } keys %subid
+            },
+        } ],
+    ]);
+    $self->assert_num_equals(4,
+        scalar keys $res->single_sentence->arguments->{updated}->%*);
+
+    my $pushes = sub {
+        return [ map  { $_->{content} }
+                 grep { $_->{event} eq 'EmailPush' } $events->() ];
+    };
+    $pushes->();
+
+    xlog $self, "deliver to the inbox";
+    $self->{instance}->deliver(
+        $self->{gen}->generate(subject => 'urgent: hello'));
+    my $got = $pushes->();
+    $self->assert_cmp_deeply([{
+        accountId => 'cassandane',
+        emailId => ignore(),
+        mailboxIds => { $inbox => bool(1) },
+        pushSubscriptionIds => bag(@subid{qw(inbox urgent unseen)}),
+    }], $got);
+
+    $res = $jmap->request([[ 'Email/query', { filter => { inMailbox => $inbox } } ]]);
+    $self->assert_cmp_deeply([ $got->[0]{emailId} ],
+        $res->single_sentence->arguments->{ids});
+
+    xlog $self, "deliver to another mailbox";
+    $self->{instance}->deliver($self->{gen}->generate(subject => 'urgent'),
+                               folder => 'foo');
+    $got = $pushes->();
+    $self->assert_cmp_deeply([{
+        accountId => 'cassandane',
+        emailId => ignore(),
+        mailboxIds => { $mboxid{foo} => bool(1) },
+        pushSubscriptionIds => bag(@subid{qw(other unseen)}),
+    }], $got);
+
+    xlog $self, "an APPEND is not a delivery";
+    $self->make_message('urgent again');
+    $self->assert_cmp_deeply([], $pushes->());
+}
