@@ -6102,7 +6102,7 @@ static void updateevent_bump_sequence(json_t *old_event,
     if (JNOTNULL(jorga)) {
         const char *addr = json_string_value(jorga);
         if (addr && !strncasecmp(addr, "mailto:", 7) &&
-                !strarray_contains(schedule_addresses, addr + 7)) {
+                !strarray_contains_case(schedule_addresses, addr + 7)) {
             return;
         }
     }

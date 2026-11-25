@@ -1,0 +1,22 @@
+#!perl
+use Cassandane::Tiny;
+
+sub test_calendarevent_set_sequence_organizer_case
+    ($self)
+{
+    xlog "Create event with organizer address in different case";
+    my $event = $self->default_user->calendarevents->create({
+        organizerCalendarAddress => 'mailto:Cassandane@Example.com',
+        participants => {
+            someone => {
+                calendarAddress => 'mailto:someone@example.com',
+            },
+        },
+    });
+
+    xlog "Bump sequence when updating shared property";
+    $event->update({ title => 'updated' });
+    $self->assert_str_equals('mailto:Cassandane@Example.com',
+        $event->organizerCalendarAddress);
+    $self->assert_num_equals(1, $event->sequence);
+}
