@@ -5,6 +5,9 @@ implements PushSubscription/get and /set; a separate notification service
 sends the pushes, using the PushSubscriptionCreated event and the
 `/dblookup/pushsubs` endpoint.
 
+An expired subscription is no longer visible, and `cyr_expire` destroys it
+when run with `-E`, `-X` or `-a`.
+
 
 Documentation:
 

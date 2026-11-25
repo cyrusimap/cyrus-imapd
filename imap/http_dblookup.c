@@ -473,6 +473,11 @@ static int get_mbpath(struct transaction_t *txn __attribute__((unused)),
 static int get_pushsub(void *rock, struct pushsub_data *data)
 {
     json_t *array = (json_t *) rock;
+
+    if (data->expires <= time(NULL)) {
+        return 0;
+    }
+
     json_t *obj = json_loads(data->subscription, 0, NULL);
 
     if (!obj) {

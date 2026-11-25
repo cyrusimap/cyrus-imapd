@@ -29,6 +29,15 @@
 static int getpushsub(void *rock, struct pushsub_data *psdata)
 {
     struct jmap_get *get = (struct jmap_get *) rock;
+
+    /* cyr_expire destroys it later */
+    if (psdata->expires <= time(NULL)) {
+        if (JNOTNULL(get->ids)) {
+            json_array_append_new(get->not_found, json_string(psdata->id));
+        }
+        return 0;
+    }
+
     json_t *pushsub = json_loads(psdata->subscription, 0, NULL);
 
     if (!pushsub) {
@@ -463,8 +472,9 @@ static void set_update(const char *id,
     struct index_record record;
 
     int r = pushsubdb_lookup_id(db, id, &psdata, 0);
-    if (r == CYRUSDB_NOTFOUND) {
+    if (r == CYRUSDB_NOTFOUND || (!r && psdata->expires <= time(NULL))) {
         err = json_pack("{s:s}", "type", "notFound");
+        r = 0;
         goto done;
     }
     if (r || !(jold = json_loads(psdata->subscription, 0, NULL))) {
