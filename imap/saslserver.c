@@ -5,8 +5,9 @@
 #include <config.h>
 
 #include <string.h>
-#include <sasl/sasl.h>
-#include <sasl/saslutil.h>
+
+#include "libsasl_min/sasl.h"
+#include "libsasl_min/saslutil.h"
 
 #include "prot.h"
 #include "xmalloc.h"

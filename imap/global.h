@@ -5,7 +5,8 @@
 #ifndef INCLUDED_GLOBAL_H
 #define INCLUDED_GLOBAL_H
 
-#include <sasl/sasl.h>
+#include "libsasl_min/sasl.h"
+
 #include "libconfig.h"
 #include "auth.h"
 #include "prot.h"
@@ -48,10 +49,6 @@ extern int mysasl_config(void *context,
                          const char **result,
                          unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
-
-/* sasl_callback_t.proc is generic;
- * going via void (*)(void) avoids -Wcast-function-type */
-#define SASL_CB_PROC_PTR  (int (*)(void)) (void (*)(void))
 
 /* user canonification */
 extern const char *canonify_userid(char *user, const char *loginid,

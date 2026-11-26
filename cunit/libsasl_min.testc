@@ -1,0 +1,229 @@
+#include "cunit/unit.h"
+
+#include "libsasl_min/core_saslint.h"
+#include "libsasl_min/canonuser_internal.h"
+
+#include <stdlib.h>
+
+extern int _canonuser_internal(const sasl_utils_t *utils,
+                               const char *user,
+                               unsigned ulen,
+                               unsigned flags,
+                               char *out_user,
+                               unsigned out_umax,
+                               unsigned *out_ulen);
+
+static int set_up(void)
+{
+    return 0;
+}
+
+static int tear_down(void)
+{
+    return 0;
+}
+
+static void test_client_canonuser_internal(void)
+{
+    const struct test {
+        const char *user;
+        unsigned user_len;
+        int expect_r;
+        const char *expect;
+        unsigned expect_len;
+    } tests[] = {
+        { NULL,             0, SASL_BADPARAM, "",           0 },
+        { "",               0, SASL_FAIL,     "",           0 },
+        { "strlen",         0, SASL_OK,       "strlen",     6 },
+        { "    ",           0, SASL_FAIL,     "",           0 },
+        { "    ",           4, SASL_FAIL,     "",           0 },
+        { "  trim",         6, SASL_OK,       "trim",       4 },
+        { "trim  ",         6, SASL_OK,       "trim",       4 },
+        { "  trim  ",       8, SASL_OK,       "trim",       4 },
+        { "truncate",       5, SASL_OK,       "trunc",      5 },
+        { "foo@bar",        7, SASL_OK,       "foo@bar",    7 },
+        { "admin",          5, SASL_OK,       "admin",      5 },
+        { "thisistoolong", 13, SASL_BUFOVER,  "",           0 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    sasl_conn_t *conn = NULL;
+    const sasl_utils_t *utils = NULL;
+    unsigned i;
+    int r;
+
+    r = sasl_client_init(NULL);
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+
+    r = sasl_client_new("nothing", NULL, NULL, NULL, NULL, 0, &conn);
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+    utils = ((const sasl_client_conn_t *) conn)->cparams->utils;
+
+    for (i = 0; i < n_tests; i++) {
+        const struct test *test = &tests[i];
+        char actual[12] = {0}; /* tiny buffer so it's easy to check overflow */
+        unsigned actual_len = 0;
+
+        r = _canonuser_internal(utils,
+                                test->user,
+                                test->user_len,
+                                /* flags */ 0,
+                                actual,
+                                sizeof(actual),
+                                &actual_len);
+
+        CU_ASSERT_EQUAL(r, test->expect_r);
+        CU_ASSERT_EQUAL(actual_len, test->expect_len);
+        CU_ASSERT_STRING_EQUAL(actual, test->expect);
+    }
+
+    sasl_dispose(&conn);
+    sasl_client_done();
+}
+
+static void test_server_canonuser_internal(void)
+{
+    const struct test {
+        const char *user;
+        unsigned user_len;
+        int expect_r;
+        const char *expect;
+        unsigned expect_len;
+    } tests[] = {
+        { NULL,             0, SASL_BADPARAM, "",              0 },
+        { "",               0, SASL_FAIL,     "",              0 },
+        { "strlen",         0, SASL_OK,       "strlen@realm", 12 },
+        { "    ",           0, SASL_FAIL,     "",              0 },
+        { "    ",           4, SASL_FAIL,     "",              0 },
+        { "  trim",         6, SASL_OK,       "trim@realm",   10 },
+        { "trim  ",         6, SASL_OK,       "trim@realm",   10 },
+        { "  trim  ",       8, SASL_OK,       "trim@realm",   10 },
+        { "truncate",       4, SASL_OK,       "trun@realm",   10 },
+        { "foo@bar",        7, SASL_OK,       "foo@bar",       7 },
+        { "thisistoolong", 13, SASL_BUFOVER,  "",              0 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    sasl_conn_t *conn = NULL;
+    const sasl_utils_t *utils = NULL;
+    unsigned i;
+    int r;
+
+    r = sasl_server_init(NULL, "nothing");
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+
+    r = sasl_server_new("nothing", NULL, "realm", NULL, NULL, NULL, 0, &conn);
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+    utils = ((const sasl_server_conn_t *) conn)->sparams->utils;
+
+    for (i = 0; i < n_tests; i++) {
+        const struct test *test = &tests[i];
+        char actual[13] = {0}; /* tiny buffer so it's easy to check overflow */
+        unsigned actual_len = 0;
+
+        r = _canonuser_internal(utils,
+                                test->user,
+                                test->user_len,
+                                /* flags */ 0,
+                                actual,
+                                sizeof(actual),
+                                &actual_len);
+
+        CU_ASSERT_EQUAL(r, test->expect_r);
+        CU_ASSERT_EQUAL(actual_len, test->expect_len);
+        CU_ASSERT_STRING_EQUAL(actual, test->expect);
+    }
+
+    sasl_dispose(&conn);
+    sasl_server_done();
+}
+
+static void test_server_canonuser_internal_norealm(void)
+{
+    const struct test {
+        const char *user;
+        unsigned user_len;
+        int expect_r;
+        const char *expect;
+        unsigned expect_len;
+    } tests[] = {
+        { NULL,             0, SASL_BADPARAM, "",        0 },
+        { "",               0, SASL_FAIL,     "",        0 },
+        { "strlen",         0, SASL_OK,       "strlen",  6 },
+        { "    ",           0, SASL_FAIL,     "",        0 },
+        { "    ",           4, SASL_FAIL,     "",        0 },
+        { "  trim",         6, SASL_OK,       "trim",    4 },
+        { "trim  ",         6, SASL_OK,       "trim",    4 },
+        { "  trim  ",       8, SASL_OK,       "trim",    4 },
+        { "truncate",       5, SASL_OK,       "trunc",   5 },
+        { "foo@bar",        7, SASL_OK,       "foo@bar", 7 },
+        { "admin",          5, SASL_OK,       "admin",   5 },
+        { "thisistoolong", 13, SASL_BUFOVER,  "",        0 },
+    };
+    const size_t n_tests = sizeof(tests) / sizeof(tests[0]);
+    sasl_conn_t *conn = NULL;
+    const sasl_utils_t *utils = NULL;
+    unsigned i;
+    int r;
+
+    r = sasl_server_init(NULL, "nothing");
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+
+    r = sasl_server_new("nothing", NULL, NULL, NULL, NULL, NULL, 0, &conn);
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+    utils = ((const sasl_server_conn_t *) conn)->sparams->utils;
+
+    for (i = 0; i < n_tests; i++) {
+        const struct test *test = &tests[i];
+        char actual[12] = {0}; /* tiny buffer so it's easy to check overflow */
+        unsigned actual_len = 0;
+
+        r = _canonuser_internal(utils,
+                                test->user,
+                                test->user_len,
+                                /* flags */ 0,
+                                actual,
+                                sizeof(actual),
+                                &actual_len);
+
+        CU_ASSERT_EQUAL(r, test->expect_r);
+        CU_ASSERT_EQUAL(actual_len, test->expect_len);
+        CU_ASSERT_STRING_EQUAL(actual, test->expect);
+    }
+
+    sasl_dispose(&conn);
+    sasl_server_done();
+}
+
+static void test_canonuser_internal_inplace(void)
+{
+    sasl_conn_t *conn = NULL;
+    const sasl_utils_t *utils = NULL;
+    const char expect[] = "foo@realm";
+    char inout_user[16] = "foo";
+    unsigned actual_len;
+    int r;
+
+    r = sasl_server_init(NULL, "nothing");
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+
+    r = sasl_server_new("nothing", NULL, "realm", NULL, NULL, NULL, 0, &conn);
+    CU_ASSERT_EQUAL_FATAL(r, SASL_OK);
+    utils = ((const sasl_server_conn_t *) conn)->sparams->utils;
+
+    /* must accept same pointer for user and out_user */
+    r = _canonuser_internal(utils,
+                            inout_user,
+                            strlen(inout_user),
+                            /* flags */ 0,
+                            inout_user,
+                            sizeof(inout_user),
+                            &actual_len);
+
+    CU_ASSERT_EQUAL(r, SASL_OK);
+    CU_ASSERT_EQUAL(actual_len, strlen(expect));
+    CU_ASSERT_STRING_EQUAL(inout_user, expect);
+
+    sasl_dispose(&conn);
+    sasl_server_done();
+}
+
+/* vim: set ft=c: */

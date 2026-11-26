@@ -183,9 +183,26 @@ anonymous user will be granted the rights ``lrp``.
 Login Authentication
 ********************
 
-This section discusses different types of authentication (ways of logging in) that can be used with Cyrus IMAP.
+This section discusses different types of authentication (ways of logging in)
+that can be used with Cyrus IMAP.
 
-The Cyrus IMAP server uses the Cyrus SASL library for authentication. This section describes how to configure SASL with use with Cyrus imapd. Please consult the :cyrus-sasl:`Cyrus SASL System Administrator's Guide </>` for more detailed, up-to-date information.
+The Cyrus IMAP server can use the Cyrus SASL library for authentication.  The
+Cyrus SASL library is highly flexible and can support many different
+authentication styles.  Some documentation for configuring Cyrus SASL is
+provided in this section, but please consult the
+:cyrus-sasl:`Cyrus SASL System Administrator's Guide </>`
+for more detailed, up-to-date information.
+
+The Cyrus IMAP server can be built without the Cyrus SASL library.  The options
+available in this configuration are limited, but that may be preferable if you
+don't need the complexity of Cyrus-SASL.
+
+Without Cyrus-SASL, you get:
+
+* The ``ANONYMOUS``, ``PLAIN`` and ``EXTERNAL`` mechanisms
+  (see :imapdconf:`sasl_mech_list`)
+* The ``saslauthd`` password check method
+  (see :imapdconf:`sasl_pwcheck_method`)
 
 Anonymous Login
 ===============
@@ -196,41 +213,89 @@ option in :cyrusman:`imapd.conf(5)` is turned on, then the server will
 permit plaintext password logins using the user ``anonymous`` and any
 password.
 
-Additionally, the server will enable any SASL mechanisms that allow anonymous logins.
+Additionally, the server will enable any SASL mechanisms that allow anonymous
+logins.
 
 Plaintext Authentication
 ========================
 
-The SASL library has several ways of verifying plaintext passwords. Plaintext passwords are passed either by the IMAP ``LOGIN`` command or by the SASL ``PLAIN`` mechanism (under a TLS layer).
+Username and password credentials are provided over the wire in plain text.
+By default, Cyrus IMAP only advertises plaintext authentication mechanisms
+to clients after a TLS encryption layer has been negotiated, unless the
+:imapdconf:`allowplaintext` option has been enabled (but don't do that).
+
+Credentials are checked according to the :imapdconf:`sasl_pwcheck_method`
+option.  Without Cyrus SASL, this will be ``saslauthd``.
+
+You will need a local saslauthd service.  This service receives credentials
+over a UNIX socket, validates them against your authentication system, and
+returns a suitable response.  Cyrus IMAP does not provide a general
+implementation of such a service, but in the cyrus-imapd source distribution,
+``cassandane/utils/fakesaslauthd`` is a minimal example of this service that is
+used for testing.
+
+The :imapdconf:`sasl_saslauthd_path` option must be set to the path to the UNIX
+socket your saslauthd service is listening on.
+
+Plaintext Authentication with Cyrus SASL
+========================================
+
+Cyrus SASL has several ways of verifying plaintext passwords. Plaintext
+passwords are passed either by the IMAP ``LOGIN`` command or by the SASL
+``PLAIN`` mechanism (under a TLS layer).
 
 * PAM
-* GSSAPI: Plaintext passwords are verified by obtaining a ticket for the server's Kerberos identity, to protect against Kerberos server spoofing attacks.
+* GSSAPI: Plaintext passwords are verified by obtaining a ticket for the
+  server's Kerberos identity, to protect against Kerberos server spoofing
+  attacks.
 
 * ``/etc/passwd``
-* ``/etc/shadow``: ``sasl_auto_transition`` automatically creates secrets for shared secret authentication when given a password.
+* ``/etc/shadow``: ``sasl_auto_transition`` automatically creates secrets for
+  shared secret authentication when given a password.
 
-The method of plaintext password verification is always through the SASL library, even in the case of the internal LOGIN command. This is to allow the SASL library to be the only source of authentication information. You'll want to look at the ``sasl_pwcheck_method`` option in the SASL documentation to understand how to configure a plaintext password verifier for your system.
+The method of plaintext password verification is always through the SASL
+library, even in the case of the internal LOGIN command. This is to allow the
+SASL library to be the only source of authentication information. You'll want
+to look at the ``sasl_pwcheck_method`` option in the SASL documentation to
+understand how to configure a plaintext password verifier for your system.
 
-To disallow the use of plaintext passwords for authentication, you can set ``allowplaintext: no`` in imapd.conf. This will still allow PLAIN under TLS, but IMAP LOGIN commands will now fail.
+To disallow the use of plaintext passwords for authentication, you can set
+``allowplaintext: no`` in imapd.conf. This will still allow PLAIN under TLS,
+but IMAP LOGIN commands will now fail.
 
-Kerberos Logins
-===============
+Kerberos Logins with Cyrus SASL
+===============================
 
-The Kerberos SASL mechanism supports the ``GSSAPI`` authentication mechanism. The mechanism requires that a ``keytab`` file exist in the location given in the ``sasl_keytab`` configuration option. The ``keytab`` file must be readable by the Cyrus server and must contain a ``$service/$host@$realm`` service key.  ``$host`` is the first component of the server's host name, the FQDN or IP address (whatever the client uses). ``$realm`` is the server's Kerberos realm. ``$service`` is name of the service: ``imap``, ``HTTP``, ``sieve``.
+The Kerberos SASL mechanism supports the ``GSSAPI`` authentication mechanism.
+The mechanism requires that a ``keytab`` file exist in the location given in
+the ``sasl_keytab`` configuration option. The ``keytab`` file must be readable
+by the Cyrus server and must contain a ``$service/$host@$realm`` service key.
+``$host`` is the first component of the server's host name, the FQDN or IP
+address (whatever the client uses). ``$realm`` is the server's Kerberos realm.
+``$service`` is name of the service: ``imap``, ``HTTP``, ``sieve``.
 
-The server will permit logins by identities in the local realm and identities in the realms listed in the ``loginrealms`` option in :cyrusman:`imapd.conf(5)`.
+The server will permit logins by identities in the local realm and identities
+in the realms listed in the ``loginrealms`` option in
+:cyrusman:`imapd.conf(5)`.
 
-If the ``loginuseacl`` configuration option is turned on, than any Kerberos identity that is granted the ``a`` right on the user's ``INBOX`` is permitted to log in as that user.
+If the ``loginuseacl`` configuration option is turned on, than any Kerberos
+identity that is granted the ``a`` right on the user's ``INBOX`` is permitted
+to log in as that user.
 
-Shared Secrets Logins
-=====================
+Shared Secrets Logins with Cyrus SASL
+=====================================
 
-The SCRAM mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanisms, you will need to supply a source of passwords, such as the sasldb (which is described more fully in the :cyrus-sasl:`Cyrus SASL distribution </>`).
+The SCRAM mechanisms require the user and the server to share a secret
+(generally a password) that can be used for comparison without actually passing
+the password in the clear across the network. For these mechanisms, you will
+need to supply a source of passwords, such as the sasldb (which is described
+more fully in the :cyrus-sasl:`Cyrus SASL distribution </>`).
 
 Quotas
 ******
 
-Quotas allow server administrators to limit resources used by hierarchies of mailboxes on the server.
+Quotas allow server administrators to limit resources used by hierarchies of
+mailboxes on the server.
 
 Working with Quotas
 ===================
@@ -332,7 +397,8 @@ users with ``d`` rights are capable of correcting the problem.
 Quotas and Partitions
 =====================
 
-Quota roots are independent of partitions. A single quota root can apply to mailboxes in different partitions.
+Quota roots are independent of partitions. A single quota root can apply to
+mailboxes in different partitions.
 
 ..  include: /reference/admin/quotas.rst
     :start-after:`_imap-admin-quotas-database:`
@@ -361,14 +427,22 @@ enabled by using one or both of the following configuration options:
 Partitions
 **********
 
-Partitions allow administrators to store different mailboxes in different parts of the Unix filesystem.  This is intended to be used to allow hierarchies of mailboxes to be spread across multiple disks.
+Partitions allow administrators to store different mailboxes in different parts
+of the Unix filesystem.  This is intended to be used to allow hierarchies of
+mailboxes to be spread across multiple disks.
 
 Specifying Partitions with "create"
 ===================================
 
-When an administrator creates a new mailbox, the name of the partition for the mailbox may be specified using an optional second argument to the "create" command.  Non-administrators are not permitted to specify the partition of a mailbox.  If the partition is not specified, then the mailbox inherits the partition of its most immediate parent mailbox.  If the mailbox has no parent, it gets the partition specified in the "defaultpartition" configuration option.
+When an administrator creates a new mailbox, the name of the partition for the
+mailbox may be specified using an optional second argument to the "create"
+command.  Non-administrators are not permitted to specify the partition of a
+mailbox.  If the partition is not specified, then the mailbox inherits the
+partition of its most immediate parent mailbox.  If the mailbox has no parent,
+it gets the partition specified in the "defaultpartition" configuration option.
 
-The optional second argument to the "create" command can usually be given only when using a specialized Cyrus-aware administrative client such as ``cyradm``.
+The optional second argument to the "create" command can usually be given only
+when using a specialized Cyrus-aware administrative client such as ``cyradm``.
 
 Changing Partitions with "rename"
 =================================
@@ -406,7 +480,8 @@ The Cyrus IMAP server software sends log messages to the ``local6``
 syslog facility.  The severity levels used are:
 
 * **CRIT** - Critical errors which probably require prompt administrator action
-* **ERR** - I/O errors, including failure to update quota usage. The syslog message includes the specific file and Unix error.
+* **ERR** - I/O errors, including failure to update quota usage. The syslog
+  message includes the specific file and Unix error.
 * **WARNING** - Protection mechanism failures, client inactivity timeouts
 * **NOTICE** - Authentications, both successful and unsuccessful
 * **INFO** - Mailbox openings, duplicate delivery suppression
@@ -425,19 +500,25 @@ The largest database is the mailbox directories.  Each
 mailbox directory contains the following files:
 
 message files
-    There is one file per message, containing the message in :rfc:`822` format.  Lines in the message are separated by CRLF, not just LF.  The file name of each message is the message's UID followed by a dot (.).
+    There is one file per message, containing the message in :rfc:`822` format.
+    Lines in the message are separated by CRLF, not just LF.  The file name of
+    each message is the message's UID followed by a dot (.).
 
 ``cyrus.header``
-    This file contains a magic number and variable-length information about the mailbox itself.
+    This file contains a magic number and variable-length information about the
+    mailbox itself.
 
 ``cyrus.index``
-    This file contains fixed-length information about the mailbox itself and each message in the mailbox.
+    This file contains fixed-length information about the mailbox itself and
+    each message in the mailbox.
 
 ``cyrus.cache``
-    This file contains variable-length information about each message in the mailbox.
+    This file contains variable-length information about each message in the
+    mailbox.
 
 ``cyrus.seen``
-    This file contains variable-length state information about each reader of the mailbox who has ``s`` permissions.
+    This file contains variable-length state information about each reader of
+    the mailbox who has ``s`` permissions.
 
 The ``reconstruct`` program can be used to recover from
 corruption in mailbox directories.  If ``reconstruct`` can find
