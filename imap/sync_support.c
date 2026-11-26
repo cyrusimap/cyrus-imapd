@@ -3455,7 +3455,9 @@ static int sync_apply_mailbox(struct dlist *kin,
     dlist_getatom(kin, "USERGROUPS", &groups);
     dlist_getatom(kin, "JMAPID", &jmapid);
     dlist_getatom(kin, "ACCOUNTID", &accountid);
-    dlist_getnum32(kin, "VERSION", &version);
+    /* senders before 3.13 omit VERSION, and 19 is the newest they create;
+     * VERSION 0 asks for the newest version this server supports */
+    if (!dlist_getnum32(kin, "VERSION", &version)) version = 19;
 
     /* Get the CRCs */
     dlist_getnum32(kin, "SYNC_CRC", &synccrcs.basic);
